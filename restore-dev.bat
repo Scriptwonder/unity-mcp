@@ -11,7 +11,7 @@ echo.
 
 :: Configuration
 set "DEFAULT_BACKUP_DIR=%USERPROFILE%\Desktop\unity-mcp-backup"
-set "DEFAULT_SERVER_PATH=%LOCALAPPDATA%\Programs\UnityMCP\UnityMcpServer\src"
+set "DEFAULT_SERVER_PATH=%LOCALAPPDATA%\UnityMCP\UnityMcpServer\src"
 
 :: Get user inputs
 echo Please provide the following paths:
