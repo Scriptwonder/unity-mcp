@@ -1933,7 +1933,7 @@ namespace MCPForUnity.Editor.Tools
         /// </summary>
         private static ValidationLevel GetValidationLevelFromGUI()
         {
-            string savedLevel = EditorPrefs.GetString("MCPForUnity_ScriptValidationLevel", "standard");
+            string savedLevel = EditorPrefs.GetString("MCPForUnity.ValidationLevel", "standard");
             return savedLevel.ToLower() switch
             {
                 "basic" => ValidationLevel.Basic,

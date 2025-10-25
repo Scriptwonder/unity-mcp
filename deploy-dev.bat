@@ -11,7 +11,7 @@ set "SCRIPT_DIR=%~dp0"
 set "BRIDGE_SOURCE=%SCRIPT_DIR%MCPForUnity"
 set "SERVER_SOURCE=%SCRIPT_DIR%MCPForUnity\UnityMcpServer~\src"
 set "DEFAULT_BACKUP_DIR=%USERPROFILE%\Desktop\unity-mcp-backup"
-set "DEFAULT_SERVER_PATH=%LOCALAPPDATA%\Programs\UnityMCP\UnityMcpServer\src"
+set "DEFAULT_SERVER_PATH=%LOCALAPPDATA%\UnityMCP\UnityMcpServer\src"
 
 :: Get user inputs
 echo Please provide the following paths:
@@ -19,7 +19,7 @@ echo.
 
 :: Package cache location
 echo Unity Package Cache Location:
-echo Example: X:\UnityProject\Library\PackageCache\com.coplaydev.unity-mcp@1.0.0
+echo Example: X:\Unity\Projects\UnityMCPTestbed2\Library\PackageCache\com.coplaydev.unity-mcp@4c106125b342
 set /p "PACKAGE_CACHE_PATH=Enter Unity package cache path: "
 
 if "%PACKAGE_CACHE_PATH%"=="" (
