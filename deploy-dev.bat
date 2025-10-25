@@ -94,10 +94,20 @@ echo ===============================================
 :: Backup original files
 echo Creating backup of original files...
 if exist "%PACKAGE_CACHE_PATH%\Editor" (
-    echo Backing up Unity Bridge files...
+    echo Backing up Unity Bridge Editor files...
     xcopy "%PACKAGE_CACHE_PATH%\Editor" "%BACKUP_SUBDIR%\UnityBridge\Editor\" /E /I /Y > nul
     if !errorlevel! neq 0 (
-        echo Error: Failed to backup Unity Bridge files
+        echo Error: Failed to backup Unity Bridge Editor files
+        pause
+        exit /b 1
+    )
+)
+
+if exist "%PACKAGE_CACHE_PATH%\Runtime" (
+    echo Backing up Unity Bridge Runtime files...
+    xcopy "%PACKAGE_CACHE_PATH%\Runtime" "%BACKUP_SUBDIR%\UnityBridge\Runtime\" /E /I /Y > nul
+    if !errorlevel! neq 0 (
+        echo Error: Failed to backup Unity Bridge Runtime files
         pause
         exit /b 1
     )
@@ -115,10 +125,18 @@ if exist "%SERVER_PATH%" (
 
 :: Deploy Unity Bridge
 echo.
-echo Deploying Unity Bridge code...
+echo Deploying Unity Bridge Editor code...
 xcopy "%BRIDGE_SOURCE%\Editor\*" "%PACKAGE_CACHE_PATH%\Editor\" /E /Y > nul
 if !errorlevel! neq 0 (
-    echo Error: Failed to deploy Unity Bridge code
+    echo Error: Failed to deploy Unity Bridge Editor code
+    pause
+    exit /b 1
+)
+
+echo Deploying Unity Bridge Runtime code...
+xcopy "%BRIDGE_SOURCE%\Runtime\*" "%PACKAGE_CACHE_PATH%\Runtime\" /E /Y > nul
+if !errorlevel! neq 0 (
+    echo Error: Failed to deploy Unity Bridge Runtime code
     pause
     exit /b 1
 )
