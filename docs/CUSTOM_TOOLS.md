@@ -21,7 +21,7 @@ First, create a ScriptableObject to manage your Python tools:
 2. Select **Assets > Create > MCP For Unity > Python Tools**
 3. Name it (e.g., `MyPythonTools`)
 
-![Create Python Tools Asset](screenshots/v6_2_create_python_tools_asset.png)
+![Create Python Tools Asset](images/v6_2_create_python_tools_asset.png)
 
 ## Step 2: Create Your Python Tool File
 
@@ -62,7 +62,7 @@ async def my_custom_tool(
 2. In the Inspector, expand **Python Files**
 3. Drag your `.py` file into the list (or click **+** and select it)
 
-![Python Tools Asset Inspector](screenshots/v6_2_python_tools_asset.png)
+![Python Tools Asset Inspector](images/v6_2_python_tools_asset.png)
 
 **Note:** If you can't see `.py` files in the object picker, go to **Window > MCP For Unity > Tool Sync > Reimport Python Files** to force Unity to recognize them as text assets.
 

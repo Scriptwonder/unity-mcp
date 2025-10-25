@@ -11,7 +11,7 @@ echo.
 
 :: Configuration
 set "DEFAULT_BACKUP_DIR=%USERPROFILE%\Desktop\unity-mcp-backup"
-set "DEFAULT_SERVER_PATH=%LOCALAPPDATA%\Programs\UnityMCP\UnityMcpServer\src"
+set "DEFAULT_SERVER_PATH=%LOCALAPPDATA%\UnityMCP\UnityMcpServer\src"
 
 :: Get user inputs
 echo Please provide the following paths:
@@ -102,7 +102,8 @@ echo ===============================================
 echo WARNING: This will overwrite current files!
 echo ===============================================
 echo Restoring from: %SELECTED_BACKUP%
-echo Unity Bridge target: %PACKAGE_CACHE_PATH%\Editor
+echo Unity Bridge Editor target: %PACKAGE_CACHE_PATH%\Editor
+echo Unity Bridge Runtime target: %PACKAGE_CACHE_PATH%\Runtime
 echo Python Server target: %SERVER_PATH%
 echo.
 set /p "confirm=Continue with restore? (y/N): "
@@ -119,16 +120,29 @@ echo ===============================================
 
 :: Restore Unity Bridge
 if exist "%SELECTED_BACKUP%\UnityBridge\Editor" (
-    echo Restoring Unity Bridge files...
+    echo Restoring Unity Bridge Editor files...
     rd /s /q "%PACKAGE_CACHE_PATH%\Editor" 2>nul
     xcopy "%SELECTED_BACKUP%\UnityBridge\Editor\*" "%PACKAGE_CACHE_PATH%\Editor\" /E /I /Y > nul
     if !errorlevel! neq 0 (
-        echo Error: Failed to restore Unity Bridge files
+        echo Error: Failed to restore Unity Bridge Editor files
         pause
         exit /b 1
     )
 ) else (
-    echo Warning: No Unity Bridge backup found, skipping...
+    echo Warning: No Unity Bridge Editor backup found, skipping...
+)
+
+if exist "%SELECTED_BACKUP%\UnityBridge\Runtime" (
+    echo Restoring Unity Bridge Runtime files...
+    rd /s /q "%PACKAGE_CACHE_PATH%\Runtime" 2>nul
+    xcopy "%SELECTED_BACKUP%\UnityBridge\Runtime\*" "%PACKAGE_CACHE_PATH%\Runtime\" /E /I /Y > nul
+    if !errorlevel! neq 0 (
+        echo Error: Failed to restore Unity Bridge Runtime files
+        pause
+        exit /b 1
+    )
+) else (
+    echo Warning: No Unity Bridge Runtime backup found, skipping...
 )
 
 :: Restore Python Server

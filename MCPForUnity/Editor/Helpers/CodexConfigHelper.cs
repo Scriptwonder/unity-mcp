@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using MCPForUnity.External.Tommy;
+using MCPForUnity.Editor.Services;
 
 namespace MCPForUnity.Editor.Helpers
 {
@@ -26,10 +27,10 @@ namespace MCPForUnity.Editor.Helpers
                 string toml = File.ReadAllText(configPath);
                 if (!TryParseCodexServer(toml, out _, out var args)) return false;
 
-                string dir = McpConfigFileHelper.ExtractDirectoryArg(args);
+                string dir = McpConfigurationHelper.ExtractDirectoryArg(args);
                 if (string.IsNullOrEmpty(dir)) return false;
 
-                return McpConfigFileHelper.PathsEqual(dir, pythonDir);
+                return McpConfigurationHelper.PathsEqual(dir, pythonDir);
             }
             catch
             {
@@ -125,6 +126,8 @@ namespace MCPForUnity.Editor.Helpers
         /// <summary>
         /// Creates a TomlTable for the unityMCP server configuration
         /// </summary>
+        /// <param name="uvPath">Path to uv executable</param>
+        /// <param name="serverSrc">Path to server source directory</param>
         private static TomlTable CreateUnityMcpTable(string uvPath, string serverSrc)
         {
             var unityMCP = new TomlTable();
@@ -136,6 +139,15 @@ namespace MCPForUnity.Editor.Helpers
             argsArray.Add(new TomlString { Value = serverSrc });
             argsArray.Add(new TomlString { Value = "server.py" });
             unityMCP["args"] = argsArray;
+
+            // Add Windows-specific environment configuration, see: https://github.com/CoplayDev/unity-mcp/issues/315
+            var platformService = MCPServiceLocator.Platform;
+            if (platformService.IsWindows())
+            {
+                var envTable = new TomlTable { IsInline = true };
+                envTable["SystemRoot"] = new TomlString { Value = platformService.GetSystemRoot() };
+                unityMCP["env"] = envTable;
+            }
 
             return unityMCP;
         }

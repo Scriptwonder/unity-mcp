@@ -255,24 +255,25 @@ namespace MCPForUnity.Editor.Helpers
                     var declaredFields = currentType.GetFields(fieldFlags);
 
                     // Process the declared Fields for caching
-                    foreach (var fieldInfo in declaredFields)
+                foreach (var fieldInfo in declaredFields)
                     {
                         if (fieldInfo.Name.EndsWith("k__BackingField")) continue; // Skip backing fields
 
                         // Add if not already added (handles hiding - keep the most derived version)
                         if (fieldsToCache.Any(f => f.Name == fieldInfo.Name)) continue;
 
-                        bool shouldInclude = false;
-                        if (includeNonPublicSerializedFields)
-                        {
-                            // If TRUE, include Public OR NonPublic with [SerializeField]
-                            shouldInclude = fieldInfo.IsPublic || (fieldInfo.IsPrivate && fieldInfo.IsDefined(typeof(SerializeField), inherit: false));
-                        }
-                        else // includeNonPublicSerializedFields is FALSE
-                        {
-                            // If FALSE, include ONLY if it is explicitly Public.
-                            shouldInclude = fieldInfo.IsPublic;
-                        }
+                    bool shouldInclude = false;
+                    if (includeNonPublicSerializedFields)
+                    {
+                        // If TRUE, include Public OR any NonPublic with [SerializeField] (private/protected/internal)
+                        var hasSerializeField = fieldInfo.IsDefined(typeof(SerializeField), inherit: true);
+                        shouldInclude = fieldInfo.IsPublic || (!fieldInfo.IsPublic && hasSerializeField);
+                    }
+                    else // includeNonPublicSerializedFields is FALSE
+                    {
+                        // If FALSE, include ONLY if it is explicitly Public.
+                        shouldInclude = fieldInfo.IsPublic;
+                    }
 
                         if (shouldInclude)
                         {
@@ -357,7 +358,35 @@ namespace MCPForUnity.Editor.Helpers
                     // --- Add detailed logging --- 
                     // Debug.Log($"[GetComponentData] Accessing: {componentType.Name}.{propName}");
                     // --- End detailed logging ---
-                    object value = propInfo.GetValue(c);
+                    
+                    // --- Special handling for material/mesh properties in edit mode ---
+                    object value;
+                    if (!Application.isPlaying && (propName == "material" || propName == "materials" || propName == "mesh"))
+                    {
+                        // In edit mode, use sharedMaterial/sharedMesh to avoid instantiation warnings
+                        if ((propName == "material" || propName == "materials") && c is Renderer renderer)
+                        {
+                            if (propName == "material")
+                                value = renderer.sharedMaterial;
+                            else // materials
+                                value = renderer.sharedMaterials;
+                        }
+                        else if (propName == "mesh" && c is MeshFilter meshFilter)
+                        {
+                            value = meshFilter.sharedMesh;
+                        }
+                        else
+                        {
+                            // Fallback to normal property access if type doesn't match
+                            value = propInfo.GetValue(c);
+                        }
+                    }
+                    else
+                    {
+                        value = propInfo.GetValue(c);
+                    }
+                    // --- End special handling ---
+                    
                     Type propType = propInfo.PropertyType;
                     AddSerializableValue(serializablePropertiesOutput, propName, propType, value);
                 }

@@ -1,33 +1,16 @@
 import sys
 import pathlib
 import importlib.util
-import types
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SRC = ROOT / "MCPForUnity" / "UnityMcpServer~" / "src"
 sys.path.insert(0, str(SRC))
 
-# stub mcp.server.fastmcp
-mcp_pkg = types.ModuleType("mcp")
-server_pkg = types.ModuleType("mcp.server")
-fastmcp_pkg = types.ModuleType("mcp.server.fastmcp")
-
-
-class _Dummy:
-    pass
-
-
-fastmcp_pkg.FastMCP = _Dummy
-fastmcp_pkg.Context = _Dummy
-server_pkg.fastmcp = fastmcp_pkg
-mcp_pkg.server = server_pkg
-sys.modules.setdefault("mcp", mcp_pkg)
-sys.modules.setdefault("mcp.server", server_pkg)
-sys.modules.setdefault("mcp.server.fastmcp", fastmcp_pkg)
-
 
 def _load_module(path: pathlib.Path, name: str):
     spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load module {name} from {path}")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -48,9 +31,21 @@ class DummyMCP:
         return deco
 
 
+from tests.test_helpers import DummyContext
+
+
 def setup_tools():
     mcp = DummyMCP()
-    read_console_mod.register_read_console_tools(mcp)
+    # Import the tools module to trigger decorator registration
+    import tools.read_console
+    # Get the registered tools from the registry
+    from registry import get_registered_tools
+    registered_tools = get_registered_tools()
+    # Add all console-related tools to our dummy MCP
+    for tool_info in registered_tools:
+        tool_name = tool_info['name']
+        if any(keyword in tool_name for keyword in ['read_console', 'console']):
+            mcp.tools[tool_name] = tool_info['func']
     return mcp.tools
 
 
@@ -67,11 +62,12 @@ def test_read_console_full_default(monkeypatch):
             "data": {"lines": [{"level": "error", "message": "oops", "stacktrace": "trace", "time": "t"}]},
         }
 
-    monkeypatch.setattr(read_console_mod, "send_command_with_retry", fake_send)
-    monkeypatch.setattr(
-        read_console_mod, "get_unity_connection", lambda: object())
+    # Patch the send_command_with_retry function in the tools module
+    import tools.read_console
+    monkeypatch.setattr(tools.read_console,
+                        "send_command_with_retry", fake_send)
 
-    resp = read_console(ctx=None, count=10)
+    resp = read_console(ctx=DummyContext(), action="get", count=10)
     assert resp == {
         "success": True,
         "data": {"lines": [{"level": "error", "message": "oops", "stacktrace": "trace", "time": "t"}]},
@@ -93,11 +89,12 @@ def test_read_console_truncated(monkeypatch):
             "data": {"lines": [{"level": "error", "message": "oops", "stacktrace": "trace"}]},
         }
 
-    monkeypatch.setattr(read_console_mod, "send_command_with_retry", fake_send)
-    monkeypatch.setattr(
-        read_console_mod, "get_unity_connection", lambda: object())
+    # Patch the send_command_with_retry function in the tools module
+    import tools.read_console
+    monkeypatch.setattr(tools.read_console,
+                        "send_command_with_retry", fake_send)
 
-    resp = read_console(ctx=None, count=10, include_stacktrace=False)
+    resp = read_console(ctx=DummyContext(), action="get", count=10, include_stacktrace=False)
     assert resp == {"success": True, "data": {
         "lines": [{"level": "error", "message": "oops"}]}}
     assert captured["params"]["includeStacktrace"] is False
