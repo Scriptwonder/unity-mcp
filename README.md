@@ -8,7 +8,7 @@
 [![Discord](https://img.shields.io/badge/discord-join-red.svg?logo=discord&logoColor=white)](https://discord.gg/y4p8KfzrN4)
 [![](https://img.shields.io/badge/Website-Visit-purple)](https://www.coplay.dev/?ref=unity-mcp)
 [![](https://img.shields.io/badge/Unity-000000?style=flat&logo=unity&logoColor=blue 'Unity')](https://unity.com/releases/editor/archive)
-[![python](https://img.shields.io/badge/Python-3.12-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
+[![python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
 [![](https://badge.mcpx.dev?status=on 'MCP Enabled')](https://modelcontextprotocol.io/introduction)
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/w/CoplayDev/unity-mcp)
 ![GitHub Issues or Pull Requests](https://img.shields.io/github/issues/CoplayDev/unity-mcp)
@@ -18,7 +18,7 @@
 
 MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to interact directly with your Unity Editor via a local **MCP (Model Context Protocol) Client**. Give your LLM tools to manage assets, control scenes, edit scripts, and automate tasks within Unity.
 
-![MCP for Unity](docs/images/readme_ui.png)
+<img width="406" height="704" alt="MCP for Unity screenshot" src="docs/images/readme_ui.png">
 
 ---
 
@@ -40,18 +40,23 @@ MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to 
 
   Your LLM can use functions like:
 
-  * `read_console`: Gets messages from or clears the console.
-  * `manage_script`: Manages C# scripts (create, read, update, delete).
-  * `manage_editor`: Controls and queries the editor's state and settings.
-  * `manage_scene`: Manages scenes (load, save, create, get hierarchy, etc.).
-  * `manage_asset`: Performs asset operations (import, create, modify, delete, etc.).
-  * `manage_shader`: Performs shader CRUD operations (create, read, modify, delete).
-  * `manage_gameobject`: Manages GameObjects: create, modify, delete, find, and component operations.
-  * `execute_menu_item`: Executes Unity Editor menu items (e.g., "File/Save Project").
-  * `apply_text_edits`: Precise text edits with precondition hashes and atomic multi-edit batches.
-  * `script_apply_edits`: Structured C# method/class edits (insert/replace/delete) with safer boundaries.
-  * `validate_script`: Fast validation (basic/standard) to catch syntax/structure issues before/after writes.
-  * `run_test`: Runs a tests in the Unity Editor.
+* `execute_menu_item`: Executes Unity Editor menu items (e.g., "File/Save Project").
+* `manage_asset`: Performs asset operations (import, create, modify, delete, etc.).
+* `manage_editor`: Controls and queries the editor's state and settings.
+* `manage_gameobject`: Manages GameObjects: create, modify, delete, find, and component operations.
+* `manage_prefabs`: Performs prefab operations (create, modify, delete, etc.).
+* `manage_scene`: Manages scenes (load, save, create, get hierarchy, etc.).
+* `manage_script`: Compatibility router for legacy script operations (create, read, delete). Prefer `apply_text_edits` or `script_apply_edits` for edits.
+* `manage_shader`: Performs shader CRUD operations (create, read, modify, delete).
+* `read_console`: Gets messages from or clears the console.
+* `run_tests`: Runs tests in the Unity Editor.
+* `set_active_instance`: Routes subsequent tool calls to a specific Unity instance (when multiple are running).
+* `apply_text_edits`: Precise text edits with precondition hashes and atomic multi-edit batches.
+* `script_apply_edits`: Structured C# method/class edits (insert/replace/delete) with safer boundaries.
+* `validate_script`: Fast validation (basic/standard) to catch syntax/structure issues before/after writes.
+* `create_script`: Create a new C# script at the given project path.
+* `delete_script`: Delete a C# script by URI or Assets-relative path.
+* `get_sha`: Get SHA256 and basic metadata for a Unity C# script without returning file contents.
 </details>
 
 
@@ -60,8 +65,17 @@ MCP for Unity acts as a bridge, allowing AI assistants (like Claude, Cursor) to 
 
   Your LLM can retrieve the following resources:
 
-  * `menu_items`: Retrieves all available menu items in the Unity Editor.
-  * `tests`: Retrieves all available tests in the Unity Editor. Can select tests of a specific type (e.g., "EditMode", "PlayMode").
+* `unity_instances`: Lists all running Unity Editor instances with their details (name, path, port, status).
+* `menu_items`: Retrieves all available menu items in the Unity Editor.
+* `tests`: Retrieves all available tests in the Unity Editor. Can select tests of a specific type (e.g., "EditMode", "PlayMode").
+* `editor_active_tool`: Currently active editor tool (Move, Rotate, Scale, etc.) and transform handle settings.
+* `editor_prefab_stage`: Current prefab editing context if a prefab is open in isolation mode.
+* `editor_selection`: Detailed information about currently selected objects in the editor.
+* `editor_state`: Current editor runtime state including play mode, compilation status, active scene, and selection summary.
+* `editor_windows`: All currently open editor windows with their titles, types, positions, and focus state.
+* `project_info`: Static project information including root path, Unity version, and platform.
+* `project_layers`: All layers defined in the project's TagManager with their indices (0-31).
+* `project_tags`: All tags defined in the project's TagManager.
 </details>
 ---
 
@@ -80,7 +94,7 @@ MCP for Unity connects your tools using two components:
 
 ### Prerequisites
 
-  * **Python:** Version 3.11 or newer. [Download Python](https://www.python.org/downloads/)
+  * **Python:** Version 3.10 or newer. [Download Python](https://www.python.org/downloads/)
   * **Unity Hub & Editor:** Version 2021.3 LTS or newer. [Download Unity](https://unity.com/download)
   * **uv (Python toolchain manager):**
       ```bash
@@ -274,8 +288,30 @@ On Windows, set `command` to the absolute shim, e.g. `C:\\Users\\YOU\\AppData\\L
 2. **Start your MCP Client** (Claude, Cursor, etc.). It should automatically launch the MCP for Unity Server (Python) using the configuration from Installation Step 2.
     
 3. **Interact!** Unity tools should now be available in your MCP Client.
-    
+
     Example Prompt: `Create a 3D player controller`, `Create a tic-tac-toe game in 3D`, `Create a cool shader and apply to a cube`.
+
+### Working with Multiple Unity Instances
+
+MCP for Unity supports multiple Unity Editor instances simultaneously. Each instance is isolated per MCP client session.
+
+**To direct tool calls to a specific instance:**
+
+1. List available instances: Ask your LLM to check the `unity_instances` resource
+2. Set the active instance: Use `set_active_instance` with the instance name (e.g., `MyProject@abc123`)
+3. All subsequent tools route to that instance until changed
+
+**Example:**
+```
+User: "List all Unity instances"
+LLM: [Shows ProjectA@abc123 and ProjectB@def456]
+
+User: "Set active instance to ProjectA@abc123"
+LLM: [Calls set_active_instance("ProjectA@abc123")]
+
+User: "Create a red cube"
+LLM: [Creates cube in ProjectA]
+```
 
 ---
 
