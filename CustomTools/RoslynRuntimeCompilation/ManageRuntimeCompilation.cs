@@ -84,7 +84,10 @@ namespace MCPForUnity.Editor.Tools
             try
             {
                 string code = @params["code"]?.ToString();
-                string assemblyName = @params["assembly_name"]?.ToString() ?? $"DynamicAssembly_{DateTime.Now.Ticks}";
+                var assemblyToken = @params["assembly_name"];
+                string assemblyName = assemblyToken == null || string.IsNullOrWhiteSpace(assemblyToken.ToString())
+                    ? $"DynamicAssembly_{DateTime.Now.Ticks}"
+                    : assemblyToken.ToString().Trim();
                 string attachTo = @params["attach_to"]?.ToString();
                 bool loadImmediately = @params["load_immediately"]?.ToObject<bool>() ?? true;
                 
@@ -101,8 +104,21 @@ namespace MCPForUnity.Editor.Tools
                 
                 // Create output directory
                 Directory.CreateDirectory(DynamicAssembliesPath);
-                string dllPath = Path.Combine(DynamicAssembliesPath, $"{assemblyName}.dll");
-                
+                string basePath = Path.GetFullPath(DynamicAssembliesPath);
+                Directory.CreateDirectory(basePath);
+                string safeFileName = SanitizeAssemblyFileName(assemblyName);
+                string dllPath = Path.GetFullPath(Path.Combine(basePath, $"{safeFileName}.dll"));
+
+                if (!dllPath.StartsWith(basePath, StringComparison.Ordinal))
+                {
+                    return Response.Error("Assembly name must resolve inside the dynamic assemblies directory.");
+                }
+
+                if (File.Exists(dllPath))
+                {
+                    dllPath = Path.GetFullPath(Path.Combine(basePath, $"{safeFileName}_{DateTime.Now.Ticks}.dll"));
+                }
+
                 // Parse code
                 var syntaxTree = CSharpSyntaxTree.ParseText(code);
                 
@@ -121,7 +137,7 @@ namespace MCPForUnity.Editor.Tools
                 
                 // Emit to file
                 EmitResult emitResult;
-                using (var stream = new FileStream(dllPath, FileMode.Create))
+                using (var stream = new FileStream(dllPath, FileMode.Create, FileAccess.Write, FileShare.None))
                 {
                     emitResult = compilation.Emit(stream);
                 }
@@ -227,7 +243,7 @@ namespace MCPForUnity.Editor.Tools
             }
 #endif
         }
-        
+
         private static object ListLoadedAssemblies()
         {
             var assemblies = LoadedAssemblies.Values.Select(info => new
@@ -238,7 +254,7 @@ namespace MCPForUnity.Editor.Tools
                 type_count = info.TypeNames.Count,
                 types = info.TypeNames
             }).ToList();
-            
+
             return Response.Success($"Found {assemblies.Count} loaded dynamic assemblies", new
             {
                 count = assemblies.Count,
@@ -246,6 +262,13 @@ namespace MCPForUnity.Editor.Tools
             });
         }
         
+        private static string SanitizeAssemblyFileName(string assemblyName)
+        {
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var sanitized = new string(assemblyName.Where(c => !invalidChars.Contains(c)).ToArray());
+            return string.IsNullOrWhiteSpace(sanitized) ? $"DynamicAssembly_{DateTime.Now.Ticks}" : sanitized;
+        }
+
         private static object GetAssemblyTypes(JObject @params)
         {
             string assemblyName = @params["assembly_name"]?.ToString();

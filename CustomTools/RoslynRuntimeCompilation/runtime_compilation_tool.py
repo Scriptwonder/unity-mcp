@@ -83,8 +83,7 @@ async def compile_runtime_code(
     }
     ```
     """
-    #await safe_info(ctx, f"Compiling runtime code for assembly: {assembly_name or 'auto-generated'}")
-    await ctx.info(f"Compiling runtime code for assembly: {assembly_name or 'auto-generated'}")
+    await safe_info(ctx, f"Compiling runtime code for assembly: {assembly_name or 'auto-generated'}")
     
     params = {
         "action": "compile_and_load",
@@ -113,8 +112,7 @@ async def list_loaded_assemblies(
     - Load timestamps
     - DLL file paths
     """
-    #await safe_info(ctx, "Retrieving loaded dynamic assemblies...")
-    await ctx.info("Retrieving loaded dynamic assemblies...")
+    await safe_info(ctx, "Retrieving loaded dynamic assemblies...")
     
     params = {"action": "list_loaded"}
     return handle_unity_command("runtime_compilation", params)
@@ -135,8 +133,7 @@ async def get_assembly_types(
     - Finding MonoBehaviour classes to attach
     - Debugging compilation results
     """
-    #await safe_info(ctx, f"Getting types from assembly: {assembly_name}")
-    await ctx.info(f"Getting types from assembly: {assembly_name}")
+    await safe_info(ctx, f"Getting types from assembly: {assembly_name}")
     
     params = {"action": "get_types", "assembly_name": assembly_name}
     return handle_unity_command("runtime_compilation", params)
@@ -187,8 +184,7 @@ async def execute_with_roslyn(
     }
     ```
     """
-    #await safe_info(ctx, f"Executing code with RoslynRuntimeCompiler: {class_name}.{method_name}")
-    await ctx.info(f"Executing code with RoslynRuntimeCompiler: {class_name}.{method_name}")
+    await safe_info(ctx, f"Executing code with RoslynRuntimeCompiler: {class_name}.{method_name}")
     
     params = {
         "action": "execute_with_roslyn",
@@ -226,8 +222,7 @@ async def get_compilation_history(
     - Tracking execution flow
     - Auditing dynamic code changes
     """
-    #await safe_info(ctx, "Retrieving compilation history...")
-    await ctx.info("Retrieving compilation history...")
+    await safe_info(ctx, "Retrieving compilation history...")
     
     params = {"action": "get_history"}
     return handle_unity_command("runtime_compilation", params)
@@ -250,8 +245,7 @@ async def save_compilation_history(
     - Share compilation sessions with team members
     - Archive successful code patterns
     """
-    #await safe_info(ctx, "Saving compilation history to file...")
-    await ctx.info("Saving compilation history to file...")
+    await safe_info(ctx, "Saving compilation history to file...")
     
     params = {"action": "save_history"}
     return handle_unity_command("runtime_compilation", params)
@@ -269,8 +263,7 @@ async def clear_compilation_history(
     This removes all tracked compilations from memory but does not delete
     saved history files. Use this to start fresh or reduce memory usage.
     """
-    #await safe_info(ctx, "Clearing compilation history...")
-    await ctx.info("Clearing compilation history...")
+    await safe_info(ctx, "Clearing compilation history...")
 
     params = {"action": "clear_history"}
     return handle_unity_command("runtime_compilation", params)

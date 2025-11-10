@@ -93,7 +93,6 @@ public class RoslynRuntimeCompiler : MonoBehaviour
     
     // Static shared history
     private static System.Collections.Generic.List<CompilationHistoryEntry> _sharedHistory = new System.Collections.Generic.List<CompilationHistoryEntry>();
-    private static int _maxHistoryEntries = 50;
     
     public System.Collections.Generic.List<CompilationHistoryEntry> CompilationHistory => _sharedHistory;
 
@@ -584,7 +583,7 @@ public class RoslynRuntimeCompiler : MonoBehaviour
         _sharedHistory.Add(entry);
         
         // Trim if exceeded max
-        while (_sharedHistory.Count > _maxHistoryEntries)
+        while (_sharedHistory.Count > maxHistoryEntries)
         {
             _sharedHistory.RemoveAt(0);
         }
@@ -1167,7 +1166,7 @@ public class RoslynRuntimeCompilerWindow : EditorWindow
                 if (helperInScene.SaveHistoryEntryAsScript(selectedHistoryIndex, out string path, out string error))
                 {
                     EditorUtility.DisplayDialog("Success", $"Script saved to:\n{path}", "OK");
-                    System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{path.Replace("/", "\\")}\"");
+                    EditorUtility.RevealInFinder(path);
                 }
                 else
                 {
