@@ -25,61 +25,33 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 
             try
             {
-                // Check common Python installation paths
-                var candidates = new[]
+                // Try running python directly first (works with Windows App Execution Aliases)
+                if (TryValidatePython("python3.exe", out string version, out string fullPath) ||
+                    TryValidatePython("python.exe", out version, out fullPath))
                 {
-                    "python.exe",
-                    "python3.exe",
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "Programs", "Python", "Python314", "python.exe"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "Programs", "Python", "Python313", "python.exe"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "Programs", "Python", "Python312", "python.exe"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "Programs", "Python", "Python311", "python.exe"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "Programs", "Python", "Python310", "python.exe"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                        "Python314", "python.exe"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                        "Python313", "python.exe"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                        "Python312", "python.exe"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                        "Python311", "python.exe"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                        "Python310", "python.exe")
-                };
+                    status.IsAvailable = true;
+                    status.Version = version;
+                    status.Path = fullPath;
+                    status.Details = $"Found Python {version} in PATH";
+                    return status;
+                }
 
-                foreach (var candidate in candidates)
+                // Fallback: try 'where' command
+                if (TryFindInPath("python3.exe", out string pathResult) ||
+                    TryFindInPath("python.exe", out pathResult))
                 {
-                    if (TryValidatePython(candidate, out string version, out string fullPath))
+                    if (TryValidatePython(pathResult, out version, out fullPath))
                     {
                         status.IsAvailable = true;
                         status.Version = version;
                         status.Path = fullPath;
-                        status.Details = $"Found Python {version} at {fullPath}";
+                        status.Details = $"Found Python {version} in PATH";
                         return status;
                     }
                 }
 
-                // Try PATH resolution using 'where' command
-                if (TryFindInPath("python.exe", out string pathResult) ||
-                    TryFindInPath("python3.exe", out pathResult))
-                {
-                    if (TryValidatePython(pathResult, out string version, out string fullPath))
-                    {
-                        status.IsAvailable = true;
-                        status.Version = version;
-                        status.Path = fullPath;
-                        status.Details = $"Found Python {version} in PATH at {fullPath}";
-                        return status;
-                    }
-                }
-
-                status.ErrorMessage = "Python not found. Please install Python 3.10 or later.";
-                status.Details = "Checked common installation paths and PATH environment variable.";
+                status.ErrorMessage = "Python not found in PATH";
+                status.Details = "Install Python 3.10+ and ensure it's added to PATH.";
             }
             catch (Exception ex)
             {
@@ -94,7 +66,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
             return "https://apps.microsoft.com/store/detail/python-313/9NCVDN91XZQP";
         }
 
-        public override string GetUVInstallUrl()
+        public override string GetUvInstallUrl()
         {
             return "https://docs.astral.sh/uv/getting-started/installation/#windows";
         }
@@ -107,7 +79,7 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
    - Microsoft Store: Search for 'Python 3.10' or higher
    - Direct download: https://python.org/downloads/windows/
 
-2. UV Package Manager: Install via PowerShell
+2. uv Package Manager: Install via PowerShell
    - Run: powershell -ExecutionPolicy ByPass -c ""irm https://astral.sh/uv/install.ps1 | iex""
    - Or download from: https://github.com/astral-sh/uv/releases
 

@@ -1,6 +1,6 @@
 [project]
 name = "MCPForUnityServer"
-version = "7.0.0"
+version = "8.1.2"
 description = "MCP for Unity Server: A Unity package for Unity Editor integration via the Model Context Protocol (MCP)."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -10,6 +10,8 @@ dependencies = [
  "mcp>=1.16.0",
  "pydantic>=2.12.0",
  "tomli>=2.3.0",
+ "fastapi>=0.104.0",
+ "uvicorn>=0.35.0",
 ]
 
 [project.optional-dependencies]
@@ -19,23 +21,8 @@ dev = [
 ]
 
 [project.scripts]
-mcp-for-unity = "server:main"
+mcp-for-unity = "main:main"
 
 [build-system]
 requires = ["setuptools>=64.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
-
-[tool.setuptools]
-py-modules = [
-    "config",
-    "models",
-    "module_discovery",
-    "port_discovery",
-    "reload_sentinel",
-    "server",
-    "telemetry",
-    "telemetry_decorator",
-    "unity_connection",
-    "unity_instance_middleware"
-]
-packages = ["tools", "resources", "registry"]

@@ -10,7 +10,7 @@ namespace MCPForUnity.Editor.Tools
     /// <summary>
     /// Executes Unity tests for a specified mode and returns detailed results.
     /// </summary>
-    [McpForUnityTool("run_tests")]
+    [McpForUnityTool("run_tests", AutoRegister = false)]
     public static class RunTests
     {
         private const int DefaultTimeoutSeconds = 600; // 10 minutes
@@ -25,7 +25,7 @@ namespace MCPForUnity.Editor.Tools
 
             if (!ModeParser.TryParse(modeStr, out var parsedMode, out var parseError))
             {
-                return Response.Error(parseError);
+                return new ErrorResponse(parseError);
             }
 
             int timeoutSeconds = DefaultTimeoutSeconds;
@@ -50,7 +50,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception ex)
             {
-                return Response.Error($"Failed to start test run: {ex.Message}");
+                return new ErrorResponse($"Failed to start test run: {ex.Message}");
             }
 
             var timeoutTask = Task.Delay(TimeSpan.FromSeconds(timeoutSeconds));
@@ -58,7 +58,7 @@ namespace MCPForUnity.Editor.Tools
 
             if (completed != runTask)
             {
-                return Response.Error($"Test run timed out after {timeoutSeconds} seconds");
+                return new ErrorResponse($"Test run timed out after {timeoutSeconds} seconds");
             }
 
             var result = await runTask.ConfigureAwait(true);
@@ -67,7 +67,7 @@ namespace MCPForUnity.Editor.Tools
                 $"{parsedMode.Value} tests completed: {result.Passed}/{result.Total} passed, {result.Failed} failed, {result.Skipped} skipped";
 
             var data = result.ToSerializable(parsedMode.Value.ToString());
-            return Response.Success(message, data);
+            return new SuccessResponse(message, data);
         }
     }
 }

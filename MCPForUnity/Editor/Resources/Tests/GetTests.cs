@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Newtonsoft.Json.Linq;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
+using Newtonsoft.Json.Linq;
 using UnityEditor.TestTools.TestRunner.Api;
 
 namespace MCPForUnity.Editor.Resources.Tests
@@ -27,12 +27,12 @@ namespace MCPForUnity.Editor.Resources.Tests
             catch (Exception ex)
             {
                 McpLog.Error($"[GetTests] Error retrieving tests: {ex.Message}\n{ex.StackTrace}");
-                return Response.Error("Failed to retrieve tests");
+                return new ErrorResponse("Failed to retrieve tests");
             }
 
             string message = $"Retrieved {result.Count} tests";
 
-            return Response.Success(message, result);
+            return new SuccessResponse(message, result);
         }
     }
 
@@ -49,12 +49,12 @@ namespace MCPForUnity.Editor.Resources.Tests
             string modeStr = @params["mode"]?.ToString();
             if (string.IsNullOrEmpty(modeStr))
             {
-                return Response.Error("'mode' parameter is required");
+                return new ErrorResponse("'mode' parameter is required");
             }
 
             if (!ModeParser.TryParse(modeStr, out var parsedMode, out var parseError))
             {
-                return Response.Error(parseError);
+                return new ErrorResponse(parseError);
             }
 
             McpLog.Info($"[GetTestsForMode] Retrieving tests for mode: {parsedMode.Value}");
@@ -66,11 +66,11 @@ namespace MCPForUnity.Editor.Resources.Tests
             catch (Exception ex)
             {
                 McpLog.Error($"[GetTestsForMode] Error retrieving tests: {ex.Message}\n{ex.StackTrace}");
-                return Response.Error("Failed to retrieve tests");
+                return new ErrorResponse("Failed to retrieve tests");
             }
 
             string message = $"Retrieved {result.Count} {parsedMode.Value} tests";
-            return Response.Success(message, result);
+            return new SuccessResponse(message, result);
         }
     }
 

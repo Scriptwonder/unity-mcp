@@ -20,7 +20,7 @@ namespace MCPForUnity.Editor.Resources.Project
                 string assetsPath = Application.dataPath.Replace('\\', '/');
                 string projectRoot = Directory.GetParent(assetsPath)?.FullName.Replace('\\', '/');
                 string projectName = Path.GetFileName(projectRoot);
-                
+
                 var info = new
                 {
                     projectRoot = projectRoot ?? "",
@@ -29,12 +29,12 @@ namespace MCPForUnity.Editor.Resources.Project
                     platform = EditorUserBuildSettings.activeBuildTarget.ToString(),
                     assetsPath = assetsPath
                 };
-                
-                return Response.Success("Retrieved project info.", info);
+
+                return new SuccessResponse("Retrieved project info.", info);
             }
             catch (Exception e)
             {
-                return Response.Error($"Error getting project info: {e.Message}");
+                return new ErrorResponse($"Error getting project info: {e.Message}");
             }
         }
     }

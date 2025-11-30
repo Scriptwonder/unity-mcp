@@ -9,7 +9,7 @@ using UnityEngine.SceneManagement;
 
 namespace MCPForUnity.Editor.Tools.Prefabs
 {
-    [McpForUnityTool("manage_prefabs")]
+    [McpForUnityTool("manage_prefabs", AutoRegister = false)]
     public static class ManagePrefabs
     {
         private const string SupportedActions = "open_stage, close_stage, save_open_stage, create_from_gameobject";
@@ -18,13 +18,13 @@ namespace MCPForUnity.Editor.Tools.Prefabs
         {
             if (@params == null)
             {
-                return Response.Error("Parameters cannot be null.");
+                return new ErrorResponse("Parameters cannot be null.");
             }
 
             string action = @params["action"]?.ToString()?.ToLowerInvariant();
             if (string.IsNullOrEmpty(action))
             {
-                return Response.Error($"Action parameter is required. Valid actions are: {SupportedActions}.");
+                return new ErrorResponse($"Action parameter is required. Valid actions are: {SupportedActions}.");
             }
 
             try
@@ -40,13 +40,13 @@ namespace MCPForUnity.Editor.Tools.Prefabs
                     case "create_from_gameobject":
                         return CreatePrefabFromGameObject(@params);
                     default:
-                        return Response.Error($"Unknown action: '{action}'. Valid actions are: {SupportedActions}.");
+                        return new ErrorResponse($"Unknown action: '{action}'. Valid actions are: {SupportedActions}.");
                 }
             }
             catch (Exception e)
             {
                 McpLog.Error($"[ManagePrefabs] Action '{action}' failed: {e}");
-                return Response.Error($"Internal error: {e.Message}");
+                return new ErrorResponse($"Internal error: {e.Message}");
             }
         }
 
@@ -55,29 +55,29 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             string prefabPath = @params["prefabPath"]?.ToString();
             if (string.IsNullOrEmpty(prefabPath))
             {
-                return Response.Error("'prefabPath' parameter is required for open_stage.");
+                return new ErrorResponse("'prefabPath' parameter is required for open_stage.");
             }
 
             string sanitizedPath = AssetPathUtility.SanitizeAssetPath(prefabPath);
             GameObject prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(sanitizedPath);
             if (prefabAsset == null)
             {
-                return Response.Error($"No prefab asset found at path '{sanitizedPath}'.");
+                return new ErrorResponse($"No prefab asset found at path '{sanitizedPath}'.");
             }
 
             string modeValue = @params["mode"]?.ToString();
             if (!string.IsNullOrEmpty(modeValue) && !modeValue.Equals(PrefabStage.Mode.InIsolation.ToString(), StringComparison.OrdinalIgnoreCase))
             {
-                return Response.Error("Only PrefabStage mode 'InIsolation' is supported at this time.");
+                return new ErrorResponse("Only PrefabStage mode 'InIsolation' is supported at this time.");
             }
 
             PrefabStage stage = PrefabStageUtility.OpenPrefab(sanitizedPath);
             if (stage == null)
             {
-                return Response.Error($"Failed to open prefab stage for '{sanitizedPath}'.");
+                return new ErrorResponse($"Failed to open prefab stage for '{sanitizedPath}'.");
             }
 
-            return Response.Success($"Opened prefab stage for '{sanitizedPath}'.", SerializeStage(stage));
+            return new SuccessResponse($"Opened prefab stage for '{sanitizedPath}'.", SerializeStage(stage));
         }
 
         private static object CloseStage(JObject @params)
@@ -85,7 +85,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
             if (stage == null)
             {
-                return Response.Success("No prefab stage was open.");
+                return new SuccessResponse("No prefab stage was open.");
             }
 
             bool saveBeforeClose = @params["saveBeforeClose"]?.ToObject<bool>() ?? false;
@@ -96,7 +96,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             }
 
             StageUtility.GoToMainStage();
-            return Response.Success($"Closed prefab stage for '{stage.assetPath}'.");
+            return new SuccessResponse($"Closed prefab stage for '{stage.assetPath}'.");
         }
 
         private static object SaveOpenStage()
@@ -104,12 +104,12 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             PrefabStage stage = PrefabStageUtility.GetCurrentPrefabStage();
             if (stage == null)
             {
-                return Response.Error("No prefab stage is currently open.");
+                return new ErrorResponse("No prefab stage is currently open.");
             }
 
             SaveStagePrefab(stage);
             AssetDatabase.SaveAssets();
-            return Response.Success($"Saved prefab stage for '{stage.assetPath}'.", SerializeStage(stage));
+            return new SuccessResponse($"Saved prefab stage for '{stage.assetPath}'.", SerializeStage(stage));
         }
 
         private static void SaveStagePrefab(PrefabStage stage)
@@ -131,19 +131,19 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             string targetName = @params["target"]?.ToString() ?? @params["name"]?.ToString();
             if (string.IsNullOrEmpty(targetName))
             {
-                return Response.Error("'target' parameter is required for create_from_gameobject.");
+                return new ErrorResponse("'target' parameter is required for create_from_gameobject.");
             }
 
             bool includeInactive = @params["searchInactive"]?.ToObject<bool>() ?? false;
             GameObject sourceObject = FindSceneObjectByName(targetName, includeInactive);
             if (sourceObject == null)
             {
-                return Response.Error($"GameObject '{targetName}' not found in the active scene.");
+                return new ErrorResponse($"GameObject '{targetName}' not found in the active scene.");
             }
 
             if (PrefabUtility.IsPartOfPrefabAsset(sourceObject))
             {
-                return Response.Error(
+                return new ErrorResponse(
                     $"GameObject '{sourceObject.name}' is part of a prefab asset. Open the prefab stage to save changes instead."
                 );
             }
@@ -151,7 +151,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             PrefabInstanceStatus status = PrefabUtility.GetPrefabInstanceStatus(sourceObject);
             if (status != PrefabInstanceStatus.NotAPrefab)
             {
-                return Response.Error(
+                return new ErrorResponse(
                     $"GameObject '{sourceObject.name}' is already linked to an existing prefab instance."
                 );
             }
@@ -159,7 +159,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             string requestedPath = @params["prefabPath"]?.ToString();
             if (string.IsNullOrWhiteSpace(requestedPath))
             {
-                return Response.Error("'prefabPath' parameter is required for create_from_gameobject.");
+                return new ErrorResponse("'prefabPath' parameter is required for create_from_gameobject.");
             }
 
             string sanitizedPath = AssetPathUtility.SanitizeAssetPath(requestedPath);
@@ -188,12 +188,12 @@ namespace MCPForUnity.Editor.Tools.Prefabs
 
                 if (connectedInstance == null)
                 {
-                    return Response.Error($"Failed to save prefab asset at '{finalPath}'.");
+                    return new ErrorResponse($"Failed to save prefab asset at '{finalPath}'.");
                 }
 
                 Selection.activeGameObject = connectedInstance;
 
-                return Response.Success(
+                return new SuccessResponse(
                     $"Prefab created at '{finalPath}' and instance linked.",
                     new
                     {
@@ -204,7 +204,7 @@ namespace MCPForUnity.Editor.Tools.Prefabs
             }
             catch (Exception e)
             {
-                return Response.Error($"Error saving prefab asset at '{finalPath}': {e.Message}");
+                return new ErrorResponse($"Error saving prefab asset at '{finalPath}': {e.Message}");
             }
         }
 

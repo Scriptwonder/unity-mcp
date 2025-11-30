@@ -105,15 +105,9 @@ Files created:
 
 ## 🛠️ For Developers
 
-### Testing Telemetry
-```bash
-cd MCPForUnity/UnityMcpServer~/src
-python test_telemetry.py
-```
-
 ### Custom Telemetry Events
 ```python
-from telemetry import record_telemetry, RecordType
+core.telemetry import record_telemetry, RecordType
 
 record_telemetry(RecordType.USAGE, {
     "custom_event": "my_feature_used",
@@ -123,7 +117,7 @@ record_telemetry(RecordType.USAGE, {
 
 ### Telemetry Status Check
 ```python  
-from telemetry import is_telemetry_enabled
+core.telemetry import is_telemetry_enabled
 
 if is_telemetry_enabled():
     print("Telemetry is active")

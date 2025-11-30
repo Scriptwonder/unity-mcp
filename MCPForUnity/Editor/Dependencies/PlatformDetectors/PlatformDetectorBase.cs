@@ -1,8 +1,6 @@
 using System;
 using System.Diagnostics;
-using System.IO;
 using MCPForUnity.Editor.Dependencies.Models;
-using MCPForUnity.Editor.Helpers;
 
 namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 {
@@ -16,122 +14,78 @@ namespace MCPForUnity.Editor.Dependencies.PlatformDetectors
 
         public abstract DependencyStatus DetectPython();
         public abstract string GetPythonInstallUrl();
-        public abstract string GetUVInstallUrl();
+        public abstract string GetUvInstallUrl();
         public abstract string GetInstallationRecommendations();
 
-        public virtual DependencyStatus DetectUV()
+        public virtual DependencyStatus DetectUv()
         {
-            var status = new DependencyStatus("UV Package Manager", isRequired: true)
+            var status = new DependencyStatus("uv Package Manager", isRequired: true)
             {
-                InstallationHint = GetUVInstallUrl()
+                InstallationHint = GetUvInstallUrl()
             };
 
             try
             {
-                // Use existing UV detection from ServerInstaller
-                string uvPath = ServerInstaller.FindUvPath();
-                if (!string.IsNullOrEmpty(uvPath))
-                {
-                    if (TryValidateUV(uvPath, out string version))
-                    {
-                        status.IsAvailable = true;
-                        status.Version = version;
-                        status.Path = uvPath;
-                        status.Details = $"Found UV {version} at {uvPath}";
-                        return status;
-                    }
-                }
-
-                status.ErrorMessage = "UV package manager not found. Please install UV.";
-                status.Details = "UV is required for managing Python dependencies.";
-            }
-            catch (Exception ex)
-            {
-                status.ErrorMessage = $"Error detecting UV: {ex.Message}";
-            }
-
-            return status;
-        }
-
-        public virtual DependencyStatus DetectMCPServer()
-        {
-            var status = new DependencyStatus("MCP Server", isRequired: false);
-
-            try
-            {
-                // Check if server is installed
-                string serverPath = ServerInstaller.GetServerPath();
-                string serverPy = Path.Combine(serverPath, "server.py");
-
-                if (File.Exists(serverPy))
+                // Try to find uv/uvx in PATH
+                if (TryFindUvInPath(out string uvPath, out string version))
                 {
                     status.IsAvailable = true;
-                    status.Path = serverPath;
-
-                    // Try to get version
-                    string versionFile = Path.Combine(serverPath, "server_version.txt");
-                    if (File.Exists(versionFile))
-                    {
-                        status.Version = File.ReadAllText(versionFile).Trim();
-                    }
-
-                    status.Details = $"MCP Server found at {serverPath}";
+                    status.Version = version;
+                    status.Path = uvPath;
+                    status.Details = $"Found uv {version} in PATH";
+                    return status;
                 }
-                else
-                {
-                    // Check for embedded server
-                    if (ServerPathResolver.TryFindEmbeddedServerSource(out string embeddedPath))
-                    {
-                        status.IsAvailable = true;
-                        status.Path = embeddedPath;
-                        status.Details = "MCP Server available (embedded in package)";
-                    }
-                    else
-                    {
-                        status.ErrorMessage = "MCP Server not found";
-                        status.Details = "Server will be installed automatically when needed";
-                    }
-                }
+
+                status.ErrorMessage = "uv not found in PATH";
+                status.Details = "Install uv package manager and ensure it's added to PATH.";
             }
             catch (Exception ex)
             {
-                status.ErrorMessage = $"Error detecting MCP Server: {ex.Message}";
+                status.ErrorMessage = $"Error detecting uv: {ex.Message}";
             }
 
             return status;
         }
 
-        protected bool TryValidateUV(string uvPath, out string version)
+        protected bool TryFindUvInPath(out string uvPath, out string version)
         {
+            uvPath = null;
             version = null;
 
-            try
+            // Try common uv command names
+            var commands = new[] { "uvx", "uv" };
+
+            foreach (var cmd in commands)
             {
-                var psi = new ProcessStartInfo
+                try
                 {
-                    FileName = uvPath,
-                    Arguments = "--version",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = cmd,
+                        Arguments = "--version",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        CreateNoWindow = true
+                    };
 
-                using var process = Process.Start(psi);
-                if (process == null) return false;
+                    using var process = Process.Start(psi);
+                    if (process == null) continue;
 
-                string output = process.StandardOutput.ReadToEnd().Trim();
-                process.WaitForExit(5000);
+                    string output = process.StandardOutput.ReadToEnd().Trim();
+                    process.WaitForExit(5000);
 
-                if (process.ExitCode == 0 && output.StartsWith("uv "))
-                {
-                    version = output.Substring(3); // Remove "uv " prefix
-                    return true;
+                    if (process.ExitCode == 0 && output.StartsWith("uv "))
+                    {
+                        version = output.Substring(3).Trim();
+                        uvPath = cmd;
+                        return true;
+                    }
                 }
-            }
-            catch
-            {
-                // Ignore validation errors
+                catch
+                {
+                    // Try next command
+                }
             }
 
             return false;

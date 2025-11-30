@@ -14,8 +14,10 @@ import pytest
 from unittest.mock import AsyncMock, Mock, MagicMock, patch
 from fastmcp import Context
 
-from unity_instance_middleware import UnityInstanceMiddleware
-from tools import get_unity_instance_from_context
+from transport.unity_instance_middleware import UnityInstanceMiddleware
+from services.tools import get_unity_instance_from_context
+from services.tools.set_active_instance import set_active_instance as set_active_instance_tool
+from transport.models import SessionList, SessionDetails
 
 
 class TestInstanceRoutingBasics:
@@ -88,7 +90,8 @@ class TestInstanceRoutingIntegration:
         ctx = Mock(spec=Context)
         ctx.session_id = "test-session"
         state_storage = {}
-        ctx.set_state = Mock(side_effect=lambda k, v: state_storage.__setitem__(k, v))
+        ctx.set_state = Mock(side_effect=lambda k,
+                             v: state_storage.__setitem__(k, v))
         ctx.get_state = Mock(side_effect=lambda k: state_storage.get(k))
 
         # Create middleware context
@@ -106,7 +109,8 @@ class TestInstanceRoutingIntegration:
         await middleware.on_call_tool(middleware_ctx, mock_call_next)
 
         # Verify state was injected
-        ctx.set_state.assert_called_once_with("unity_instance", "TestProject@abc123")
+        ctx.set_state.assert_called_once_with(
+            "unity_instance", "TestProject@abc123")
 
     def test_get_unity_instance_from_context_checks_state(self):
         """get_unity_instance_from_context must read from ctx.get_state()."""
@@ -145,7 +149,8 @@ class TestInstanceRoutingToolCategories:
         # Set up state storage (only source of truth)
         state_storage = {"unity_instance": instance_id}
         ctx.get_state = Mock(side_effect=lambda k: state_storage.get(k))
-        ctx.set_state = Mock(side_effect=lambda k, v: state_storage.__setitem__(k, v))
+        ctx.set_state = Mock(side_effect=lambda k,
+                             v: state_storage.__setitem__(k, v))
 
         return ctx
 
@@ -159,13 +164,141 @@ class TestInstanceRoutingToolCategories:
         ("Shader", ["manage_shader"]),
         ("Prefab", ["manage_prefabs"]),
         ("Tests", ["run_tests"]),
-        ("Script", ["create_script", "delete_script", "apply_text_edits", "script_apply_edits"]),
+        ("Script", ["create_script", "delete_script",
+         "apply_text_edits", "script_apply_edits"]),
         ("Resources", ["unity_instances", "menu_items", "tests"]),
     ])
     def test_tool_category_respects_active_instance(self, tool_category, tool_names):
         """All tool categories must respect set_active_instance."""
         # This is a specification test - individual tools need separate implementation tests
         pass  # Placeholder for category-level test
+
+
+class TestInstanceRoutingHTTP:
+    """Validate HTTP-specific routing helpers."""
+
+    @pytest.mark.asyncio
+    async def test_set_active_instance_http_transport(self, monkeypatch):
+        """set_active_instance should enumerate PluginHub sessions under HTTP."""
+        middleware = UnityInstanceMiddleware()
+        ctx = Mock(spec=Context)
+        ctx.session_id = "http-session"
+        state_storage = {}
+        ctx.set_state = Mock(side_effect=lambda k,
+                             v: state_storage.__setitem__(k, v))
+        ctx.get_state = Mock(side_effect=lambda k: state_storage.get(k))
+
+        monkeypatch.setenv("UNITY_MCP_TRANSPORT", "http")
+        fake_sessions = SessionList(
+            sessions={
+                "sess-1": SessionDetails(
+                    project="Ramble",
+                    hash="8e29de57",
+                    unity_version="6000.2.10f1",
+                    connected_at="2025-11-21T03:30:03.682353+00:00",
+                )
+            }
+        )
+        monkeypatch.setattr(
+            "services.tools.set_active_instance.PluginHub.get_sessions",
+            AsyncMock(return_value=fake_sessions),
+        )
+        monkeypatch.setattr(
+            "services.tools.set_active_instance.get_unity_instance_middleware",
+            lambda: middleware,
+        )
+
+        result = await set_active_instance_tool(ctx, "Ramble@8e29de57")
+
+        assert result["success"] is True
+        assert middleware.get_active_instance(ctx) == "Ramble@8e29de57"
+
+    @pytest.mark.asyncio
+    async def test_set_active_instance_http_hash_only(self, monkeypatch):
+        """Hash-only selection should resolve via PluginHub registry."""
+        middleware = UnityInstanceMiddleware()
+        ctx = Mock(spec=Context)
+        ctx.session_id = "http-session-2"
+        state_storage = {}
+        ctx.set_state = Mock(side_effect=lambda k,
+                             v: state_storage.__setitem__(k, v))
+        ctx.get_state = Mock(side_effect=lambda k: state_storage.get(k))
+
+        monkeypatch.setenv("UNITY_MCP_TRANSPORT", "http")
+        fake_sessions = SessionList(
+            sessions={
+                "sess-99": SessionDetails(
+                    project="UnityMCPTests",
+                    hash="cc8756d4",
+                    unity_version="2021.3.45f2",
+                    connected_at="2025-11-21T03:37:01.501022+00:00",
+                )
+            }
+        )
+        monkeypatch.setattr(
+            "services.tools.set_active_instance.PluginHub.get_sessions",
+            AsyncMock(return_value=fake_sessions),
+        )
+        monkeypatch.setattr(
+            "services.tools.set_active_instance.get_unity_instance_middleware",
+            lambda: middleware,
+        )
+
+        result = await set_active_instance_tool(ctx, "UnityMCPTests@cc8756d4")
+
+        assert result["success"] is True
+        assert middleware.get_active_instance(ctx) == "UnityMCPTests@cc8756d4"
+
+    @pytest.mark.asyncio
+    async def test_set_active_instance_http_hash_missing(self, monkeypatch):
+        """Unknown hashes should surface a clear error."""
+        middleware = UnityInstanceMiddleware()
+        ctx = Mock(spec=Context)
+        ctx.session_id = "http-session-3"
+
+        monkeypatch.setenv("UNITY_MCP_TRANSPORT", "http")
+        fake_sessions = SessionList(sessions={})
+        monkeypatch.setattr(
+            "services.tools.set_active_instance.PluginHub.get_sessions",
+            AsyncMock(return_value=fake_sessions),
+        )
+        monkeypatch.setattr(
+            "services.tools.set_active_instance.get_unity_instance_middleware",
+            lambda: middleware,
+        )
+
+        result = await set_active_instance_tool(ctx, "Unknown@deadbeef")
+
+        assert result["success"] is False
+        assert "No Unity instances" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_set_active_instance_http_hash_ambiguous(self, monkeypatch):
+        """Ambiguous hash prefixes should mirror stdio error messaging."""
+        middleware = UnityInstanceMiddleware()
+        ctx = Mock(spec=Context)
+        ctx.session_id = "http-session-4"
+
+        monkeypatch.setenv("UNITY_MCP_TRANSPORT", "http")
+        fake_sessions = SessionList(
+            sessions={
+                "sess-a": SessionDetails(project="ProjA", hash="abc12345", unity_version="2022", connected_at="now"),
+                "sess-b": SessionDetails(project="ProjB", hash="abc98765", unity_version="2022", connected_at="now"),
+            }
+        )
+        monkeypatch.setattr(
+            "services.tools.set_active_instance.PluginHub.get_sessions",
+            AsyncMock(return_value=fake_sessions),
+        )
+        monkeypatch.setattr(
+            "services.tools.set_active_instance.get_unity_instance_middleware",
+            lambda: middleware,
+        )
+
+        result = await set_active_instance_tool(ctx, "abc")
+
+        assert result["success"] is False
+        assert "Name@hash" in result["error"]
 
 
 class TestInstanceRoutingRaceConditions:
@@ -179,7 +312,8 @@ class TestInstanceRoutingRaceConditions:
         ctx.session_id = "test-session"
 
         state_storage = {}
-        ctx.set_state = Mock(side_effect=lambda k, v: state_storage.__setitem__(k, v))
+        ctx.set_state = Mock(side_effect=lambda k,
+                             v: state_storage.__setitem__(k, v))
         ctx.get_state = Mock(side_effect=lambda k: state_storage.get(k))
 
         instances = ["Project1@aaa", "Project2@bbb", "Project3@ccc"]
@@ -211,7 +345,8 @@ class TestInstanceRoutingRaceConditions:
         ctx.info = Mock()
 
         state_storage = {}
-        ctx.set_state = Mock(side_effect=lambda k, v: state_storage.__setitem__(k, v))
+        ctx.set_state = Mock(side_effect=lambda k,
+                             v: state_storage.__setitem__(k, v))
         ctx.get_state = Mock(side_effect=lambda k: state_storage.get(k))
         ctx.request_context = None
 
@@ -280,7 +415,8 @@ class TestInstanceRoutingSequentialOperations:
         ctx.info = Mock()
 
         state_storage = {}
-        ctx.set_state = Mock(side_effect=lambda k, v: state_storage.__setitem__(k, v))
+        ctx.set_state = Mock(side_effect=lambda k,
+                             v: state_storage.__setitem__(k, v))
         ctx.get_state = Mock(side_effect=lambda k: state_storage.get(k))
 
         # Execute sequence

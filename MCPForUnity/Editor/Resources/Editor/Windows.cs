@@ -48,11 +48,11 @@ namespace MCPForUnity.Editor.Resources.Editor
                     }
                 }
 
-                return Response.Success("Retrieved list of open editor windows.", openWindows);
+                return new SuccessResponse("Retrieved list of open editor windows.", openWindows);
             }
             catch (Exception e)
             {
-                return Response.Error($"Error getting editor windows: {e.Message}");
+                return new ErrorResponse($"Error getting editor windows: {e.Message}");
             }
         }
     }

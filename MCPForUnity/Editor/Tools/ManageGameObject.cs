@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using MCPForUnity.Editor.Helpers; // For Response class
+using MCPForUnity.Runtime.Serialization;
 using Newtonsoft.Json; // Added for JsonSerializationException
 using Newtonsoft.Json.Linq;
 using UnityEditor;
@@ -11,15 +13,13 @@ using UnityEditor.SceneManagement;
 using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using MCPForUnity.Editor.Helpers; // For Response class
-using MCPForUnity.Runtime.Serialization;
 
 namespace MCPForUnity.Editor.Tools
 {
     /// <summary>
     /// Handles GameObject manipulation within the current scene (CRUD, find, components).
     /// </summary>
-    [McpForUnityTool("manage_gameobject")]
+    [McpForUnityTool("manage_gameobject", AutoRegister = false)]
     public static class ManageGameObject
     {
         // Shared JsonSerializer to avoid per-call allocation overhead
@@ -43,13 +43,13 @@ namespace MCPForUnity.Editor.Tools
         {
             if (@params == null)
             {
-                return Response.Error("Parameters cannot be null.");
+                return new ErrorResponse("Parameters cannot be null.");
             }
 
             string action = @params["action"]?.ToString().ToLower();
             if (string.IsNullOrEmpty(action))
             {
-                return Response.Error("Action parameter is required.");
+                return new ErrorResponse("Action parameter is required.");
             }
 
             // Parameters used by various actions
@@ -109,11 +109,11 @@ namespace MCPForUnity.Editor.Tools
                         string compName = @params["componentName"]?.ToString();
                         JObject compProps = @params["componentProperties"]?[compName] as JObject; // Handle potential nesting
                         if (string.IsNullOrEmpty(compName))
-                            return Response.Error(
+                            return new ErrorResponse(
                                 "Missing 'componentName' for 'set_component_property' on prefab."
                             );
                         if (compProps == null)
-                            return Response.Error(
+                            return new ErrorResponse(
                                 $"Missing or invalid 'componentProperties' for component '{compName}' for 'set_component_property' on prefab."
                             );
 
@@ -124,7 +124,7 @@ namespace MCPForUnity.Editor.Tools
                     {
                         properties = @params["componentProperties"] as JObject;
                         if (properties == null)
-                            return Response.Error(
+                            return new ErrorResponse(
                                 "Missing 'componentProperties' for 'modify' action on prefab."
                             );
                     }
@@ -142,7 +142,7 @@ namespace MCPForUnity.Editor.Tools
                 ) // Added get_components here too
                 {
                     // Explicitly block other modifications on the prefab asset itself via manage_gameobject
-                    return Response.Error(
+                    return new ErrorResponse(
                         $"Action '{action}' on a prefab asset ('{targetPath}') should be performed using the 'manage_asset' command."
                     );
                 }
@@ -166,7 +166,7 @@ namespace MCPForUnity.Editor.Tools
                     case "get_components":
                         string getCompTarget = targetToken?.ToString(); // Expect name, path, or ID string
                         if (getCompTarget == null)
-                            return Response.Error(
+                            return new ErrorResponse(
                                 "'target' parameter required for get_components."
                             );
                         // Pass the includeNonPublicSerialized flag here
@@ -174,12 +174,12 @@ namespace MCPForUnity.Editor.Tools
                     case "get_component":
                         string getSingleCompTarget = targetToken?.ToString();
                         if (getSingleCompTarget == null)
-                            return Response.Error(
+                            return new ErrorResponse(
                                 "'target' parameter required for get_component."
                             );
                         string componentName = @params["componentName"]?.ToString();
                         if (string.IsNullOrEmpty(componentName))
-                            return Response.Error(
+                            return new ErrorResponse(
                                 "'componentName' parameter required for get_component."
                             );
                         return GetSingleComponentFromTarget(getSingleCompTarget, searchMethod, componentName, includeNonPublicSerialized);
@@ -191,13 +191,13 @@ namespace MCPForUnity.Editor.Tools
                         return SetComponentPropertyOnTarget(@params, targetToken, searchMethod);
 
                     default:
-                        return Response.Error($"Unknown action: '{action}'.");
+                        return new ErrorResponse($"Unknown action: '{action}'.");
                 }
             }
             catch (Exception e)
             {
                 Debug.LogError($"[ManageGameObject] Action '{action}' failed: {e}");
-                return Response.Error($"Internal error processing action '{action}': {e.Message}");
+                return new ErrorResponse($"Internal error processing action '{action}': {e.Message}");
             }
         }
 
@@ -208,7 +208,7 @@ namespace MCPForUnity.Editor.Tools
             string name = @params["name"]?.ToString();
             if (string.IsNullOrEmpty(name))
             {
-                return Response.Error("'name' parameter is required for 'create' action.");
+                return new ErrorResponse("'name' parameter is required for 'create' action.");
             }
 
             // Get prefab creation parameters
@@ -235,7 +235,7 @@ namespace MCPForUnity.Editor.Tools
                     string[] guids = AssetDatabase.FindAssets($"t:Prefab {prefabNameOnly}");
                     if (guids.Length == 0)
                     {
-                        return Response.Error(
+                        return new ErrorResponse(
                             $"Prefab named '{prefabNameOnly}' not found anywhere in the project."
                         );
                     }
@@ -245,7 +245,7 @@ namespace MCPForUnity.Editor.Tools
                             ", ",
                             guids.Select(g => AssetDatabase.GUIDToAssetPath(g))
                         );
-                        return Response.Error(
+                        return new ErrorResponse(
                             $"Multiple prefabs found matching name '{prefabNameOnly}': {foundPaths}. Please provide a more specific path."
                         );
                     }
@@ -283,7 +283,7 @@ namespace MCPForUnity.Editor.Tools
                             Debug.LogError(
                                 $"[ManageGameObject.Create] Failed to instantiate prefab at '{prefabPath}', asset might be corrupted or not a GameObject."
                             );
-                            return Response.Error(
+                            return new ErrorResponse(
                                 $"Failed to instantiate prefab at '{prefabPath}'."
                             );
                         }
@@ -303,7 +303,7 @@ namespace MCPForUnity.Editor.Tools
                     }
                     catch (Exception e)
                     {
-                        return Response.Error(
+                        return new ErrorResponse(
                             $"Error instantiating prefab '{prefabPath}': {e.Message}"
                         );
                     }
@@ -338,7 +338,7 @@ namespace MCPForUnity.Editor.Tools
                         else
                         {
                             UnityEngine.Object.DestroyImmediate(newGo); // cleanup leak
-                            return Response.Error(
+                            return new ErrorResponse(
                                 "'name' parameter is required when creating a primitive."
                             );
                         }
@@ -346,13 +346,13 @@ namespace MCPForUnity.Editor.Tools
                     }
                     catch (ArgumentException)
                     {
-                        return Response.Error(
+                        return new ErrorResponse(
                             $"Invalid primitive type: '{primitiveType}'. Valid types: {string.Join(", ", Enum.GetNames(typeof(PrimitiveType)))}"
                         );
                     }
                     catch (Exception e)
                     {
-                        return Response.Error(
+                        return new ErrorResponse(
                             $"Failed to create primitive '{primitiveType}': {e.Message}"
                         );
                     }
@@ -361,7 +361,7 @@ namespace MCPForUnity.Editor.Tools
                 {
                     if (string.IsNullOrEmpty(name))
                     {
-                        return Response.Error(
+                        return new ErrorResponse(
                             "'name' parameter is required for 'create' action when not instantiating a prefab or creating a primitive."
                         );
                     }
@@ -378,7 +378,7 @@ namespace MCPForUnity.Editor.Tools
             if (newGo == null)
             {
                 // Should theoretically not happen if logic above is correct, but safety check.
-                return Response.Error("Failed to create or instantiate the GameObject.");
+                return new ErrorResponse("Failed to create or instantiate the GameObject.");
             }
 
             // Record potential changes to the existing prefab instance or the new GO
@@ -394,7 +394,7 @@ namespace MCPForUnity.Editor.Tools
                 if (parentGo == null)
                 {
                     UnityEngine.Object.DestroyImmediate(newGo); // Clean up created object
-                    return Response.Error($"Parent specified ('{parentToken}') but not found.");
+                    return new ErrorResponse($"Parent specified ('{parentToken}') but not found.");
                 }
                 newGo.transform.SetParent(parentGo.transform, true); // worldPositionStays = true
             }
@@ -438,7 +438,7 @@ namespace MCPForUnity.Editor.Tools
                         catch (Exception innerEx)
                         {
                             UnityEngine.Object.DestroyImmediate(newGo); // Clean up
-                            return Response.Error(
+                            return new ErrorResponse(
                                 $"Failed to create or assign tag '{tagToSet}' during creation: {innerEx.Message}."
                             );
                         }
@@ -446,7 +446,7 @@ namespace MCPForUnity.Editor.Tools
                     else
                     {
                         UnityEngine.Object.DestroyImmediate(newGo); // Clean up
-                        return Response.Error(
+                        return new ErrorResponse(
                             $"Failed to set tag to '{tagToSet}' during creation: {ex.Message}."
                         );
                     }
@@ -516,7 +516,7 @@ namespace MCPForUnity.Editor.Tools
                 {
                     // Clean up the created object before returning error
                     UnityEngine.Object.DestroyImmediate(newGo);
-                    return Response.Error(
+                    return new ErrorResponse(
                         "'prefabPath' is required when 'saveAsPrefab' is true and creating a new object."
                     );
                 }
@@ -555,7 +555,7 @@ namespace MCPForUnity.Editor.Tools
                     {
                         // Destroy the original if saving failed somehow (shouldn't usually happen if path is valid)
                         UnityEngine.Object.DestroyImmediate(newGo);
-                        return Response.Error(
+                        return new ErrorResponse(
                             $"Failed to save GameObject '{name}' as prefab at '{finalPrefabPath}'. Check path and permissions."
                         );
                     }
@@ -569,7 +569,7 @@ namespace MCPForUnity.Editor.Tools
                 {
                     // Clean up the instance if prefab saving fails
                     UnityEngine.Object.DestroyImmediate(newGo); // Destroy the original attempt
-                    return Response.Error($"Error saving prefab '{finalPrefabPath}': {e.Message}");
+                    return new ErrorResponse($"Error saving prefab '{finalPrefabPath}': {e.Message}");
                 }
             }
 
@@ -602,8 +602,8 @@ namespace MCPForUnity.Editor.Tools
             }
 
             // Use the new serializer helper
-            //return Response.Success(successMessage, GetGameObjectData(finalInstance));
-            return Response.Success(successMessage, Helpers.GameObjectSerializer.GetGameObjectData(finalInstance));
+            //return new SuccessResponse(successMessage, GetGameObjectData(finalInstance));
+            return new SuccessResponse(successMessage, Helpers.GameObjectSerializer.GetGameObjectData(finalInstance));
         }
 
         private static object ModifyGameObject(
@@ -615,7 +615,7 @@ namespace MCPForUnity.Editor.Tools
             GameObject targetGo = FindObjectInternal(targetToken, searchMethod);
             if (targetGo == null)
             {
-                return Response.Error(
+                return new ErrorResponse(
                     $"Target GameObject ('{targetToken}') not found using method '{searchMethod ?? "default"}'."
                 );
             }
@@ -651,11 +651,11 @@ namespace MCPForUnity.Editor.Tools
                     )
                 )
                 {
-                    return Response.Error($"New parent ('{parentToken}') not found.");
+                    return new ErrorResponse($"New parent ('{parentToken}') not found.");
                 }
                 if (newParentGo != null && newParentGo.transform.IsChildOf(targetGo.transform))
                 {
-                    return Response.Error(
+                    return new ErrorResponse(
                         $"Cannot parent '{targetGo.name}' to '{newParentGo.name}', as it would create a hierarchy loop."
                     );
                 }
@@ -715,7 +715,7 @@ namespace MCPForUnity.Editor.Tools
                             Debug.LogError(
                                 $"[ManageGameObject] Failed to create or assign tag '{tagToSet}' after attempting creation: {innerEx.Message}"
                             );
-                            return Response.Error(
+                            return new ErrorResponse(
                                 $"Failed to create or assign tag '{tagToSet}': {innerEx.Message}. Check Tag Manager and permissions."
                             );
                         }
@@ -723,7 +723,7 @@ namespace MCPForUnity.Editor.Tools
                     else
                     {
                         // If the exception was for a different reason, return the original error
-                        return Response.Error($"Failed to set tag to '{tagToSet}': {ex.Message}.");
+                        return new ErrorResponse($"Failed to set tag to '{tagToSet}': {ex.Message}.");
                     }
                 }
             }
@@ -735,7 +735,7 @@ namespace MCPForUnity.Editor.Tools
                 int layerId = LayerMask.NameToLayer(layerName);
                 if (layerId == -1 && layerName != "Default")
                 {
-                    return Response.Error(
+                    return new ErrorResponse(
                         $"Invalid layer specified: '{layerName}'. Use a valid layer name."
                     );
                 }
@@ -867,7 +867,7 @@ namespace MCPForUnity.Editor.Tools
                     catch { }
                 }
 
-                return Response.Error(
+                return new ErrorResponse(
                     $"One or more component property operations failed on '{targetGo.name}'.",
                     new { componentErrors = componentErrors, errors = aggregatedErrors }
                 );
@@ -876,11 +876,11 @@ namespace MCPForUnity.Editor.Tools
             if (!modified)
             {
                 // Use the new serializer helper
-                // return Response.Success(
+                // return new SuccessResponse(
                 //     $"No modifications applied to GameObject '{targetGo.name}'.",
                 //     GetGameObjectData(targetGo));
 
-                return Response.Success(
+                return new SuccessResponse(
                     $"No modifications applied to GameObject '{targetGo.name}'.",
                     Helpers.GameObjectSerializer.GetGameObjectData(targetGo)
                 );
@@ -888,11 +888,11 @@ namespace MCPForUnity.Editor.Tools
 
             EditorUtility.SetDirty(targetGo); // Mark scene as dirty
             // Use the new serializer helper
-            return Response.Success(
+            return new SuccessResponse(
                 $"GameObject '{targetGo.name}' modified successfully.",
                 Helpers.GameObjectSerializer.GetGameObjectData(targetGo)
             );
-            // return Response.Success(
+            // return new SuccessResponse(
             //     $"GameObject '{targetGo.name}' modified successfully.",
             //     GetGameObjectData(targetGo));
 
@@ -905,7 +905,7 @@ namespace MCPForUnity.Editor.Tools
 
             if (targets.Count == 0)
             {
-                return Response.Error(
+                return new ErrorResponse(
                     $"Target GameObject(s) ('{targetToken}') not found using method '{searchMethod ?? "default"}'."
                 );
             }
@@ -929,12 +929,12 @@ namespace MCPForUnity.Editor.Tools
                     targets.Count == 1
                         ? $"GameObject '{deletedObjects[0].GetType().GetProperty("name").GetValue(deletedObjects[0])}' deleted successfully."
                         : $"{deletedObjects.Count} GameObjects deleted successfully.";
-                return Response.Success(message, deletedObjects);
+                return new SuccessResponse(message, deletedObjects);
             }
             else
             {
                 // Should not happen if targets.Count > 0 initially, but defensive check
-                return Response.Error("Failed to delete target GameObject(s).");
+                return new ErrorResponse("Failed to delete target GameObject(s).");
             }
         }
 
@@ -954,13 +954,13 @@ namespace MCPForUnity.Editor.Tools
 
             if (foundObjects.Count == 0)
             {
-                return Response.Success("No matching GameObjects found.", new List<object>());
+                return new SuccessResponse("No matching GameObjects found.", new List<object>());
             }
 
             // Use the new serializer helper
             //var results = foundObjects.Select(go => GetGameObjectData(go)).ToList();
             var results = foundObjects.Select(go => Helpers.GameObjectSerializer.GetGameObjectData(go)).ToList();
-            return Response.Success($"Found {results.Count} GameObject(s).", results);
+            return new SuccessResponse($"Found {results.Count} GameObject(s).", results);
         }
 
         private static object GetComponentsFromTarget(string target, string searchMethod, bool includeNonPublicSerialized = true)
@@ -968,7 +968,7 @@ namespace MCPForUnity.Editor.Tools
             GameObject targetGo = FindObjectInternal(target, searchMethod);
             if (targetGo == null)
             {
-                return Response.Error(
+                return new ErrorResponse(
                     $"Target GameObject ('{target}') not found using method '{searchMethod ?? "default"}'."
                 );
             }
@@ -1023,14 +1023,14 @@ namespace MCPForUnity.Editor.Tools
                 componentsToIterate.Clear();
                 componentsToIterate = null;
 
-                return Response.Success(
+                return new SuccessResponse(
                     $"Retrieved {componentData.Count} components from '{targetGo.name}'.",
                     componentData // List was built in original order
                 );
             }
             catch (Exception e)
             {
-                return Response.Error(
+                return new ErrorResponse(
                     $"Error getting components from '{targetGo.name}': {e.Message}"
                 );
             }
@@ -1041,7 +1041,7 @@ namespace MCPForUnity.Editor.Tools
             GameObject targetGo = FindObjectInternal(target, searchMethod);
             if (targetGo == null)
             {
-                return Response.Error(
+                return new ErrorResponse(
                     $"Target GameObject ('{target}') not found using method '{searchMethod ?? "default"}'."
                 );
             }
@@ -1073,7 +1073,7 @@ namespace MCPForUnity.Editor.Tools
 
                 if (targetComponent == null)
                 {
-                    return Response.Error(
+                    return new ErrorResponse(
                         $"Component '{componentName}' not found on GameObject '{targetGo.name}'."
                     );
                 }
@@ -1082,19 +1082,19 @@ namespace MCPForUnity.Editor.Tools
 
                 if (componentData == null)
                 {
-                    return Response.Error(
+                    return new ErrorResponse(
                         $"Failed to serialize component '{componentName}' on GameObject '{targetGo.name}'."
                     );
                 }
 
-                return Response.Success(
+                return new SuccessResponse(
                     $"Retrieved component '{componentName}' from '{targetGo.name}'.",
                     componentData
                 );
             }
             catch (Exception e)
             {
-                return Response.Error(
+                return new ErrorResponse(
                     $"Error getting component '{componentName}' from '{targetGo.name}': {e.Message}"
                 );
             }
@@ -1109,7 +1109,7 @@ namespace MCPForUnity.Editor.Tools
             GameObject targetGo = FindObjectInternal(targetToken, searchMethod);
             if (targetGo == null)
             {
-                return Response.Error(
+                return new ErrorResponse(
                     $"Target GameObject ('{targetToken}') not found using method '{searchMethod ?? "default"}'."
                 );
             }
@@ -1140,7 +1140,7 @@ namespace MCPForUnity.Editor.Tools
 
             if (string.IsNullOrEmpty(typeName))
             {
-                return Response.Error(
+                return new ErrorResponse(
                     "Component type name ('componentName' or first element in 'componentsToAdd') is required."
                 );
             }
@@ -1151,7 +1151,7 @@ namespace MCPForUnity.Editor.Tools
 
             EditorUtility.SetDirty(targetGo);
             // Use the new serializer helper
-            return Response.Success(
+            return new SuccessResponse(
                 $"Component '{typeName}' added to '{targetGo.name}'.",
                 Helpers.GameObjectSerializer.GetGameObjectData(targetGo)
             ); // Return updated GO data
@@ -1166,7 +1166,7 @@ namespace MCPForUnity.Editor.Tools
             GameObject targetGo = FindObjectInternal(targetToken, searchMethod);
             if (targetGo == null)
             {
-                return Response.Error(
+                return new ErrorResponse(
                     $"Target GameObject ('{targetToken}') not found using method '{searchMethod ?? "default"}'."
                 );
             }
@@ -1187,7 +1187,7 @@ namespace MCPForUnity.Editor.Tools
 
             if (string.IsNullOrEmpty(typeName))
             {
-                return Response.Error(
+                return new ErrorResponse(
                     "Component type name ('componentName' or first element in 'componentsToRemove') is required."
                 );
             }
@@ -1198,7 +1198,7 @@ namespace MCPForUnity.Editor.Tools
 
             EditorUtility.SetDirty(targetGo);
             // Use the new serializer helper
-            return Response.Success(
+            return new SuccessResponse(
                 $"Component '{typeName}' removed from '{targetGo.name}'.",
                 Helpers.GameObjectSerializer.GetGameObjectData(targetGo)
             );
@@ -1213,7 +1213,7 @@ namespace MCPForUnity.Editor.Tools
             GameObject targetGo = FindObjectInternal(targetToken, searchMethod);
             if (targetGo == null)
             {
-                return Response.Error(
+                return new ErrorResponse(
                     $"Target GameObject ('{targetToken}') not found using method '{searchMethod ?? "default"}'."
                 );
             }
@@ -1231,12 +1231,12 @@ namespace MCPForUnity.Editor.Tools
             }
             else
             {
-                return Response.Error("'componentName' parameter is required.");
+                return new ErrorResponse("'componentName' parameter is required.");
             }
 
             if (propertiesToSet == null || !propertiesToSet.HasValues)
             {
-                return Response.Error(
+                return new ErrorResponse(
                     "'componentProperties' dictionary for the specified component is required and cannot be empty."
                 );
             }
@@ -1247,7 +1247,7 @@ namespace MCPForUnity.Editor.Tools
 
             EditorUtility.SetDirty(targetGo);
             // Use the new serializer helper
-            return Response.Success(
+            return new SuccessResponse(
                 $"Properties set for component '{compName}' on '{targetGo.name}'.",
                 Helpers.GameObjectSerializer.GetGameObjectData(targetGo)
             );
@@ -1499,19 +1499,19 @@ namespace MCPForUnity.Editor.Tools
             Type componentType = FindType(typeName);
             if (componentType == null)
             {
-                return Response.Error(
+                return new ErrorResponse(
                     $"Component type '{typeName}' not found or is not a valid Component."
                 );
             }
             if (!typeof(Component).IsAssignableFrom(componentType))
             {
-                return Response.Error($"Type '{typeName}' is not a Component.");
+                return new ErrorResponse($"Type '{typeName}' is not a Component.");
             }
 
             // Prevent adding Transform again
             if (componentType == typeof(Transform))
             {
-                return Response.Error("Cannot add another Transform component.");
+                return new ErrorResponse("Cannot add another Transform component.");
             }
 
             // Check for 2D/3D physics component conflicts
@@ -1530,7 +1530,7 @@ namespace MCPForUnity.Editor.Tools
                     || targetGo.GetComponent<Collider>() != null
                 )
                 {
-                    return Response.Error(
+                    return new ErrorResponse(
                         $"Cannot add 2D physics component '{typeName}' because the GameObject '{targetGo.name}' already has a 3D Rigidbody or Collider."
                     );
                 }
@@ -1543,7 +1543,7 @@ namespace MCPForUnity.Editor.Tools
                     || targetGo.GetComponent<Collider2D>() != null
                 )
                 {
-                    return Response.Error(
+                    return new ErrorResponse(
                         $"Cannot add 3D physics component '{typeName}' because the GameObject '{targetGo.name}' already has a 2D Rigidbody or Collider."
                     );
                 }
@@ -1555,7 +1555,7 @@ namespace MCPForUnity.Editor.Tools
                 Component newComponent = Undo.AddComponent(targetGo, componentType);
                 if (newComponent == null)
                 {
-                    return Response.Error(
+                    return new ErrorResponse(
                         $"Failed to add component '{typeName}' to '{targetGo.name}'. It might be disallowed (e.g., adding script twice)."
                     );
                 }
@@ -1588,7 +1588,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception e)
             {
-                return Response.Error(
+                return new ErrorResponse(
                     $"Error adding component '{typeName}' to '{targetGo.name}': {e.Message}"
                 );
             }
@@ -1603,19 +1603,19 @@ namespace MCPForUnity.Editor.Tools
             Type componentType = FindType(typeName);
             if (componentType == null)
             {
-                return Response.Error($"Component type '{typeName}' not found for removal.");
+                return new ErrorResponse($"Component type '{typeName}' not found for removal.");
             }
 
             // Prevent removing essential components
             if (componentType == typeof(Transform))
             {
-                return Response.Error("Cannot remove the Transform component.");
+                return new ErrorResponse("Cannot remove the Transform component.");
             }
 
             Component componentToRemove = targetGo.GetComponent(componentType);
             if (componentToRemove == null)
             {
-                return Response.Error(
+                return new ErrorResponse(
                     $"Component '{typeName}' not found on '{targetGo.name}' to remove."
                 );
             }
@@ -1628,7 +1628,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception e)
             {
-                return Response.Error(
+                return new ErrorResponse(
                     $"Error removing component '{typeName}' from '{targetGo.name}': {e.Message}"
                 );
             }
@@ -1659,7 +1659,7 @@ namespace MCPForUnity.Editor.Tools
             }
             if (targetComponent == null)
             {
-                return Response.Error(
+                return new ErrorResponse(
                     $"Component '{compName}' not found on '{targetGo.name}' to set properties."
                 );
             }
@@ -1697,7 +1697,7 @@ namespace MCPForUnity.Editor.Tools
             EditorUtility.SetDirty(targetComponent);
             return failures.Count == 0
                 ? null
-                : Response.Error($"One or more properties failed on '{compName}'.", new { errors = failures });
+                : new ErrorResponse($"One or more properties failed on '{compName}'.", new { errors = failures });
         }
 
         /// <summary>

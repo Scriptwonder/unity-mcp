@@ -56,13 +56,9 @@ namespace MCPForUnity.Editor.Dependencies
                 var pythonStatus = detector.DetectPython();
                 result.Dependencies.Add(pythonStatus);
 
-                // Check UV
-                var uvStatus = detector.DetectUV();
+                // Check uv
+                var uvStatus = detector.DetectUv();
                 result.Dependencies.Add(uvStatus);
-
-                // Check MCP Server
-                var serverStatus = detector.DetectMCPServer();
-                result.Dependencies.Add(serverStatus);
 
                 // Generate summary and recommendations
                 result.GenerateSummary();
@@ -104,7 +100,7 @@ namespace MCPForUnity.Editor.Dependencies
             try
             {
                 var detector = GetCurrentPlatformDetector();
-                return (detector.GetPythonInstallUrl(), detector.GetUVInstallUrl());
+                return (detector.GetPythonInstallUrl(), detector.GetUvInstallUrl());
             }
             catch
             {
@@ -128,9 +124,9 @@ namespace MCPForUnity.Editor.Dependencies
                 {
                     result.RecommendedActions.Add($"Install Python 3.10+ from: {detector.GetPythonInstallUrl()}");
                 }
-                else if (dep.Name == "UV Package Manager")
+                else if (dep.Name == "uv Package Manager")
                 {
-                    result.RecommendedActions.Add($"Install UV package manager from: {detector.GetUVInstallUrl()}");
+                    result.RecommendedActions.Add($"Install uv package manager from: {detector.GetUvInstallUrl()}");
                 }
                 else if (dep.Name == "MCP Server")
                 {
@@ -140,7 +136,7 @@ namespace MCPForUnity.Editor.Dependencies
 
             if (result.GetMissingRequired().Count > 0)
             {
-                result.RecommendedActions.Add("Use the Setup Wizard (Window > MCP for Unity > Setup Wizard) for guided installation.");
+                result.RecommendedActions.Add("Use the Setup Window (Window > MCP for Unity > Setup Window) for guided installation.");
             }
         }
     }

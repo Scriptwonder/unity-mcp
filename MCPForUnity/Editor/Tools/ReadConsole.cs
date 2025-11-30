@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using MCPForUnity.Editor.Helpers; // For Response class
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
-using MCPForUnity.Editor.Helpers; // For Response class
 
 namespace MCPForUnity.Editor.Tools
 {
@@ -14,7 +14,7 @@ namespace MCPForUnity.Editor.Tools
     /// Handles reading and clearing Unity Editor console log entries.
     /// Uses reflection to access internal LogEntry methods/properties.
     /// </summary>
-    [McpForUnityTool("read_console")]
+    [McpForUnityTool("read_console", AutoRegister = false)]
     public static class ReadConsole
     {
         // (Calibration removed)
@@ -147,7 +147,7 @@ namespace MCPForUnity.Editor.Tools
                 Debug.LogError(
                     "[ReadConsole] HandleCommand called but reflection members are not initialized. Static constructor might have failed silently or there's an issue."
                 );
-                return Response.Error(
+                return new ErrorResponse(
                     "ReadConsole handler failed to initialize due to reflection errors. Cannot access console logs."
                 );
             }
@@ -190,7 +190,7 @@ namespace MCPForUnity.Editor.Tools
                 }
                 else
                 {
-                    return Response.Error(
+                    return new ErrorResponse(
                         $"Unknown action: '{action}'. Valid actions are 'get' or 'clear'."
                     );
                 }
@@ -198,7 +198,7 @@ namespace MCPForUnity.Editor.Tools
             catch (Exception e)
             {
                 Debug.LogError($"[ReadConsole] Action '{action}' failed: {e}");
-                return Response.Error($"Internal error processing action '{action}': {e.Message}");
+                return new ErrorResponse($"Internal error processing action '{action}': {e.Message}");
             }
         }
 
@@ -209,12 +209,12 @@ namespace MCPForUnity.Editor.Tools
             try
             {
                 _clearMethod.Invoke(null, null); // Static method, no instance, no parameters
-                return Response.Success("Console cleared successfully.");
+                return new SuccessResponse("Console cleared successfully.");
             }
             catch (Exception e)
             {
                 Debug.LogError($"[ReadConsole] Failed to clear console: {e}");
-                return Response.Error($"Failed to clear console: {e.Message}");
+                return new ErrorResponse($"Failed to clear console: {e.Message}");
             }
         }
 
@@ -359,7 +359,7 @@ namespace MCPForUnity.Editor.Tools
                 catch
                 { /* Ignore nested exception */
                 }
-                return Response.Error($"Error retrieving log entries: {e.Message}");
+                return new ErrorResponse($"Error retrieving log entries: {e.Message}");
             }
             finally
             {
@@ -376,7 +376,7 @@ namespace MCPForUnity.Editor.Tools
             }
 
             // Return the filtered and formatted list (might be empty)
-            return Response.Success(
+            return new SuccessResponse(
                 $"Retrieved {formattedEntries.Count} log entries.",
                 formattedEntries
             );

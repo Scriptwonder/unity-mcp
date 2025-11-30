@@ -16,11 +16,11 @@ namespace MCPForUnity.Editor.Resources.Project
             try
             {
                 string[] tags = InternalEditorUtility.tags;
-                return Response.Success("Retrieved current tags.", tags);
+                return new SuccessResponse("Retrieved current tags.", tags);
             }
             catch (Exception e)
             {
-                return Response.Error($"Failed to retrieve tags: {e.Message}");
+                return new ErrorResponse($"Failed to retrieve tags: {e.Message}");
             }
         }
     }

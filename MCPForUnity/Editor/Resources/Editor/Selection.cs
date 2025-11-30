@@ -41,11 +41,11 @@ namespace MCPForUnity.Editor.Resources.Editor
                     assetGUIDs = UnityEditor.Selection.assetGUIDs
                 };
 
-                return Response.Success("Retrieved current selection details.", selectionInfo);
+                return new SuccessResponse("Retrieved current selection details.", selectionInfo);
             }
             catch (Exception e)
             {
-                return Response.Error($"Error getting selection: {e.Message}");
+                return new ErrorResponse($"Error getting selection: {e.Message}");
             }
         }
     }

@@ -27,12 +27,12 @@ namespace MCPForUnity.Editor.Resources.Project
                         layers.Add(i, layerName);
                     }
                 }
-                
-                return Response.Success("Retrieved current named layers.", layers);
+
+                return new SuccessResponse("Retrieved current named layers.", layers);
             }
             catch (Exception e)
             {
-                return Response.Error($"Failed to retrieve layers: {e.Message}");
+                return new ErrorResponse($"Failed to retrieve layers: {e.Message}");
             }
         }
     }

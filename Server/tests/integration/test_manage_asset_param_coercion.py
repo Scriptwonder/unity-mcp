@@ -1,7 +1,7 @@
 import asyncio
 
 from .test_helpers import DummyContext
-import tools.manage_asset as manage_asset_mod
+import services.tools.manage_asset as manage_asset_mod
 
 
 def test_manage_asset_pagination_coercion(monkeypatch):
@@ -11,7 +11,8 @@ def test_manage_asset_pagination_coercion(monkeypatch):
         captured["params"] = params
         return {"success": True, "data": {}}
 
-    monkeypatch.setattr(manage_asset_mod, "async_send_command_with_retry", fake_async_send)
+    monkeypatch.setattr(
+        manage_asset_mod, "async_send_command_with_retry", fake_async_send)
 
     result = asyncio.run(
         manage_asset_mod.manage_asset(
@@ -26,9 +27,3 @@ def test_manage_asset_pagination_coercion(monkeypatch):
     assert result == {"success": True, "data": {}}
     assert captured["params"]["pageSize"] == 50
     assert captured["params"]["pageNumber"] == 2
-
-
-
-
-
-

@@ -40,11 +40,11 @@ namespace MCPForUnity.Editor.Resources.Editor
                     }
                 };
 
-                return Response.Success("Retrieved active tool information.", toolInfo);
+                return new SuccessResponse("Retrieved active tool information.", toolInfo);
             }
             catch (Exception e)
             {
-                return Response.Error($"Error getting active tool: {e.Message}");
+                return new ErrorResponse($"Error getting active tool: {e.Message}");
             }
         }
     }

@@ -22,7 +22,7 @@ namespace MCPForUnity.Editor.Tools
     /// <summary>
     /// Handles asset management operations within the Unity project.
     /// </summary>
-    [McpForUnityTool("manage_asset")]
+    [McpForUnityTool("manage_asset", AutoRegister = false)]
     public static class ManageAsset
     {
         // --- Main Handler ---
@@ -48,14 +48,14 @@ namespace MCPForUnity.Editor.Tools
             string action = @params["action"]?.ToString().ToLower();
             if (string.IsNullOrEmpty(action))
             {
-                return Response.Error("Action parameter is required.");
+                return new ErrorResponse("Action parameter is required.");
             }
 
             // Check if the action is valid before switching
             if (!ValidActions.Contains(action))
             {
                 string validActionsList = string.Join(", ", ValidActions);
-                return Response.Error(
+                return new ErrorResponse(
                     $"Unknown action: '{action}'. Valid actions are: {validActionsList}"
                 );
             }
@@ -112,7 +112,7 @@ namespace MCPForUnity.Editor.Tools
                     default:
                         // This error message is less likely to be hit now, but kept here as a fallback or for potential future modifications.
                         string validActionsListDefault = string.Join(", ", ValidActions);
-                        return Response.Error(
+                        return new ErrorResponse(
                             $"Unknown action: '{action}'. Valid actions are: {validActionsListDefault}"
                         );
                 }
@@ -120,7 +120,7 @@ namespace MCPForUnity.Editor.Tools
             catch (Exception e)
             {
                 Debug.LogError($"[ManageAsset] Action '{action}' failed for path '{path}': {e}");
-                return Response.Error(
+                return new ErrorResponse(
                     $"Internal error processing action '{action}' on '{path}': {e.Message}"
                 );
             }
@@ -131,10 +131,10 @@ namespace MCPForUnity.Editor.Tools
         private static object ReimportAsset(string path, JObject properties)
         {
             if (string.IsNullOrEmpty(path))
-                return Response.Error("'path' is required for reimport.");
+                return new ErrorResponse("'path' is required for reimport.");
             string fullPath = AssetPathUtility.SanitizeAssetPath(path);
             if (!AssetExists(fullPath))
-                return Response.Error($"Asset not found at path: {fullPath}");
+                return new ErrorResponse($"Asset not found at path: {fullPath}");
 
             try
             {
@@ -152,11 +152,11 @@ namespace MCPForUnity.Editor.Tools
 
                 AssetDatabase.ImportAsset(fullPath, ImportAssetOptions.ForceUpdate);
                 // AssetDatabase.Refresh(); // Usually ImportAsset handles refresh
-                return Response.Success($"Asset '{fullPath}' reimported.", GetAssetData(fullPath));
+                return new SuccessResponse($"Asset '{fullPath}' reimported.", GetAssetData(fullPath));
             }
             catch (Exception e)
             {
-                return Response.Error($"Failed to reimport asset '{fullPath}': {e.Message}");
+                return new ErrorResponse($"Failed to reimport asset '{fullPath}': {e.Message}");
             }
         }
 
@@ -167,9 +167,9 @@ namespace MCPForUnity.Editor.Tools
             JObject properties = @params["properties"] as JObject;
 
             if (string.IsNullOrEmpty(path))
-                return Response.Error("'path' is required for create.");
+                return new ErrorResponse("'path' is required for create.");
             if (string.IsNullOrEmpty(assetType))
-                return Response.Error("'assetType' is required for create.");
+                return new ErrorResponse("'assetType' is required for create.");
 
             string fullPath = AssetPathUtility.SanitizeAssetPath(path);
             string directory = Path.GetDirectoryName(fullPath);
@@ -182,7 +182,7 @@ namespace MCPForUnity.Editor.Tools
             }
 
             if (AssetExists(fullPath))
-                return Response.Error($"Asset already exists at path: {fullPath}");
+                return new ErrorResponse($"Asset already exists at path: {fullPath}");
 
             try
             {
@@ -205,7 +205,7 @@ namespace MCPForUnity.Editor.Tools
                         ?? Shader.Find("Standard")
                         ?? Shader.Find("Unlit/Color");
                     if (shader == null)
-                        return Response.Error($"Could not find a suitable shader (requested: '{requested ?? "none"}').");
+                        return new ErrorResponse($"Could not find a suitable shader (requested: '{requested ?? "none"}').");
 
                     var mat = new Material(shader);
                     if (properties != null)
@@ -225,7 +225,7 @@ namespace MCPForUnity.Editor.Tools
                 {
                     string scriptClassName = properties?["scriptClass"]?.ToString();
                     if (string.IsNullOrEmpty(scriptClassName))
-                        return Response.Error(
+                        return new ErrorResponse(
                             "'scriptClass' property required when creating ScriptableObject asset."
                         );
 
@@ -238,7 +238,7 @@ namespace MCPForUnity.Editor.Tools
                         var reason = scriptType == null
                             ? (string.IsNullOrEmpty(error) ? "Type not found." : error)
                             : "Type found but does not inherit from ScriptableObject.";
-                        return Response.Error($"Script class '{scriptClassName}' invalid: {reason}");
+                        return new ErrorResponse($"Script class '{scriptClassName}' invalid: {reason}");
                     }
 
                     ScriptableObject so = ScriptableObject.CreateInstance(scriptType);
@@ -250,7 +250,7 @@ namespace MCPForUnity.Editor.Tools
                 {
                     // Creating prefabs usually involves saving an existing GameObject hierarchy.
                     // A common pattern is to create an empty GameObject, configure it, and then save it.
-                    return Response.Error(
+                    return new ErrorResponse(
                         "Creating prefabs programmatically usually requires a source GameObject. Use manage_gameobject to create/configure, then save as prefab via a separate mechanism or future enhancement."
                     );
                     // Example (conceptual):
@@ -265,7 +265,7 @@ namespace MCPForUnity.Editor.Tools
                     // File.Create(Path.Combine(Directory.GetCurrentDirectory(), fullPath)).Close();
                     // AssetDatabase.ImportAsset(fullPath); // Let Unity try to import it
                     // newAsset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(fullPath);
-                    return Response.Error(
+                    return new ErrorResponse(
                         $"Creation for asset type '{assetType}' is not explicitly supported yet. Supported: Folder, Material, ScriptableObject."
                     );
                 }
@@ -275,28 +275,28 @@ namespace MCPForUnity.Editor.Tools
                     && !Directory.Exists(Path.Combine(Directory.GetCurrentDirectory(), fullPath))
                 ) // Check if it wasn't a folder and asset wasn't created
                 {
-                    return Response.Error(
+                    return new ErrorResponse(
                         $"Failed to create asset '{assetType}' at '{fullPath}'. See logs for details."
                     );
                 }
 
                 AssetDatabase.SaveAssets();
                 // AssetDatabase.Refresh(); // CreateAsset often handles refresh
-                return Response.Success(
+                return new SuccessResponse(
                     $"Asset '{fullPath}' created successfully.",
                     GetAssetData(fullPath)
                 );
             }
             catch (Exception e)
             {
-                return Response.Error($"Failed to create asset at '{fullPath}': {e.Message}");
+                return new ErrorResponse($"Failed to create asset at '{fullPath}': {e.Message}");
             }
         }
 
         private static object CreateFolder(string path)
         {
             if (string.IsNullOrEmpty(path))
-                return Response.Error("'path' is required for create_folder.");
+                return new ErrorResponse("'path' is required for create_folder.");
             string fullPath = AssetPathUtility.SanitizeAssetPath(path);
             string parentDir = Path.GetDirectoryName(fullPath);
             string folderName = Path.GetFileName(fullPath);
@@ -306,14 +306,14 @@ namespace MCPForUnity.Editor.Tools
                 // Check if it's actually a folder already
                 if (AssetDatabase.IsValidFolder(fullPath))
                 {
-                    return Response.Success(
+                    return new SuccessResponse(
                         $"Folder already exists at path: {fullPath}",
                         GetAssetData(fullPath)
                     );
                 }
                 else
                 {
-                    return Response.Error(
+                    return new ErrorResponse(
                         $"An asset (not a folder) already exists at path: {fullPath}"
                     );
                 }
@@ -331,33 +331,33 @@ namespace MCPForUnity.Editor.Tools
                 string guid = AssetDatabase.CreateFolder(parentDir, folderName);
                 if (string.IsNullOrEmpty(guid))
                 {
-                    return Response.Error(
+                    return new ErrorResponse(
                         $"Failed to create folder '{fullPath}'. Check logs and permissions."
                     );
                 }
 
                 // AssetDatabase.Refresh(); // CreateFolder usually handles refresh
-                return Response.Success(
+                return new SuccessResponse(
                     $"Folder '{fullPath}' created successfully.",
                     GetAssetData(fullPath)
                 );
             }
             catch (Exception e)
             {
-                return Response.Error($"Failed to create folder '{fullPath}': {e.Message}");
+                return new ErrorResponse($"Failed to create folder '{fullPath}': {e.Message}");
             }
         }
 
         private static object ModifyAsset(string path, JObject properties)
         {
             if (string.IsNullOrEmpty(path))
-                return Response.Error("'path' is required for modify.");
+                return new ErrorResponse("'path' is required for modify.");
             if (properties == null || !properties.HasValues)
-                return Response.Error("'properties' are required for modify.");
+                return new ErrorResponse("'properties' are required for modify.");
 
             string fullPath = AssetPathUtility.SanitizeAssetPath(path);
             if (!AssetExists(fullPath))
-                return Response.Error($"Asset not found at path: {fullPath}");
+                return new ErrorResponse($"Asset not found at path: {fullPath}");
 
             try
             {
@@ -365,7 +365,7 @@ namespace MCPForUnity.Editor.Tools
                     fullPath
                 );
                 if (asset == null)
-                    return Response.Error($"Failed to load asset at path: {fullPath}");
+                    return new ErrorResponse($"Failed to load asset at path: {fullPath}");
 
                 bool modified = false; // Flag to track if any changes were made
 
@@ -484,7 +484,7 @@ namespace MCPForUnity.Editor.Tools
                     AssetDatabase.SaveAssets();
                     // Refresh might be needed in some edge cases, but SaveAssets usually covers it.
                     // AssetDatabase.Refresh();
-                    return Response.Success(
+                    return new SuccessResponse(
                         $"Asset '{fullPath}' modified successfully.",
                         GetAssetData(fullPath)
                     );
@@ -492,11 +492,11 @@ namespace MCPForUnity.Editor.Tools
                 else
                 {
                     // If no changes were made (e.g., component not found, property names incorrect, value unchanged), return a success message indicating nothing changed.
-                    return Response.Success(
+                    return new SuccessResponse(
                         $"No applicable or modifiable properties found for asset '{fullPath}'. Check component names, property names, and values.",
                         GetAssetData(fullPath)
                     );
-                    // Previous message: return Response.Success($"No applicable properties found to modify for asset '{fullPath}'.", GetAssetData(fullPath));
+                    // Previous message: return new SuccessResponse($"No applicable properties found to modify for asset '{fullPath}'.", GetAssetData(fullPath));
                 }
             }
             catch (Exception e)
@@ -504,17 +504,17 @@ namespace MCPForUnity.Editor.Tools
                 // Log the detailed error internally
                 Debug.LogError($"[ManageAsset] Action 'modify' failed for path '{path}': {e}");
                 // Return a user-friendly error message
-                return Response.Error($"Failed to modify asset '{fullPath}': {e.Message}");
+                return new ErrorResponse($"Failed to modify asset '{fullPath}': {e.Message}");
             }
         }
 
         private static object DeleteAsset(string path)
         {
             if (string.IsNullOrEmpty(path))
-                return Response.Error("'path' is required for delete.");
+                return new ErrorResponse("'path' is required for delete.");
             string fullPath = AssetPathUtility.SanitizeAssetPath(path);
             if (!AssetExists(fullPath))
-                return Response.Error($"Asset not found at path: {fullPath}");
+                return new ErrorResponse($"Asset not found at path: {fullPath}");
 
             try
             {
@@ -522,30 +522,30 @@ namespace MCPForUnity.Editor.Tools
                 if (success)
                 {
                     // AssetDatabase.Refresh(); // DeleteAsset usually handles refresh
-                    return Response.Success($"Asset '{fullPath}' deleted successfully.");
+                    return new SuccessResponse($"Asset '{fullPath}' deleted successfully.");
                 }
                 else
                 {
                     // This might happen if the file couldn't be deleted (e.g., locked)
-                    return Response.Error(
+                    return new ErrorResponse(
                         $"Failed to delete asset '{fullPath}'. Check logs or if the file is locked."
                     );
                 }
             }
             catch (Exception e)
             {
-                return Response.Error($"Error deleting asset '{fullPath}': {e.Message}");
+                return new ErrorResponse($"Error deleting asset '{fullPath}': {e.Message}");
             }
         }
 
         private static object DuplicateAsset(string path, string destinationPath)
         {
             if (string.IsNullOrEmpty(path))
-                return Response.Error("'path' is required for duplicate.");
+                return new ErrorResponse("'path' is required for duplicate.");
 
             string sourcePath = AssetPathUtility.SanitizeAssetPath(path);
             if (!AssetExists(sourcePath))
-                return Response.Error($"Source asset not found at path: {sourcePath}");
+                return new ErrorResponse($"Source asset not found at path: {sourcePath}");
 
             string destPath;
             if (string.IsNullOrEmpty(destinationPath))
@@ -557,7 +557,7 @@ namespace MCPForUnity.Editor.Tools
             {
                 destPath = AssetPathUtility.SanitizeAssetPath(destinationPath);
                 if (AssetExists(destPath))
-                    return Response.Error($"Asset already exists at destination path: {destPath}");
+                    return new ErrorResponse($"Asset already exists at destination path: {destPath}");
                 // Ensure destination directory exists
                 EnsureDirectoryExists(Path.GetDirectoryName(destPath));
             }
@@ -568,38 +568,38 @@ namespace MCPForUnity.Editor.Tools
                 if (success)
                 {
                     // AssetDatabase.Refresh();
-                    return Response.Success(
+                    return new SuccessResponse(
                         $"Asset '{sourcePath}' duplicated to '{destPath}'.",
                         GetAssetData(destPath)
                     );
                 }
                 else
                 {
-                    return Response.Error(
+                    return new ErrorResponse(
                         $"Failed to duplicate asset from '{sourcePath}' to '{destPath}'."
                     );
                 }
             }
             catch (Exception e)
             {
-                return Response.Error($"Error duplicating asset '{sourcePath}': {e.Message}");
+                return new ErrorResponse($"Error duplicating asset '{sourcePath}': {e.Message}");
             }
         }
 
         private static object MoveOrRenameAsset(string path, string destinationPath)
         {
             if (string.IsNullOrEmpty(path))
-                return Response.Error("'path' is required for move/rename.");
+                return new ErrorResponse("'path' is required for move/rename.");
             if (string.IsNullOrEmpty(destinationPath))
-                return Response.Error("'destination' path is required for move/rename.");
+                return new ErrorResponse("'destination' path is required for move/rename.");
 
             string sourcePath = AssetPathUtility.SanitizeAssetPath(path);
             string destPath = AssetPathUtility.SanitizeAssetPath(destinationPath);
 
             if (!AssetExists(sourcePath))
-                return Response.Error($"Source asset not found at path: {sourcePath}");
+                return new ErrorResponse($"Source asset not found at path: {sourcePath}");
             if (AssetExists(destPath))
-                return Response.Error(
+                return new ErrorResponse(
                     $"An asset already exists at the destination path: {destPath}"
                 );
 
@@ -612,7 +612,7 @@ namespace MCPForUnity.Editor.Tools
                 string error = AssetDatabase.ValidateMoveAsset(sourcePath, destPath);
                 if (!string.IsNullOrEmpty(error))
                 {
-                    return Response.Error(
+                    return new ErrorResponse(
                         $"Failed to move/rename asset from '{sourcePath}' to '{destPath}': {error}"
                     );
                 }
@@ -621,7 +621,7 @@ namespace MCPForUnity.Editor.Tools
                 if (!string.IsNullOrEmpty(guid)) // MoveAsset returns the new GUID on success
                 {
                     // AssetDatabase.Refresh(); // MoveAsset usually handles refresh
-                    return Response.Success(
+                    return new SuccessResponse(
                         $"Asset moved/renamed from '{sourcePath}' to '{destPath}'.",
                         GetAssetData(destPath)
                     );
@@ -629,14 +629,14 @@ namespace MCPForUnity.Editor.Tools
                 else
                 {
                     // This case might not be reachable if ValidateMoveAsset passes, but good to have
-                    return Response.Error(
+                    return new ErrorResponse(
                         $"MoveAsset call failed unexpectedly for '{sourcePath}' to '{destPath}'."
                     );
                 }
             }
             catch (Exception e)
             {
-                return Response.Error($"Error moving/renaming asset '{sourcePath}': {e.Message}");
+                return new ErrorResponse($"Error moving/renaming asset '{sourcePath}': {e.Message}");
             }
         }
 
@@ -728,7 +728,7 @@ namespace MCPForUnity.Editor.Tools
                 int startIndex = (pageNumber - 1) * pageSize;
                 var pagedResults = results.Skip(startIndex).Take(pageSize).ToList();
 
-                return Response.Success(
+                return new SuccessResponse(
                     $"Found {totalFound} asset(s). Returning page {pageNumber} ({pagedResults.Count} assets).",
                     new
                     {
@@ -741,28 +741,28 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception e)
             {
-                return Response.Error($"Error searching assets: {e.Message}");
+                return new ErrorResponse($"Error searching assets: {e.Message}");
             }
         }
 
         private static object GetAssetInfo(string path, bool generatePreview)
         {
             if (string.IsNullOrEmpty(path))
-                return Response.Error("'path' is required for get_info.");
+                return new ErrorResponse("'path' is required for get_info.");
             string fullPath = AssetPathUtility.SanitizeAssetPath(path);
             if (!AssetExists(fullPath))
-                return Response.Error($"Asset not found at path: {fullPath}");
+                return new ErrorResponse($"Asset not found at path: {fullPath}");
 
             try
             {
-                return Response.Success(
+                return new SuccessResponse(
                     "Asset info retrieved.",
                     GetAssetData(fullPath, generatePreview)
                 );
             }
             catch (Exception e)
             {
-                return Response.Error($"Error getting info for asset '{fullPath}': {e.Message}");
+                return new ErrorResponse($"Error getting info for asset '{fullPath}': {e.Message}");
             }
         }
 
@@ -775,12 +775,12 @@ namespace MCPForUnity.Editor.Tools
         {
             // 1. Validate input path
             if (string.IsNullOrEmpty(path))
-                return Response.Error("'path' is required for get_components.");
+                return new ErrorResponse("'path' is required for get_components.");
 
             // 2. Sanitize and check existence
             string fullPath = AssetPathUtility.SanitizeAssetPath(path);
             if (!AssetExists(fullPath))
-                return Response.Error($"Asset not found at path: {fullPath}");
+                return new ErrorResponse($"Asset not found at path: {fullPath}");
 
             try
             {
@@ -789,7 +789,7 @@ namespace MCPForUnity.Editor.Tools
                     fullPath
                 );
                 if (asset == null)
-                    return Response.Error($"Failed to load asset at path: {fullPath}");
+                    return new ErrorResponse($"Failed to load asset at path: {fullPath}");
 
                 // 4. Check if it's a GameObject (Prefabs load as GameObjects)
                 GameObject gameObject = asset as GameObject;
@@ -801,11 +801,11 @@ namespace MCPForUnity.Editor.Tools
                     {
                         // If the asset itself *is* a component, maybe return just its info?
                         // This is an edge case. Let's stick to GameObjects for now.
-                        return Response.Error(
+                        return new ErrorResponse(
                             $"Asset at '{fullPath}' is a Component ({asset.GetType().FullName}), not a GameObject. Components are typically retrieved *from* a GameObject."
                         );
                     }
-                    return Response.Error(
+                    return new ErrorResponse(
                         $"Asset at '{fullPath}' is not a GameObject (Type: {asset.GetType().FullName}). Cannot get components from this asset type."
                     );
                 }
@@ -825,7 +825,7 @@ namespace MCPForUnity.Editor.Tools
                     .ToList<object>(); // Explicit cast for clarity if needed
 
                 // 7. Return success response
-                return Response.Success(
+                return new SuccessResponse(
                     $"Found {componentList.Count} component(s) on asset '{fullPath}'.",
                     componentList
                 );
@@ -835,7 +835,7 @@ namespace MCPForUnity.Editor.Tools
                 Debug.LogError(
                     $"[ManageAsset.GetComponentsFromAsset] Error getting components for '{fullPath}': {e}"
                 );
-                return Response.Error(
+                return new ErrorResponse(
                     $"Error getting components for asset '{fullPath}': {e.Message}"
                 );
             }
@@ -1051,113 +1051,113 @@ namespace MCPForUnity.Editor.Tools
                 }
             }
 
-			// --- Flexible direct property assignment ---
-			// Allow payloads like: { "_Color": [r,g,b,a] }, { "_Glossiness": 0.5 }, { "_MainTex": "Assets/.." }
-			// while retaining backward compatibility with the structured keys above.
-			// This iterates all top-level keys except the reserved structured ones and applies them
-			// if they match known shader properties.
-			var reservedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "shader", "color", "float", "texture" };
+            // --- Flexible direct property assignment ---
+            // Allow payloads like: { "_Color": [r,g,b,a] }, { "_Glossiness": 0.5 }, { "_MainTex": "Assets/.." }
+            // while retaining backward compatibility with the structured keys above.
+            // This iterates all top-level keys except the reserved structured ones and applies them
+            // if they match known shader properties.
+            var reservedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "shader", "color", "float", "texture" };
 
-			// Helper resolves common URP/Standard aliasing (e.g., _Color <-> _BaseColor, _MainTex <-> _BaseMap, _Glossiness <-> _Smoothness)
-			string ResolvePropertyName(string name)
-			{
-				if (string.IsNullOrEmpty(name)) return name;
-				string[] candidates;
-				var lower = name.ToLowerInvariant();
-				switch (lower)
-				{
-					case "_color": candidates = new[] { "_Color", "_BaseColor" }; break;
-					case "_basecolor": candidates = new[] { "_BaseColor", "_Color" }; break;
-					case "_maintex": candidates = new[] { "_MainTex", "_BaseMap" }; break;
-					case "_basemap": candidates = new[] { "_BaseMap", "_MainTex" }; break;
-					case "_glossiness": candidates = new[] { "_Glossiness", "_Smoothness" }; break;
-					case "_smoothness": candidates = new[] { "_Smoothness", "_Glossiness" }; break;
-					// Friendly names → shader property names
-					case "metallic": candidates = new[] { "_Metallic" }; break;
-					case "smoothness": candidates = new[] { "_Smoothness", "_Glossiness" }; break;
-					case "albedo": candidates = new[] { "_BaseMap", "_MainTex" }; break;
-					default: candidates = new[] { name }; break; // keep original as-is
-				}
-				foreach (var candidate in candidates)
-				{
-					if (mat.HasProperty(candidate)) return candidate;
-				}
-				return name; // fall back to original
-			}
+            // Helper resolves common URP/Standard aliasing (e.g., _Color <-> _BaseColor, _MainTex <-> _BaseMap, _Glossiness <-> _Smoothness)
+            string ResolvePropertyName(string name)
+            {
+                if (string.IsNullOrEmpty(name)) return name;
+                string[] candidates;
+                var lower = name.ToLowerInvariant();
+                switch (lower)
+                {
+                    case "_color": candidates = new[] { "_Color", "_BaseColor" }; break;
+                    case "_basecolor": candidates = new[] { "_BaseColor", "_Color" }; break;
+                    case "_maintex": candidates = new[] { "_MainTex", "_BaseMap" }; break;
+                    case "_basemap": candidates = new[] { "_BaseMap", "_MainTex" }; break;
+                    case "_glossiness": candidates = new[] { "_Glossiness", "_Smoothness" }; break;
+                    case "_smoothness": candidates = new[] { "_Smoothness", "_Glossiness" }; break;
+                    // Friendly names → shader property names
+                    case "metallic": candidates = new[] { "_Metallic" }; break;
+                    case "smoothness": candidates = new[] { "_Smoothness", "_Glossiness" }; break;
+                    case "albedo": candidates = new[] { "_BaseMap", "_MainTex" }; break;
+                    default: candidates = new[] { name }; break; // keep original as-is
+                }
+                foreach (var candidate in candidates)
+                {
+                    if (mat.HasProperty(candidate)) return candidate;
+                }
+                return name; // fall back to original
+            }
 
-			foreach (var prop in properties.Properties())
-			{
-				if (reservedKeys.Contains(prop.Name)) continue;
-				string shaderProp = ResolvePropertyName(prop.Name);
-				JToken v = prop.Value;
+            foreach (var prop in properties.Properties())
+            {
+                if (reservedKeys.Contains(prop.Name)) continue;
+                string shaderProp = ResolvePropertyName(prop.Name);
+                JToken v = prop.Value;
 
-				// Color: numeric array [r,g,b,(a)]
-				if (v is JArray arr && arr.Count >= 3 && arr.All(t => t.Type == JTokenType.Float || t.Type == JTokenType.Integer))
-				{
-					if (mat.HasProperty(shaderProp))
-					{
-						try
-						{
-							var c = new Color(
-								arr[0].ToObject<float>(),
-								arr[1].ToObject<float>(),
-								arr[2].ToObject<float>(),
-								arr.Count > 3 ? arr[3].ToObject<float>() : 1f
-							);
-							if (mat.GetColor(shaderProp) != c)
-							{
-								mat.SetColor(shaderProp, c);
-								modified = true;
-							}
-						}
-						catch (Exception ex)
-						{
-							Debug.LogWarning($"Error setting color '{shaderProp}': {ex.Message}");
-						}
-					}
-					continue;
-				}
+                // Color: numeric array [r,g,b,(a)]
+                if (v is JArray arr && arr.Count >= 3 && arr.All(t => t.Type == JTokenType.Float || t.Type == JTokenType.Integer))
+                {
+                    if (mat.HasProperty(shaderProp))
+                    {
+                        try
+                        {
+                            var c = new Color(
+                                arr[0].ToObject<float>(),
+                                arr[1].ToObject<float>(),
+                                arr[2].ToObject<float>(),
+                                arr.Count > 3 ? arr[3].ToObject<float>() : 1f
+                            );
+                            if (mat.GetColor(shaderProp) != c)
+                            {
+                                mat.SetColor(shaderProp, c);
+                                modified = true;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.LogWarning($"Error setting color '{shaderProp}': {ex.Message}");
+                        }
+                    }
+                    continue;
+                }
 
-				// Float: single number
-				if (v.Type == JTokenType.Float || v.Type == JTokenType.Integer)
-				{
-					if (mat.HasProperty(shaderProp))
-					{
-						try
-						{
-							float f = v.ToObject<float>();
-							if (!Mathf.Approximately(mat.GetFloat(shaderProp), f))
-							{
-								mat.SetFloat(shaderProp, f);
-								modified = true;
-							}
-						}
-						catch (Exception ex)
-						{
-							Debug.LogWarning($"Error setting float '{shaderProp}': {ex.Message}");
-						}
-					}
-					continue;
-				}
+                // Float: single number
+                if (v.Type == JTokenType.Float || v.Type == JTokenType.Integer)
+                {
+                    if (mat.HasProperty(shaderProp))
+                    {
+                        try
+                        {
+                            float f = v.ToObject<float>();
+                            if (!Mathf.Approximately(mat.GetFloat(shaderProp), f))
+                            {
+                                mat.SetFloat(shaderProp, f);
+                                modified = true;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.LogWarning($"Error setting float '{shaderProp}': {ex.Message}");
+                        }
+                    }
+                    continue;
+                }
 
-				// Texture: string path
-				if (v.Type == JTokenType.String)
-				{
-					string texPath = v.ToString();
-					if (!string.IsNullOrEmpty(texPath) && mat.HasProperty(shaderProp))
-					{
-						var tex = AssetDatabase.LoadAssetAtPath<Texture>(AssetPathUtility.SanitizeAssetPath(texPath));
-						if (tex != null && mat.GetTexture(shaderProp) != tex)
-						{
-							mat.SetTexture(shaderProp, tex);
-							modified = true;
-						}
-					}
-					continue;
-				}
-			}
+                // Texture: string path
+                if (v.Type == JTokenType.String)
+                {
+                    string texPath = v.ToString();
+                    if (!string.IsNullOrEmpty(texPath) && mat.HasProperty(shaderProp))
+                    {
+                        var tex = AssetDatabase.LoadAssetAtPath<Texture>(AssetPathUtility.SanitizeAssetPath(texPath));
+                        if (tex != null && mat.GetTexture(shaderProp) != tex)
+                        {
+                            mat.SetTexture(shaderProp, tex);
+                            modified = true;
+                        }
+                    }
+                    continue;
+                }
+            }
 
-			// TODO: Add handlers for other property types (Vectors, Ints, Keywords, RenderQueue, etc.)
+            // TODO: Add handlers for other property types (Vectors, Ints, Keywords, RenderQueue, etc.)
             return modified;
         }
 

@@ -2,19 +2,19 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using MCPForUnity.Editor.Helpers; // For Response class
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using MCPForUnity.Editor.Helpers; // For Response class
 
 namespace MCPForUnity.Editor.Tools
 {
     /// <summary>
     /// Handles scene management operations like loading, saving, creating, and querying hierarchy.
     /// </summary>
-    [McpForUnityTool("manage_scene")]
+    [McpForUnityTool("manage_scene", AutoRegister = false)]
     public static class ManageScene
     {
         private sealed class SceneCommand
@@ -78,7 +78,7 @@ namespace MCPForUnity.Editor.Tools
 
             if (string.IsNullOrEmpty(action))
             {
-                return Response.Error("Action parameter is required.");
+                return new ErrorResponse("Action parameter is required.");
             }
 
             string sceneFileName = string.IsNullOrEmpty(name) ? null : $"{name}.unity";
@@ -101,7 +101,7 @@ namespace MCPForUnity.Editor.Tools
                 }
                 catch (Exception e)
                 {
-                    return Response.Error(
+                    return new ErrorResponse(
                         $"Could not create directory '{fullPathDir}': {e.Message}"
                     );
                 }
@@ -113,7 +113,7 @@ namespace MCPForUnity.Editor.Tools
             {
                 case "create":
                     if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(relativePath))
-                        return Response.Error(
+                        return new ErrorResponse(
                             "'name' and 'path' parameters are required for 'create' action."
                         );
                     return CreateScene(fullPath, relativePath);
@@ -124,7 +124,7 @@ namespace MCPForUnity.Editor.Tools
                     else if (buildIndex.HasValue)
                         return LoadScene(buildIndex.Value);
                     else
-                        return Response.Error(
+                        return new ErrorResponse(
                             "Either 'name'/'path' or 'buildIndex' must be provided for 'load' action."
                         );
                 case "save":
@@ -144,7 +144,7 @@ namespace MCPForUnity.Editor.Tools
                     return GetBuildSettingsScenes();
                 // Add cases for modifying build settings, additive loading, unloading etc.
                 default:
-                    return Response.Error(
+                    return new ErrorResponse(
                         $"Unknown action: '{action}'. Valid actions: create, load, save, get_hierarchy, get_active, get_build_settings."
                     );
             }
@@ -154,7 +154,7 @@ namespace MCPForUnity.Editor.Tools
         {
             if (File.Exists(fullPath))
             {
-                return Response.Error($"Scene already exists at '{relativePath}'.");
+                return new ErrorResponse($"Scene already exists at '{relativePath}'.");
             }
 
             try
@@ -170,7 +170,7 @@ namespace MCPForUnity.Editor.Tools
                 if (saved)
                 {
                     AssetDatabase.Refresh(); // Ensure Unity sees the new scene file
-                    return Response.Success(
+                    return new SuccessResponse(
                         $"Scene '{Path.GetFileName(relativePath)}' created successfully at '{relativePath}'.",
                         new { path = relativePath }
                     );
@@ -179,12 +179,12 @@ namespace MCPForUnity.Editor.Tools
                 {
                     // If SaveScene fails, it might leave an untitled scene open.
                     // Optionally try to close it, but be cautious.
-                    return Response.Error($"Failed to save new scene to '{relativePath}'.");
+                    return new ErrorResponse($"Failed to save new scene to '{relativePath}'.");
                 }
             }
             catch (Exception e)
             {
-                return Response.Error($"Error creating scene '{relativePath}': {e.Message}");
+                return new ErrorResponse($"Error creating scene '{relativePath}': {e.Message}");
             }
         }
 
@@ -202,24 +202,24 @@ namespace MCPForUnity.Editor.Tools
                 )
             )
             {
-                return Response.Error($"Scene file not found at '{relativePath}'.");
+                return new ErrorResponse($"Scene file not found at '{relativePath}'.");
             }
 
             // Check for unsaved changes in the current scene
             if (EditorSceneManager.GetActiveScene().isDirty)
             {
                 // Optionally prompt the user or save automatically before loading
-                return Response.Error(
+                return new ErrorResponse(
                     "Current scene has unsaved changes. Please save or discard changes before loading a new scene."
                 );
                 // Example: bool saveOK = EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo();
-                // if (!saveOK) return Response.Error("Load cancelled by user.");
+                // if (!saveOK) return new ErrorResponse("Load cancelled by user.");
             }
 
             try
             {
                 EditorSceneManager.OpenScene(relativePath, OpenSceneMode.Single);
-                return Response.Success(
+                return new SuccessResponse(
                     $"Scene '{relativePath}' loaded successfully.",
                     new
                     {
@@ -230,7 +230,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception e)
             {
-                return Response.Error($"Error loading scene '{relativePath}': {e.Message}");
+                return new ErrorResponse($"Error loading scene '{relativePath}': {e.Message}");
             }
         }
 
@@ -238,7 +238,7 @@ namespace MCPForUnity.Editor.Tools
         {
             if (buildIndex < 0 || buildIndex >= SceneManager.sceneCountInBuildSettings)
             {
-                return Response.Error(
+                return new ErrorResponse(
                     $"Invalid build index: {buildIndex}. Must be between 0 and {SceneManager.sceneCountInBuildSettings - 1}."
                 );
             }
@@ -246,7 +246,7 @@ namespace MCPForUnity.Editor.Tools
             // Check for unsaved changes
             if (EditorSceneManager.GetActiveScene().isDirty)
             {
-                return Response.Error(
+                return new ErrorResponse(
                     "Current scene has unsaved changes. Please save or discard changes before loading a new scene."
                 );
             }
@@ -255,7 +255,7 @@ namespace MCPForUnity.Editor.Tools
             {
                 string scenePath = SceneUtility.GetScenePathByBuildIndex(buildIndex);
                 EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
-                return Response.Success(
+                return new SuccessResponse(
                     $"Scene at build index {buildIndex} ('{scenePath}') loaded successfully.",
                     new
                     {
@@ -267,7 +267,7 @@ namespace MCPForUnity.Editor.Tools
             }
             catch (Exception e)
             {
-                return Response.Error(
+                return new ErrorResponse(
                     $"Error loading scene with build index {buildIndex}: {e.Message}"
                 );
             }
@@ -280,7 +280,7 @@ namespace MCPForUnity.Editor.Tools
                 Scene currentScene = EditorSceneManager.GetActiveScene();
                 if (!currentScene.IsValid())
                 {
-                    return Response.Error("No valid scene is currently active to save.");
+                    return new ErrorResponse("No valid scene is currently active to save.");
                 }
 
                 bool saved;
@@ -303,7 +303,7 @@ namespace MCPForUnity.Editor.Tools
                     if (string.IsNullOrEmpty(currentScene.path))
                     {
                         // Scene is untitled, needs a path
-                        return Response.Error(
+                        return new ErrorResponse(
                             "Cannot save an untitled scene without providing a 'name' and 'path'. Use Save As functionality."
                         );
                     }
@@ -313,19 +313,19 @@ namespace MCPForUnity.Editor.Tools
                 if (saved)
                 {
                     AssetDatabase.Refresh();
-                    return Response.Success(
+                    return new SuccessResponse(
                         $"Scene '{currentScene.name}' saved successfully to '{finalPath}'.",
                         new { path = finalPath, name = currentScene.name }
                     );
                 }
                 else
                 {
-                    return Response.Error($"Failed to save scene '{currentScene.name}'.");
+                    return new ErrorResponse($"Failed to save scene '{currentScene.name}'.");
                 }
             }
             catch (Exception e)
             {
-                return Response.Error($"Error saving scene: {e.Message}");
+                return new ErrorResponse($"Error saving scene: {e.Message}");
             }
         }
 
@@ -338,7 +338,7 @@ namespace MCPForUnity.Editor.Tools
                 try { McpLog.Info($"[ManageScene] get_active: got scene valid={activeScene.IsValid()} loaded={activeScene.isLoaded} name='{activeScene.name}'", always: false); } catch { }
                 if (!activeScene.IsValid())
                 {
-                    return Response.Error("No active scene found.");
+                    return new ErrorResponse("No active scene found.");
                 }
 
                 var sceneInfo = new
@@ -351,12 +351,12 @@ namespace MCPForUnity.Editor.Tools
                     rootCount = activeScene.rootCount,
                 };
 
-                return Response.Success("Retrieved active scene information.", sceneInfo);
+                return new SuccessResponse("Retrieved active scene information.", sceneInfo);
             }
             catch (Exception e)
             {
                 try { McpLog.Error($"[ManageScene] get_active: exception {e.Message}"); } catch { }
-                return Response.Error($"Error getting active scene info: {e.Message}");
+                return new ErrorResponse($"Error getting active scene info: {e.Message}");
             }
         }
 
@@ -378,11 +378,11 @@ namespace MCPForUnity.Editor.Tools
                         }
                     );
                 }
-                return Response.Success("Retrieved scenes from Build Settings.", scenes);
+                return new SuccessResponse("Retrieved scenes from Build Settings.", scenes);
             }
             catch (Exception e)
             {
-                return Response.Error($"Error getting scenes from Build Settings: {e.Message}");
+                return new ErrorResponse($"Error getting scenes from Build Settings: {e.Message}");
             }
         }
 
@@ -395,7 +395,7 @@ namespace MCPForUnity.Editor.Tools
                 try { McpLog.Info($"[ManageScene] get_hierarchy: got scene valid={activeScene.IsValid()} loaded={activeScene.isLoaded} name='{activeScene.name}'", always: false); } catch { }
                 if (!activeScene.IsValid() || !activeScene.isLoaded)
                 {
-                    return Response.Error(
+                    return new ErrorResponse(
                         "No valid and loaded scene is active to get hierarchy from."
                     );
                 }
@@ -405,7 +405,7 @@ namespace MCPForUnity.Editor.Tools
                 try { McpLog.Info($"[ManageScene] get_hierarchy: rootCount={rootObjects?.Length ?? 0}", always: false); } catch { }
                 var hierarchy = rootObjects.Select(go => GetGameObjectDataRecursive(go)).ToList();
 
-                var resp = Response.Success(
+                var resp = new SuccessResponse(
                     $"Retrieved hierarchy for scene '{activeScene.name}'.",
                     hierarchy
                 );
@@ -415,7 +415,7 @@ namespace MCPForUnity.Editor.Tools
             catch (Exception e)
             {
                 try { McpLog.Error($"[ManageScene] get_hierarchy: exception {e.Message}"); } catch { }
-                return Response.Error($"Error getting scene hierarchy: {e.Message}");
+                return new ErrorResponse($"Error getting scene hierarchy: {e.Message}");
             }
         }
 

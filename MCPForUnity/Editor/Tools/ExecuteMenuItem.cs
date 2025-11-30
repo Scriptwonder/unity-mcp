@@ -6,7 +6,7 @@ using UnityEditor;
 
 namespace MCPForUnity.Editor.Tools
 {
-    [McpForUnityTool("execute_menu_item")]
+    [McpForUnityTool("execute_menu_item", AutoRegister = false)]
     public static class ExecuteMenuItem
     {
         // Basic blacklist to prevent execution of disruptive menu items.
@@ -22,12 +22,12 @@ namespace MCPForUnity.Editor.Tools
             string menuPath = @params["menu_path"]?.ToString() ?? @params["menuPath"]?.ToString();
             if (string.IsNullOrWhiteSpace(menuPath))
             {
-                return Response.Error("Required parameter 'menu_path' or 'menuPath' is missing or empty.");
+                return new ErrorResponse("Required parameter 'menu_path' or 'menuPath' is missing or empty.");
             }
 
             if (_menuPathBlacklist.Contains(menuPath))
             {
-                return Response.Error($"Execution of menu item '{menuPath}' is blocked for safety reasons.");
+                return new ErrorResponse($"Execution of menu item '{menuPath}' is blocked for safety reasons.");
             }
 
             try
@@ -36,14 +36,14 @@ namespace MCPForUnity.Editor.Tools
                 if (!executed)
                 {
                     McpLog.Error($"[MenuItemExecutor] Failed to execute menu item '{menuPath}'. It might be invalid, disabled, or context-dependent.");
-                    return Response.Error($"Failed to execute menu item '{menuPath}'. It might be invalid, disabled, or context-dependent.");
+                    return new ErrorResponse($"Failed to execute menu item '{menuPath}'. It might be invalid, disabled, or context-dependent.");
                 }
-                return Response.Success($"Attempted to execute menu item: '{menuPath}'. Check Unity logs for confirmation or errors.");
+                return new SuccessResponse($"Attempted to execute menu item: '{menuPath}'. Check Unity logs for confirmation or errors.");
             }
             catch (Exception e)
             {
                 McpLog.Error($"[MenuItemExecutor] Failed to setup execution for '{menuPath}': {e}");
-                return Response.Error($"Error setting up execution for menu item '{menuPath}': {e.Message}");
+                return new ErrorResponse($"Error setting up execution for menu item '{menuPath}': {e.Message}");
             }
         }
     }

@@ -33,7 +33,7 @@ namespace MCPForUnity.Editor.Resources.MenuItems
             }
 
             string message = $"Retrieved {items.Count} menu items";
-            return Response.Success(message, items);
+            return new SuccessResponse(message, items);
         }
 
         internal static List<string> GetMenuItemsInternal(bool forceRefresh)

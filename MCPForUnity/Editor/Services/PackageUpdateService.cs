@@ -1,5 +1,6 @@
 using System;
 using System.Net;
+using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
@@ -11,8 +12,8 @@ namespace MCPForUnity.Editor.Services
     /// </summary>
     public class PackageUpdateService : IPackageUpdateService
     {
-        private const string LastCheckDateKey = "MCPForUnity.LastUpdateCheck";
-        private const string CachedVersionKey = "MCPForUnity.LatestKnownVersion";
+        private const string LastCheckDateKey = EditorPrefKeys.LastUpdateCheck;
+        private const string CachedVersionKey = EditorPrefKeys.LatestKnownVersion;
         private const string PackageJsonUrl = "https://raw.githubusercontent.com/CoplayDev/unity-mcp/main/MCPForUnity/package.json";
 
         /// <inheritdoc/>

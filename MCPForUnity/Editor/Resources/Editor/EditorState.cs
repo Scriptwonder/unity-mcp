@@ -28,12 +28,12 @@ namespace MCPForUnity.Editor.Resources.Editor
                     selectionCount = UnityEditor.Selection.count,
                     activeObjectName = UnityEditor.Selection.activeObject?.name
                 };
-                
-                return Response.Success("Retrieved editor state.", state);
+
+                return new SuccessResponse("Retrieved editor state.", state);
             }
             catch (Exception e)
             {
-                return Response.Error($"Error getting editor state: {e.Message}");
+                return new ErrorResponse($"Error getting editor state: {e.Message}");
             }
         }
     }
