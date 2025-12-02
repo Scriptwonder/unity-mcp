@@ -31,7 +31,8 @@ namespace MCPForUnity.Editor.MenuItems
         {
             if (EditorWindow.HasOpenInstances<MCPForUnityEditorWindow>())
             {
-                foreach (var window in UnityEngine.Resources.FindObjectsOfTypeAll<MCPForUnityEditorWindow>())
+                var window = EditorWindow.GetWindow<MCPForUnityEditorWindow>();
+                if (window != null)
                 {
                     window.Close();
                 }
