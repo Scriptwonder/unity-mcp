@@ -1,18 +1,14 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using UnityEditor;
-using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
-using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Windows.Components.Settings;
 using MCPForUnity.Editor.Windows.Components.Connection;
 using MCPForUnity.Editor.Windows.Components.ClientConfig;
-using MCPForUnity.Editor.Windows.Components.Tools;
 
 namespace MCPForUnity.Editor.Windows
 {
@@ -22,29 +18,8 @@ namespace MCPForUnity.Editor.Windows
         private McpSettingsSection settingsSection;
         private McpConnectionSection connectionSection;
         private McpClientConfigSection clientConfigSection;
-        private McpToolsSection toolsSection;
-
-        private ToolbarToggle settingsTabToggle;
-        private ToolbarToggle toolsTabToggle;
-        private VisualElement settingsPanel;
-        private VisualElement toolsPanel;
 
         private static readonly HashSet<MCPForUnityEditorWindow> OpenWindows = new();
-
-        private enum ActivePanel
-        {
-            Settings,
-            Tools
-        }
-
-        internal static void CloseAllWindows()
-        {
-            var windows = OpenWindows.Where(window => window != null).ToArray();
-            foreach (var window in windows)
-            {
-                window.Close();
-            }
-        }
 
         public static void ShowWindow()
         {
@@ -86,30 +61,13 @@ namespace MCPForUnity.Editor.Windows
                 rootVisualElement.styleSheets.Add(commonStyleSheet);
             }
 
-            settingsPanel = rootVisualElement.Q<VisualElement>("settings-panel");
-            toolsPanel = rootVisualElement.Q<VisualElement>("tools-panel");
-            var settingsContainer = rootVisualElement.Q<VisualElement>("settings-container");
-            var toolsContainer = rootVisualElement.Q<VisualElement>("tools-container");
-
-            if (settingsPanel == null || toolsPanel == null)
+            // Get sections container
+            var sectionsContainer = rootVisualElement.Q<VisualElement>("sections-container");
+            if (sectionsContainer == null)
             {
-                McpLog.Error("Failed to find tab panels in UXML");
+                McpLog.Error("Failed to find sections-container in UXML");
                 return;
             }
-
-            if (settingsContainer == null)
-            {
-                McpLog.Error("Failed to find settings-container in UXML");
-                return;
-            }
-
-            if (toolsContainer == null)
-            {
-                McpLog.Error("Failed to find tools-container in UXML");
-                return;
-            }
-
-            SetupTabs();
 
             // Load and initialize Settings section
             var settingsTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
@@ -118,7 +76,7 @@ namespace MCPForUnity.Editor.Windows
             if (settingsTree != null)
             {
                 var settingsRoot = settingsTree.Instantiate();
-                settingsContainer.Add(settingsRoot);
+                sectionsContainer.Add(settingsRoot);
                 settingsSection = new McpSettingsSection(settingsRoot);
                 settingsSection.OnGitUrlChanged += () => clientConfigSection?.UpdateManualConfiguration();
                 settingsSection.OnHttpServerCommandUpdateRequested += () => connectionSection?.UpdateHttpServerCommandDisplay();
@@ -131,7 +89,7 @@ namespace MCPForUnity.Editor.Windows
             if (connectionTree != null)
             {
                 var connectionRoot = connectionTree.Instantiate();
-                settingsContainer.Add(connectionRoot);
+                sectionsContainer.Add(connectionRoot);
                 connectionSection = new McpConnectionSection(connectionRoot);
                 connectionSection.OnManualConfigUpdateRequested += () => clientConfigSection?.UpdateManualConfiguration();
             }
@@ -143,24 +101,8 @@ namespace MCPForUnity.Editor.Windows
             if (clientConfigTree != null)
             {
                 var clientConfigRoot = clientConfigTree.Instantiate();
-                settingsContainer.Add(clientConfigRoot);
+                sectionsContainer.Add(clientConfigRoot);
                 clientConfigSection = new McpClientConfigSection(clientConfigRoot);
-            }
-
-            // Load and initialize Tools section
-            var toolsTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
-                $"{basePath}/Editor/Windows/Components/Tools/McpToolsSection.uxml"
-            );
-            if (toolsTree != null)
-            {
-                var toolsRoot = toolsTree.Instantiate();
-                toolsContainer.Add(toolsRoot);
-                toolsSection = new McpToolsSection(toolsRoot);
-                toolsSection.Refresh();
-            }
-            else
-            {
-                McpLog.Warn("Failed to load tools section UXML. Tool configuration will be unavailable.");
             }
 
             // Initial updates
@@ -176,7 +118,7 @@ namespace MCPForUnity.Editor.Windows
         private void OnDisable()
         {
             EditorApplication.update -= OnEditorUpdate;
-            OpenWindows.RemoveWhere(window => window == null || window == this);
+            OpenWindows.Remove(this);
         }
 
         private void OnFocus()
@@ -207,77 +149,6 @@ namespace MCPForUnity.Editor.Windows
 
             settingsSection?.UpdatePathOverrides();
             clientConfigSection?.RefreshSelectedClient();
-        }
-
-        private void SetupTabs()
-        {
-            settingsTabToggle = rootVisualElement.Q<ToolbarToggle>("settings-tab");
-            toolsTabToggle = rootVisualElement.Q<ToolbarToggle>("tools-tab");
-
-            settingsPanel?.RemoveFromClassList("hidden");
-            toolsPanel?.RemoveFromClassList("hidden");
-
-            if (settingsTabToggle != null)
-            {
-                settingsTabToggle.RegisterValueChangedCallback(evt =>
-                {
-                    if (!evt.newValue)
-                    {
-                        if (toolsTabToggle != null && !toolsTabToggle.value)
-                        {
-                            settingsTabToggle.SetValueWithoutNotify(true);
-                        }
-                        return;
-                    }
-
-                    SwitchPanel(ActivePanel.Settings);
-                });
-            }
-
-            if (toolsTabToggle != null)
-            {
-                toolsTabToggle.RegisterValueChangedCallback(evt =>
-                {
-                    if (!evt.newValue)
-                    {
-                        if (settingsTabToggle != null && !settingsTabToggle.value)
-                        {
-                            toolsTabToggle.SetValueWithoutNotify(true);
-                        }
-                        return;
-                    }
-
-                    SwitchPanel(ActivePanel.Tools);
-                });
-            }
-
-            var savedPanel = EditorPrefs.GetString(EditorPrefKeys.EditorWindowActivePanel, ActivePanel.Settings.ToString());
-            if (!Enum.TryParse(savedPanel, out ActivePanel initialPanel))
-            {
-                initialPanel = ActivePanel.Settings;
-            }
-
-            SwitchPanel(initialPanel);
-        }
-
-        private void SwitchPanel(ActivePanel panel)
-        {
-            bool showSettings = panel == ActivePanel.Settings;
-
-            if (settingsPanel != null)
-            {
-                settingsPanel.style.display = showSettings ? DisplayStyle.Flex : DisplayStyle.None;
-            }
-
-            if (toolsPanel != null)
-            {
-                toolsPanel.style.display = showSettings ? DisplayStyle.None : DisplayStyle.Flex;
-            }
-
-            settingsTabToggle?.SetValueWithoutNotify(showSettings);
-            toolsTabToggle?.SetValueWithoutNotify(!showSettings);
-
-            EditorPrefs.SetString(EditorPrefKeys.EditorWindowActivePanel, panel.ToString());
         }
 
         internal static void RequestHealthVerification()
