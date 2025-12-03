@@ -289,7 +289,7 @@ Help make Unity MCP better!
     
 5. **Push** your branch.
     
-6. **Open a Pull Request** against the master branch.
+6. **Open a Pull Request** against the main branch.
     
 
 ---
@@ -338,7 +338,7 @@ Still stuck? [Open an Issue](https://www.google.com/url?sa=E&q=https%3A%2F%2Fgit
 
 ## License 📜
 
-MIT License. See [LICENSE](https://www.google.com/url?sa=E&q=https%3A%2F%2Fgithub.com%2Fjustinpbarnett%2Funity-mcp%2Fblob%2Fmaster%2FLICENSE) file.
+MIT License. See [LICENSE](https://www.google.com/url?sa=E&q=https%3A%2F%2Fgithub.com%2Fjustinpbarnett%2Funity-mcp%2Fblob%2Fmain%2FLICENSE) file.
 
 ---
 

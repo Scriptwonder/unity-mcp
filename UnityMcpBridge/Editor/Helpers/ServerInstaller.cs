@@ -11,7 +11,7 @@ namespace UnityMcpBridge.Editor.Helpers
     {
         private const string RootFolder = "UnityMCP";
         private const string ServerFolder = "UnityMcpServer";
-        private const string BranchName = "master";
+        private const string BranchName = "main";
         private const string GitUrl = "https://github.com/justinpbarnett/unity-mcp.git";
         private const string PyprojectUrl =
             "https://raw.githubusercontent.com/justinpbarnett/unity-mcp/refs/heads/"
