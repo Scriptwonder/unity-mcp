@@ -3,7 +3,10 @@
     "rootNamespace": "MCPForUnity.Editor",
     "references": [
         "MCPForUnity.Runtime",
-        "GUID:560b04d1a97f54a46a2660c3cc343a6f"
+        "GUID:560b04d1a97f54a46a2660c3cc343a6f",
+        "GUID:5a88fe3a0cbb00542b997b7910a10aba",
+        "GUID:0df4a4f19ebe1554f9f704d1811e693a",
+        "glTFast"
     ],
     "includePlatforms": [
         "Editor"

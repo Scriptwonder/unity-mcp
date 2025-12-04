@@ -118,9 +118,25 @@ echo.
 echo Deploying Unity Bridge code...
 xcopy "%BRIDGE_SOURCE%\Editor\*" "%PACKAGE_CACHE_PATH%\Editor\" /E /Y > nul
 if !errorlevel! neq 0 (
-    echo Error: Failed to deploy Unity Bridge code
+    echo Error: Failed to deploy Unity Bridge Editor code
     pause
     exit /b 1
+)
+
+if exist "%BRIDGE_SOURCE%\Runtime" (
+    echo Deploying Unity Bridge Runtime code...
+    xcopy "%BRIDGE_SOURCE%\Runtime\*" "%PACKAGE_CACHE_PATH%\Runtime\" /E /Y > nul
+    if !errorlevel! neq 0 (
+        echo Warning: Failed to deploy Unity Bridge Runtime code
+    )
+)
+
+echo Deploying Unity Bridge package metadata...
+if exist "%BRIDGE_SOURCE%\package.json" (
+    copy "%BRIDGE_SOURCE%\package.json" "%PACKAGE_CACHE_PATH%\" /Y > nul
+)
+if exist "%BRIDGE_SOURCE%\README.md" (
+    copy "%BRIDGE_SOURCE%\README.md" "%PACKAGE_CACHE_PATH%\" /Y > nul
 )
 
 :: Deploy Python Server
