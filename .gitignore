@@ -39,3 +39,12 @@ TestProjects/UnityMCPTests/Packages/packages-lock.json
 *.backup.meta
 
 .wt-origin-main/
+MCPForUnity/Trellis/TrellisClient.cs
+MCPForUnity/Trellis/TrellisClient.cs.meta
+MCPForUnity/Trellis/TrellisPlugin.meta
+MCPForUnity/Trellis/TrellisPlugin/TrellisClientEditor.cs
+MCPForUnity/Trellis/TrellisPlugin/TrellisClientEditor.cs.meta
+MCPForUnity/Trellis/TrellisPlugin/TrellisGeneratorWindow.cs
+MCPForUnity/Trellis/TrellisPlugin/TrellisGeneratorWindow.cs.meta
+MCPForUnity/Trellis/TrellisPlugin/TrellisServiceHost.cs
+MCPForUnity/Trellis/TrellisPlugin/TrellisServiceHost.cs.meta
