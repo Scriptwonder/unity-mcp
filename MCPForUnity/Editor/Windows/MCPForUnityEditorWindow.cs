@@ -347,11 +347,21 @@ namespace MCPForUnity.Editor.Windows
         {
             EditorApplication.delayCall += async () =>
             {
+                // Ensure window and components are still valid before execution
                 if (this == null || connectionSection == null)
                 {
                     return;
                 }
-                await connectionSection.VerifyBridgeConnectionAsync();
+
+                try
+                {
+                    await connectionSection.VerifyBridgeConnectionAsync();
+                }
+                catch (Exception ex)
+                {
+                    // Log but don't crash if verification fails during cleanup
+                    McpLog.Warn($"Health check verification failed: {ex.Message}");
+                }
             };
         }
     }
