@@ -6,6 +6,7 @@ from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
+from services.tools.utils import coerce_bool
 
 
 @mcp_for_unity_tool(
@@ -13,7 +14,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
 )
 async def manage_gameobject(
     ctx: Context,
-    action: Annotated[Literal["create", "modify", "delete", "find", "add_component", "remove_component", "set_component_property", "get_components", "get_component"], "Perform CRUD operations on GameObjects and components."],
+    action: Annotated[Literal["create", "modify", "delete", "find", "add_component", "remove_component", "set_component_property", "get_components", "get_component", "duplicate", "move_relative"], "Perform CRUD operations on GameObjects and components."],
     target: Annotated[str,
                       "GameObject identifier by name or path for modify/delete/component actions"] | None = None,
     search_method: Annotated[Literal["by_id", "by_name", "by_path", "by_tag", "by_layer", "by_component"],
@@ -66,25 +67,26 @@ async def manage_gameobject(
     # Controls whether serialization of private [SerializeField] fields is included
     includeNonPublicSerialized: Annotated[bool | str,
                                           "Controls whether serialization of private [SerializeField] fields is included (accepts true/false or 'true'/'false')"] | None = None,
+    # --- Parameters for 'duplicate' ---
+    new_name: Annotated[str,
+                        "New name for the duplicated object (default: SourceName_Copy)"] | None = None,
+    offset: Annotated[list[float] | str,
+                      "Offset from original/reference position - [x,y,z] or string '[x,y,z]'"] | None = None,
+    # --- Parameters for 'move_relative' ---
+    reference_object: Annotated[str,
+                               "Reference object for relative movement (required for move_relative)"] | None = None,
+    direction: Annotated[Literal["left", "right", "up", "down", "forward", "back", "front", "backward", "behind"],
+                        "Direction for relative movement (e.g., 'right', 'up', 'forward')"] | None = None,
+    distance: Annotated[float,
+                       "Distance to move in the specified direction (default: 1.0)"] | None = None,
+    world_space: Annotated[bool | str,
+                          "If True (default), use world space directions; if False, use reference object's local directions"] | None = None,
 ) -> dict[str, Any]:
     # Get active instance from session state
     # Removed session_state import
     unity_instance = get_unity_instance_from_context(ctx)
 
     # Coercers to tolerate stringified booleans and vectors
-    def _coerce_bool(value, default=None):
-        if value is None:
-            return default
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, str):
-            v = value.strip().lower()
-            if v in ("true", "1", "yes", "on"):
-                return True
-            if v in ("false", "0", "no", "off"):
-                return False
-        return bool(value)
-
     def _coerce_vec(value, default=None):
         if value is None:
             return default
@@ -113,12 +115,14 @@ async def manage_gameobject(
     position = _coerce_vec(position, default=position)
     rotation = _coerce_vec(rotation, default=rotation)
     scale = _coerce_vec(scale, default=scale)
-    save_as_prefab = _coerce_bool(save_as_prefab)
-    set_active = _coerce_bool(set_active)
-    find_all = _coerce_bool(find_all)
-    search_in_children = _coerce_bool(search_in_children)
-    search_inactive = _coerce_bool(search_inactive)
-    includeNonPublicSerialized = _coerce_bool(includeNonPublicSerialized)
+    offset = _coerce_vec(offset, default=offset)
+    save_as_prefab = coerce_bool(save_as_prefab)
+    set_active = coerce_bool(set_active)
+    find_all = coerce_bool(find_all)
+    search_in_children = coerce_bool(search_in_children)
+    search_inactive = coerce_bool(search_inactive)
+    includeNonPublicSerialized = coerce_bool(includeNonPublicSerialized)
+    world_space = coerce_bool(world_space, default=True)
 
     # Coerce 'component_properties' from JSON string to dict for client compatibility
     if isinstance(component_properties, str):
@@ -181,7 +185,15 @@ async def manage_gameobject(
             "searchInChildren": search_in_children,
             "searchInactive": search_inactive,
             "componentName": component_name,
-            "includeNonPublicSerialized": includeNonPublicSerialized
+            "includeNonPublicSerialized": includeNonPublicSerialized,
+            # Parameters for 'duplicate'
+            "new_name": new_name,
+            "offset": offset,
+            # Parameters for 'move_relative'
+            "reference_object": reference_object,
+            "direction": direction,
+            "distance": distance,
+            "world_space": world_space,
         }
         params = {k: v for k, v in params.items() if v is not None}
 

@@ -40,6 +40,7 @@ def debug_request_context(ctx: Context) -> dict[str, Any]:
     active_instance = middleware.get_active_instance(ctx)
     
     # Debugging middleware internals
+    # NOTE: These fields expose internal implementation details and may change between versions.
     with middleware._lock:
         all_keys = list(middleware._active_by_key.keys())
 

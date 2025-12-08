@@ -5,6 +5,7 @@ from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
 from transport.unity_transport import send_with_unity_instance
 from transport.legacy.unity_connection import async_send_command_with_retry
+from services.tools.utils import coerce_bool
 
 
 @mcp_for_unity_tool(
@@ -29,6 +30,7 @@ async def manage_prefabs(
     # Get active instance from session state
     # Removed session_state import
     unity_instance = get_unity_instance_from_context(ctx)
+
     try:
         params: dict[str, Any] = {"action": action}
 
@@ -36,14 +38,17 @@ async def manage_prefabs(
             params["prefabPath"] = prefab_path
         if mode:
             params["mode"] = mode
-        if save_before_close is not None:
-            params["saveBeforeClose"] = bool(save_before_close)
+        save_before_close_val = coerce_bool(save_before_close)
+        if save_before_close_val is not None:
+            params["saveBeforeClose"] = save_before_close_val
         if target:
             params["target"] = target
-        if allow_overwrite is not None:
-            params["allowOverwrite"] = bool(allow_overwrite)
-        if search_inactive is not None:
-            params["searchInactive"] = bool(search_inactive)
+        allow_overwrite_val = coerce_bool(allow_overwrite)
+        if allow_overwrite_val is not None:
+            params["allowOverwrite"] = allow_overwrite_val
+        search_inactive_val = coerce_bool(search_inactive)
+        if search_inactive_val is not None:
+            params["searchInactive"] = search_inactive_val
         response = await send_with_unity_instance(async_send_command_with_retry, unity_instance, "manage_prefabs", params)
 
         if isinstance(response, dict) and response.get("success"):

@@ -371,7 +371,7 @@ async def apply_text_edits(
 async def create_script(
     ctx: Context,
     path: Annotated[str, "Path under Assets/ to create the script at, e.g., 'Assets/Scripts/My.cs'"],
-    contents: Annotated[str, "Contents of the script to create. Note, this is Base64 encoded over transport."],
+    contents: Annotated[str, "Contents of the script to create (plain text C# code). The server handles Base64 encoding."],
     script_type: Annotated[str, "Script type (e.g., 'C#')"] | None = None,
     namespace: Annotated[str, "Namespace for the script"] | None = None,
 ) -> dict[str, Any]:

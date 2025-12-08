@@ -173,6 +173,10 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 statusIndicator.RemoveFromClassList("disconnected");
                 statusIndicator.AddToClassList("connected");
                 connectionToggleButton.text = "End Session";
+                
+                // Force the UI to reflect the actual port being used
+                unityPortField.value = bridgeService.CurrentPort.ToString();
+                unityPortField.SetEnabled(false);
             }
             else
             {
@@ -180,17 +184,18 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
                 statusIndicator.RemoveFromClassList("connected");
                 statusIndicator.AddToClassList("disconnected");
                 connectionToggleButton.text = "Start Session";
+                
+                unityPortField.SetEnabled(true);
 
                 healthStatusLabel.text = HealthStatusUnknown;
                 healthIndicator.RemoveFromClassList("healthy");
                 healthIndicator.RemoveFromClassList("warning");
                 healthIndicator.AddToClassList("unknown");
-            }
-
-            int savedPort = EditorPrefs.GetInt(EditorPrefKeys.UnitySocketPort, 0);
-            if (savedPort == 0)
-            {
-                unityPortField.value = bridgeService.CurrentPort.ToString();
+                
+                int savedPort = EditorPrefs.GetInt(EditorPrefKeys.UnitySocketPort, 0);
+                unityPortField.value = (savedPort == 0 
+                    ? bridgeService.CurrentPort 
+                    : savedPort).ToString();
             }
         }
 

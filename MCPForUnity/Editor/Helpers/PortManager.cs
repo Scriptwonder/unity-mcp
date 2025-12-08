@@ -119,17 +119,41 @@ namespace MCPForUnity.Editor.Helpers
         /// <returns>True if port is available</returns>
         public static bool IsPortAvailable(int port)
         {
+            // Start with quick loopback check
             try
             {
                 var testListener = new TcpListener(IPAddress.Loopback, port);
                 testListener.Start();
                 testListener.Stop();
-                return true;
             }
             catch (SocketException)
             {
                 return false;
             }
+
+#if UNITY_EDITOR_OSX
+            // On macOS, the OS might report the port as available (SO_REUSEADDR) even if another process
+            // is using it, unless we also check active connections or try a stricter bind.
+            // Double check by trying to Connect to it. If we CAN connect, it's NOT available.
+            try
+            {
+                using var client = new TcpClient();
+                var connectTask = client.ConnectAsync(IPAddress.Loopback, port);
+                // If we connect successfully, someone is listening -> Not available
+                if (connectTask.Wait(50) && client.Connected)
+                {
+                    if (IsDebugEnabled()) McpLog.Info($"[PortManager] Port {port} bind succeeded but connection also succeeded -> Not available (Conflict).");
+                    return false;
+                }
+            }
+            catch
+            {
+                // Connection failed -> likely available (or firewall blocked, but we assume available)
+                if (IsDebugEnabled()) McpLog.Info($"[PortManager] Port {port} connection failed -> likely available.");
+            }
+#endif
+
+            return true;
         }
 
         /// <summary>
