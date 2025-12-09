@@ -87,15 +87,15 @@ async def manage_3d_gen(
         "Name/prompt of the 3D model to generate (e.g., 'sprinkler', 'medieval chair'). Used to search existing assets and as Trellis prompt."
     ] | None = None,
     position: Annotated[
-        list[float],
+        list[float] | str,
         "World position [x, y, z] for the generated object (for 'generate' action). Defaults to [0, 0, 0]."
     ] | None = None,
     rotation: Annotated[
-        list[float],
+        list[float] | str,
         "Euler rotation [x, y, z] for the generated object (for 'generate' action). Defaults to [0, 0, 0]."
     ] | None = None,
     scale: Annotated[
-        list[float],
+        list[float] | str,
         "Scale [x, y, z] for the generated object (for 'generate' action). Defaults to [1, 1, 1]."
     ] | None = None,
     parent: Annotated[

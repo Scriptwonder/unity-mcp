@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -21,6 +22,7 @@ namespace MCPForUnity.Editor.Tools
     {
         private const string ToolName = "manage_3d_gen";
         private const float DefaultPollIntervalSeconds = 3f;
+        private const int MaxPromptAssetCacheEntries = 32;
 
         // Valid actions for this tool
         private static readonly List<string> ValidActions = new List<string>
@@ -44,6 +46,7 @@ namespace MCPForUnity.Editor.Tools
             public string sourceObjectId;   // Instance ID of source object (for transform)
             public string sourceObjectName; // Name of source object (for transform)
             public string targetPrompt;
+            public string promptKey;
             public string foundAssetPath;   // If found existing asset
             public bool isGenerating;       // True if waiting for Trellis
             public string generatedGlbPath; // Path to generated GLB
@@ -57,9 +60,24 @@ namespace MCPForUnity.Editor.Tools
             public string gltfLoadingContainerId; // Instance ID of container waiting for glTFast loading
         }
 
+        private class PromptAssetRecord
+        {
+            public string assetPath;
+            public DateTime lastUsedUtc;
+            public long fileSize;
+        }
+
+        private class AssetCandidate
+        {
+            public string path;
+            public float score;
+            public DateTime? timestampUtc;
+        }
+
         // Track active Trellis generation
         private static bool s_waitingForTrellis = false;
         private static string s_pendingGlbPath = null;
+        private static readonly Dictionary<string, PromptAssetRecord> s_promptAssetCache = new(StringComparer.OrdinalIgnoreCase);
 
         public static object HandleCommand(JObject @params)
         {
@@ -115,12 +133,14 @@ namespace MCPForUnity.Editor.Tools
             float[] rotation = ParseVector3Array(@params["rotation"]) ?? new float[] { 0, 0, 0 };
             float[] scale = ParseVector3Array(@params["scale"]) ?? new float[] { 1, 1, 1 };
             string parentPath = @params["parent"]?.ToString();
+            string promptKey = NormalizePromptKey(targetName);
 
             var state = new GenerationJobState
             {
                 status = "searching",
                 actionType = "generate",
                 targetPrompt = targetName,
+                promptKey = promptKey,
                 originalPosition = position,
                 originalRotation = rotation,
                 originalScale = scale,
@@ -131,7 +151,7 @@ namespace MCPForUnity.Editor.Tools
             // Step 1: Search for existing asset
             if (searchExisting)
             {
-                string foundPath = SearchForAsset(targetName);
+                string foundPath = SearchForAsset(targetName, promptKey);
                 if (!string.IsNullOrEmpty(foundPath))
                 {
                     state.foundAssetPath = foundPath;
@@ -172,6 +192,7 @@ namespace MCPForUnity.Editor.Tools
             string targetName = @params["target_name"]?.ToString();
             bool searchExisting = @params["search_existing"]?.ToObject<bool>() ?? true;
             bool generateIfMissing = @params["generate_if_missing"]?.ToObject<bool>() ?? true;
+            string promptKey = NormalizePromptKey(targetName);
 
             if (string.IsNullOrEmpty(sourceObject))
                 return new ErrorResponse("'source_object' parameter is required for transform action.");
@@ -194,6 +215,7 @@ namespace MCPForUnity.Editor.Tools
                 sourceObjectId = sourceGo.GetInstanceID().ToString(),
                 sourceObjectName = sourceGo.name,
                 targetPrompt = targetName,
+                promptKey = promptKey,
                 originalPosition = new float[] { sourceTransform.position.x, sourceTransform.position.y, sourceTransform.position.z },
                 originalRotation = new float[] { sourceTransform.eulerAngles.x, sourceTransform.eulerAngles.y, sourceTransform.eulerAngles.z },
                 originalScale = new float[] { sourceTransform.localScale.x, sourceTransform.localScale.y, sourceTransform.localScale.z },
@@ -205,7 +227,7 @@ namespace MCPForUnity.Editor.Tools
             // Step 1: Search for existing asset
             if (searchExisting)
             {
-                string foundPath = SearchForAsset(targetName);
+                string foundPath = SearchForAsset(targetName, promptKey);
                 if (!string.IsNullOrEmpty(foundPath))
                 {
                     state.foundAssetPath = foundPath;
@@ -410,6 +432,8 @@ namespace MCPForUnity.Editor.Tools
             McpJobStateStore.SaveState(ToolName, state);
 
             Selection.activeGameObject = container;
+
+            RememberPromptAsset(state.targetPrompt, state.generatedGlbPath ?? state.foundAssetPath);
 
             return new SuccessResponse(
                 $"Successfully generated '{state.targetPrompt}'" + (isPlayMode ? " (Play Mode via glTFast)" : ""),
@@ -635,6 +659,8 @@ namespace MCPForUnity.Editor.Tools
 
             Selection.activeGameObject = newObject;
 
+            RememberPromptAsset(state.targetPrompt, assetPath);
+
             return new SuccessResponse(
                 $"Successfully generated '{state.targetPrompt}'" + (isPlayMode ? " (Play Mode)" : ""),
                 new
@@ -795,32 +821,17 @@ namespace MCPForUnity.Editor.Tools
             newObject.transform.position = position;
             newObject.transform.rotation = Quaternion.Euler(rotation);
 
-            // Reset scale to (1,1,1) before measuring bounds to get the true mesh size
+            Vector3 originalScale = new Vector3(state.originalScale[0], state.originalScale[1], state.originalScale[2]);
+            Vector3 prefabScaleSnapshot = newObject.transform.localScale;
             newObject.transform.localScale = Vector3.one;
 
-            // Calculate and apply scale to match original bounds
             var newBounds = GetObjectBounds(newObject);
             Vector3 originalBoundsSize = new Vector3(state.originalBoundsSize[0], state.originalBoundsSize[1], state.originalBoundsSize[2]);
-            
-            Debug.Log($"[Manage3DGen] Bounds check - Original: {originalBoundsSize}, New (at scale 1): {newBounds.size}");
-            
-            if (newBounds.size.magnitude > 0.001f && originalBoundsSize.magnitude > 0.001f)
-            {
-                // Calculate scale factor to match original bounding box
-                Vector3 scaleRatio = new Vector3(
-                    originalBoundsSize.x / newBounds.size.x,
-                    originalBoundsSize.y / newBounds.size.y,
-                    originalBoundsSize.z / newBounds.size.z
-                );
 
-                // Use the Y-axis (height) as the primary scaling reference for better visual matching
-                // This works well for most objects like characters, trees, furniture, etc.
-                float uniformScale = scaleRatio.y;
-                newObject.transform.localScale = Vector3.one * uniformScale;
+            Vector3 appliedScale = CalculateReplacementScale(prefabScaleSnapshot, newBounds.size, originalBoundsSize, originalScale);
+            newObject.transform.localScale = appliedScale;
 
-                Debug.Log($"[Manage3DGen] Applied scale {uniformScale:F3} (height-based) to match original bounds " +
-                    $"(original: {originalBoundsSize}, new: {newBounds.size}, ratios: {scaleRatio})");
-            }
+            Debug.Log($"[Manage3DGen] Applied scale {appliedScale} to match bounds (original: {originalBoundsSize}, new: {newBounds.size})");
 
             // Set parent
             if (!string.IsNullOrEmpty(state.originalParentPath))
@@ -849,8 +860,6 @@ namespace MCPForUnity.Editor.Tools
 
             // Get source asset path if it's a prefab (only works in Edit Mode)
             string sourceAssetPath = isPlayMode ? null : PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(sourceGo);
-
-            Vector3 originalScale = new Vector3(state.originalScale[0], state.originalScale[1], state.originalScale[2]);
 
             history.RecordTransform(
                 sourceObject: sourceGo,
@@ -884,6 +893,8 @@ namespace MCPForUnity.Editor.Tools
             McpJobStateStore.SaveState(ToolName, state);
 
             Selection.activeGameObject = newObject;
+
+            RememberPromptAsset(state.targetPrompt, assetPath);
 
             return new SuccessResponse(
                 $"Successfully transformed '{state.sourceObjectName}' to '{state.targetPrompt}'" + (isPlayMode ? " (Play Mode)" : ""),
@@ -978,118 +989,364 @@ namespace MCPForUnity.Editor.Tools
         #region Helper Methods
 
         /// <summary>
-        /// Searches for an existing asset by name. Prioritizes exact matches over substring matches.
+        /// Searches for an existing asset by prompt, factoring in caching, recency, and token similarity.
         /// </summary>
-        private static string SearchForAsset(string targetName)
+        private static string SearchForAsset(string targetName, string promptKey)
         {
-            // Search for prefabs and models containing the target name
-            string[] searchFilters = new[] { "t:Prefab", "t:Model" };
-            
-            // Collect all matches, categorized by match quality
-            string exactMatch = null;
-            string startsWithMatch = null;
-            string containsMatch = null;
+            if (string.IsNullOrWhiteSpace(targetName))
+                return null;
 
-            foreach (var filter in searchFilters)
+            if (!string.IsNullOrEmpty(promptKey) && TryGetCachedAsset(promptKey, out var cachedPath))
             {
-                string[] guids = AssetDatabase.FindAssets($"{filter} {targetName}");
+                Debug.Log($"[Manage3DGen] Using cached asset '{cachedPath}' for prompt '{promptKey}'");
+                return cachedPath;
+            }
 
+            var promptTokens = TokenizePrompt(targetName);
+            var candidates = new List<AssetCandidate>();
+            var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            void AddCandidates(IEnumerable<string> guids, bool forceFolderBoost = false)
+            {
+                int processed = 0;
                 foreach (var guid in guids)
                 {
-                    string path = AssetDatabase.GUIDToAssetPath(guid);
-                    string fileName = Path.GetFileNameWithoutExtension(path);
-
-                    // Check for exact match (case-insensitive)
-                    if (string.Equals(fileName, targetName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        exactMatch = path;
-                        Debug.Log($"[Manage3DGen] Found exact match asset: {path}");
-                        break; // Exact match is best, stop searching
-                    }
-                    // Check if filename starts with target (e.g., "beehive_large" for "beehive")
-                    else if (startsWithMatch == null && fileName.StartsWith(targetName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        startsWithMatch = path;
-                    }
-                    // Substring match (e.g., "slider_beehive" for "beehive") - lowest priority
-                    else if (containsMatch == null && fileName.IndexOf(targetName, StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        containsMatch = path;
-                    }
-                }
-                
-                if (exactMatch != null) break; // Stop if we found an exact match
-            }
-
-            // Also check the Trellis results folder with same priority logic
-            string trellisFolder = "Assets/TrellisResults";
-            if (exactMatch == null && AssetDatabase.IsValidFolder(trellisFolder))
-            {
-                string[] trellisGuids = AssetDatabase.FindAssets("t:Model", new[] { trellisFolder });
-                foreach (var guid in trellisGuids)
-                {
-                    string path = AssetDatabase.GUIDToAssetPath(guid);
-                    string fileName = Path.GetFileNameWithoutExtension(path);
-
-                    if (string.Equals(fileName, targetName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        exactMatch = path;
-                        Debug.Log($"[Manage3DGen] Found exact match Trellis asset: {path}");
+                    if (processed++ > 200)
                         break;
-                    }
-                    else if (startsWithMatch == null && fileName.StartsWith(targetName, StringComparison.OrdinalIgnoreCase))
+
+                    string path = AssetDatabase.GUIDToAssetPath(guid);
+                    if (string.IsNullOrEmpty(path))
+                        continue;
+                    if (!seenPaths.Add(path))
+                        continue;
+
+                    string fileName = Path.GetFileNameWithoutExtension(path);
+                    if (string.IsNullOrEmpty(fileName))
+                        continue;
+
+                    DateTime? timestamp = TryGetAssetTimestampUtc(path);
+                    float score = ScoreAssetCandidate(path, fileName, targetName, promptKey, promptTokens, timestamp, forceFolderBoost);
+                    if (score <= 0f)
+                        continue;
+
+                    candidates.Add(new AssetCandidate
                     {
-                        startsWithMatch = path;
-                    }
-                    else if (containsMatch == null && fileName.IndexOf(targetName, StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        containsMatch = path;
-                    }
+                        path = path,
+                        score = score,
+                        timestampUtc = timestamp
+                    });
                 }
             }
 
-            // Return best match in priority order: exact > starts with > contains
-            string result = exactMatch ?? startsWithMatch ?? containsMatch;
-            
-            if (result != null)
+            foreach (var filter in new[] { "t:Prefab", "t:Model" })
             {
-                string matchType = exactMatch != null ? "exact" : (startsWithMatch != null ? "starts-with" : "contains");
-                Debug.Log($"[Manage3DGen] Using {matchType} match: {result}");
+                AddCandidates(AssetDatabase.FindAssets($"{filter} {targetName}"));
             }
-            else
+
+            string trellisFolder = "Assets/TrellisResults";
+            if (AssetDatabase.IsValidFolder(trellisFolder))
+            {
+                AddCandidates(AssetDatabase.FindAssets("t:Model", new[] { trellisFolder }), forceFolderBoost: true);
+            }
+
+            if (candidates.Count == 0)
             {
                 Debug.Log($"[Manage3DGen] No existing asset found for '{targetName}'");
+                return null;
             }
-            
-            return result;
+
+            var best = candidates
+                .OrderByDescending(c => c.score)
+                .ThenByDescending(c => c.timestampUtc ?? DateTime.MinValue)
+                .ThenBy(c => c.path.Length)
+                .First();
+
+            Debug.Log($"[Manage3DGen] Selected asset '{best.path}' (score {best.score:F1}) for '{targetName}'");
+            return best.path;
+        }
+
+        private static bool TryGetCachedAsset(string promptKey, out string assetPath)
+        {
+            assetPath = null;
+            if (string.IsNullOrEmpty(promptKey))
+                return false;
+
+            if (s_promptAssetCache.TryGetValue(promptKey, out var record))
+            {
+                if (!string.IsNullOrEmpty(record.assetPath) && AssetFileExists(record.assetPath))
+                {
+                    record.lastUsedUtc = DateTime.UtcNow;
+                    assetPath = record.assetPath;
+                    return true;
+                }
+
+                s_promptAssetCache.Remove(promptKey);
+            }
+
+            return false;
+        }
+
+        private static void RememberPromptAsset(string prompt, string assetPath)
+        {
+            string promptKey = NormalizePromptKey(prompt);
+            if (string.IsNullOrEmpty(promptKey))
+                return;
+
+            string normalizedPath = ToAssetsRelativePath(assetPath);
+            if (string.IsNullOrEmpty(normalizedPath))
+                return;
+
+            long fileSize = TryGetAssetFileSize(normalizedPath) ?? 0;
+
+            s_promptAssetCache[promptKey] = new PromptAssetRecord
+            {
+                assetPath = normalizedPath,
+                lastUsedUtc = DateTime.UtcNow,
+                fileSize = fileSize
+            };
+
+            if (s_promptAssetCache.Count > MaxPromptAssetCacheEntries)
+            {
+                TrimPromptCache();
+            }
+        }
+
+        private static void TrimPromptCache()
+        {
+            while (s_promptAssetCache.Count > MaxPromptAssetCacheEntries)
+            {
+                var oldest = s_promptAssetCache.OrderBy(kvp => kvp.Value.lastUsedUtc).FirstOrDefault();
+                if (oldest.Key == null)
+                    break;
+                s_promptAssetCache.Remove(oldest.Key);
+            }
+        }
+
+        private static IEnumerable<string> TokenizePrompt(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return Array.Empty<string>();
+
+            string lower = text.ToLowerInvariant();
+            string sanitized = Regex.Replace(lower, "[^a-z0-9]+", " ");
+            return sanitized.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        }
+
+        private static string NormalizePromptKey(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return string.Empty;
+
+            var tokens = TokenizePrompt(text);
+            return string.Join("_", tokens);
+        }
+
+        private static float ScoreAssetCandidate(
+            string assetPath,
+            string fileName,
+            string targetName,
+            string promptKey,
+            IEnumerable<string> promptTokens,
+            DateTime? timestampUtc,
+            bool folderBoost)
+        {
+            float score = 0f;
+            string normalizedName = NormalizePromptKey(fileName);
+
+            if (string.Equals(fileName, targetName, StringComparison.OrdinalIgnoreCase))
+                score += 80f;
+            if (!string.IsNullOrEmpty(promptKey))
+            {
+                if (normalizedName == promptKey)
+                    score += 60f;
+                else if (normalizedName.StartsWith(promptKey, StringComparison.OrdinalIgnoreCase))
+                    score += 25f;
+            }
+
+            if (fileName.StartsWith(targetName, StringComparison.OrdinalIgnoreCase))
+                score += 25f;
+            if (fileName.IndexOf(targetName, StringComparison.OrdinalIgnoreCase) >= 0)
+                score += 10f;
+
+            foreach (var token in promptTokens)
+            {
+                if (fileName.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0)
+                    score += 6f;
+                if (!string.IsNullOrEmpty(normalizedName) && normalizedName.Contains(token))
+                    score += 2f;
+            }
+
+            if (assetPath.IndexOf("TrellisResults", StringComparison.OrdinalIgnoreCase) >= 0)
+                score += 30f;
+            else if (folderBoost)
+                score += 10f;
+
+            if (timestampUtc.HasValue)
+            {
+                double minutes = Math.Max(0, (DateTime.UtcNow - timestampUtc.Value).TotalMinutes);
+                if (minutes <= 60)
+                {
+                    score += (float)(60 - minutes) * 0.3f;
+                }
+            }
+
+            return score;
+        }
+
+        private static DateTime? TryGetAssetTimestampUtc(string assetPath)
+        {
+            try
+            {
+                string absolutePath = GetAbsolutePathForAsset(assetPath);
+                if (string.IsNullOrEmpty(absolutePath) || !File.Exists(absolutePath))
+                    return null;
+                return File.GetLastWriteTimeUtc(absolutePath);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static long? TryGetAssetFileSize(string assetPath)
+        {
+            try
+            {
+                string absolutePath = GetAbsolutePathForAsset(assetPath);
+                if (string.IsNullOrEmpty(absolutePath) || !File.Exists(absolutePath))
+                    return null;
+                var info = new FileInfo(absolutePath);
+                return info.Length;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static bool AssetFileExists(string assetPath)
+        {
+            string absolutePath = GetAbsolutePathForAsset(assetPath);
+            return !string.IsNullOrEmpty(absolutePath) && File.Exists(absolutePath);
+        }
+
+        private static string GetAbsolutePathForAsset(string assetPath)
+        {
+            if (string.IsNullOrEmpty(assetPath))
+                return null;
+
+            if (assetPath.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
+            {
+                string relative = assetPath.Substring("Assets/".Length);
+                return Path.Combine(Application.dataPath, relative).Replace('\\', '/');
+            }
+
+            return assetPath;
+        }
+
+        private static Vector3 CalculateReplacementScale(
+            Vector3 prefabScale,
+            Vector3 newBoundsSize,
+            Vector3 originalBoundsSize,
+            Vector3 originalScaleSnapshot)
+        {
+            const float epsilon = 0.0001f;
+            bool hasNewBounds = newBoundsSize.x > epsilon && newBoundsSize.y > epsilon && newBoundsSize.z > epsilon;
+            bool hasOriginalBounds = originalBoundsSize.x > epsilon && originalBoundsSize.y > epsilon && originalBoundsSize.z > epsilon;
+
+            if (!hasNewBounds || !hasOriginalBounds)
+            {
+                return originalScaleSnapshot.magnitude > epsilon ? originalScaleSnapshot : prefabScale;
+            }
+
+            float ratioX = SafeRatio(originalBoundsSize.x, newBoundsSize.x, 1f);
+            float ratioY = SafeRatio(originalBoundsSize.y, newBoundsSize.y, 1f);
+            float ratioZ = SafeRatio(originalBoundsSize.z, newBoundsSize.z, 1f);
+
+            float medianRatio = MedianOf(ratioX, ratioY, ratioZ);
+            float volumeRatio = SafeRatio(
+                originalBoundsSize.x * originalBoundsSize.y * originalBoundsSize.z,
+                newBoundsSize.x * newBoundsSize.y * newBoundsSize.z,
+                1f);
+            float volumeScale = volumeRatio > epsilon ? Mathf.Pow(volumeRatio, 1f / 3f) : medianRatio;
+
+            float uniformScale = Mathf.Clamp(Mathf.Lerp(medianRatio, volumeScale, 0.35f), 0.05f, 20f);
+
+            Vector3 shapeWeights = ShouldApplyShape(originalScaleSnapshot)
+                ? NormalizeScaleShape(originalScaleSnapshot)
+                : Vector3.one;
+
+            Vector3 combined = Vector3.Scale(Vector3.one * uniformScale, shapeWeights);
+            return Vector3.Scale(prefabScale, combined);
+        }
+
+        private static float SafeRatio(float numerator, float denominator, float fallback)
+        {
+            return Mathf.Abs(denominator) < 1e-4f ? fallback : numerator / denominator;
+        }
+
+        private static float MedianOf(float a, float b, float c)
+        {
+            float[] values = { a, b, c };
+            Array.Sort(values);
+            return values[1];
+        }
+
+        private static bool ShouldApplyShape(Vector3 scale)
+        {
+            float avg = (Mathf.Abs(scale.x) + Mathf.Abs(scale.y) + Mathf.Abs(scale.z)) / 3f;
+            if (avg < 1e-4f)
+                return false;
+
+            float maxDeviation = Mathf.Max(Mathf.Abs(scale.x - avg), Mathf.Abs(scale.y - avg), Mathf.Abs(scale.z - avg));
+            return maxDeviation / avg > 0.2f;
+        }
+
+        private static Vector3 NormalizeScaleShape(Vector3 scale)
+        {
+            float avg = (Mathf.Abs(scale.x) + Mathf.Abs(scale.y) + Mathf.Abs(scale.z)) / 3f;
+            if (avg < 1e-4f)
+                return Vector3.one;
+
+            Vector3 normalized = new Vector3(scale.x / avg, scale.y / avg, scale.z / avg);
+            return new Vector3(
+                Mathf.Clamp(normalized.x, 0.25f, 4f),
+                Mathf.Clamp(normalized.y, 0.25f, 4f),
+                Mathf.Clamp(normalized.z, 0.25f, 4f));
         }
 
         /// <summary>
         /// Starts Trellis model generation.
+        /// Works in both Edit Mode and Play Mode.
         /// </summary>
         private static void StartTrellisGeneration(string prompt, GenerationJobState state)
         {
-            try
+            // Use delayCall to ensure we're on the main editor thread
+            // This helps with Play Mode compatibility
+            EditorApplication.delayCall += () =>
             {
-                var client = TrellisServiceHost.EnsureClient();
-                s_waitingForTrellis = true;
-                s_pendingGlbPath = null;
+                try
+                {
+                    var client = TrellisServiceHost.EnsureClient();
+                    s_waitingForTrellis = true;
+                    s_pendingGlbPath = null;
 
-                // Subscribe to the GLB ready event
-                client.AddGlbReadyListener(OnTrellisGlbReady);
+                    // Subscribe to the GLB ready event
+                    client.AddGlbReadyListener(OnTrellisGlbReady);
 
-                // Start generation
-                client.SubmitPrompt(prompt);
+                    // Start generation
+                    client.SubmitPrompt(prompt);
 
-                Debug.Log($"[Manage3DGen] Started Trellis generation for '{prompt}'");
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[Manage3DGen] Failed to start Trellis generation: {e.Message}");
-                state.status = "error";
-                state.errorMessage = $"Failed to start Trellis: {e.Message}";
-                McpJobStateStore.SaveState(ToolName, state);
-            }
+                    Debug.Log($"[Manage3DGen] Started Trellis generation for '{prompt}'");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"[Manage3DGen] Failed to start Trellis generation: {e.Message}");
+                    state.status = "error";
+                    state.errorMessage = $"Failed to start Trellis: {e.Message}";
+                    McpJobStateStore.SaveState(ToolName, state);
+                }
+            };
         }
 
         /// <summary>
