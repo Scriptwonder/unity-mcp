@@ -4,6 +4,7 @@ using System.Linq;
 using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
+using MCPForUnity.Editor.Tools;
 using UnityEditor;
 using UnityEngine.UIElements;
 
@@ -199,6 +200,11 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
                 row.Add(parametersLabel);
             }
 
+            if (IsManageSceneTool(tool))
+            {
+                row.Add(CreateManageSceneActions());
+            }
+
             return row;
         }
 
@@ -258,12 +264,55 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             categoryContainer?.Add(label);
         }
 
+        private VisualElement CreateManageSceneActions()
+        {
+            var actions = new VisualElement();
+            actions.AddToClassList("tool-item-actions");
+
+            var screenshotButton = new Button(OnManageSceneScreenshotClicked)
+            {
+                text = "Capture Screenshot"
+            };
+            screenshotButton.AddToClassList("tool-action-button");
+            screenshotButton.style.marginTop = 4;
+            screenshotButton.tooltip = "Capture a screenshot to Assets/Screenshots via manage_scene.";
+
+            actions.Add(screenshotButton);
+            return actions;
+        }
+
+        private void OnManageSceneScreenshotClicked()
+        {
+            try
+            {
+                var response = ManageScene.ExecuteScreenshot();
+                if (response is SuccessResponse success && !string.IsNullOrWhiteSpace(success.Message))
+                {
+                    McpLog.Info(success.Message);
+                }
+                else if (response is ErrorResponse error && !string.IsNullOrWhiteSpace(error.Error))
+                {
+                    McpLog.Error(error.Error);
+                }
+                else
+                {
+                    McpLog.Info("Screenshot capture requested.");
+                }
+            }
+            catch (Exception ex)
+            {
+                McpLog.Error($"Failed to capture screenshot: {ex.Message}");
+            }
+        }
+
         private static Label CreateTag(string text)
         {
             var tag = new Label(text);
             tag.AddToClassList("tool-tag");
             return tag;
         }
+
+        private static bool IsManageSceneTool(ToolMetadata tool) => string.Equals(tool?.Name, "manage_scene", StringComparison.OrdinalIgnoreCase);
 
         private static bool IsBuiltIn(ToolMetadata tool) => tool?.IsBuiltIn ?? false;
     }
