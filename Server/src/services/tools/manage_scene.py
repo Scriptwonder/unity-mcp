@@ -25,7 +25,7 @@ async def manage_scene(
     path: Annotated[str, "Scene path."] | None = None,
     build_index: Annotated[int | str,
                            "Unity build index (quote as string, e.g., '0')."] | None = None,
-    screenshot_file_name: Annotated[str, "Screenshot file name (optional). Defaults to timestamp when omitted)."] | None = None,
+    screenshot_file_name: Annotated[str, "Screenshot file name (optional). Defaults to timestamp when omitted."] | None = None,
     screenshot_super_size: Annotated[int | str, "Screenshot supersize multiplier (integer ≥1). Optional." ] | None = None,
 ) -> dict[str, Any]:
     # Get active instance from session state

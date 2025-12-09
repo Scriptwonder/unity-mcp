@@ -119,7 +119,7 @@ if !errorlevel! neq 0 (
 )
 
 echo Deploying Unity Runtime code...
-xcopy "%BRIDGE_SOURCE%\Runtime\*" "%PACKAGE_CACHE_PATH%\Runtime" /E /Y > nul
+xcopy "%BRIDGE_SOURCE%\Runtime\*" "%PACKAGE_CACHE_PATH%\Runtime\" /E /Y > nul
 if !errorlevel! neq 0 (
     echo Error: Failed to deploy Unity Runtime code
     pause
