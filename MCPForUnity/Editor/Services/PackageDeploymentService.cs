@@ -256,7 +256,7 @@ namespace MCPForUnity.Editor.Services
 
             if (assetPath.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
             {
-                return Path.GetFullPath(Path.Combine(Application.dataPath, "..", assetPath.Substring("Assets/".Length)));
+                return Path.GetFullPath(Path.Combine(Application.dataPath, "..", assetPath));
             }
 
             if (assetPath.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase))
