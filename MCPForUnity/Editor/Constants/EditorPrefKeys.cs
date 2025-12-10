@@ -21,6 +21,11 @@ namespace MCPForUnity.Editor.Constants
         internal const string WebSocketUrlOverride = "MCPForUnity.WebSocketUrl";
         internal const string GitUrlOverride = "MCPForUnity.GitUrlOverride";
 
+        internal const string PackageDeploySourcePath = "MCPForUnity.PackageDeploy.SourcePath";
+        internal const string PackageDeployLastBackupPath = "MCPForUnity.PackageDeploy.LastBackupPath";
+        internal const string PackageDeployLastTargetPath = "MCPForUnity.PackageDeploy.LastTargetPath";
+        internal const string PackageDeployLastSourcePath = "MCPForUnity.PackageDeploy.LastSourcePath";
+
         internal const string ServerSrc = "MCPForUnity.ServerSrc";
         internal const string UseEmbeddedServer = "MCPForUnity.UseEmbeddedServer";
         internal const string LockCursorConfig = "MCPForUnity.LockCursorConfig";
