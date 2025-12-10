@@ -41,9 +41,14 @@ namespace MCPForUnity.Runtime.Helpers
 
             // Use only the file name to let Unity decide the final location (per CaptureScreenshot docs).
             string captureName = Path.GetFileName(normalizedFullPath);
-            ScreenCapture.CaptureScreenshot(captureName, size);
 
-            Debug.Log($"Screenshot requested: file='{captureName}' intendedFullPath='{normalizedFullPath}' persistentDataPath='{Application.persistentDataPath}'");
+
+#if UNITY_2022_1_OR_NEWER
+            ScreenCapture.CaptureScreenshot(captureName, size);
+#else
+            Debug.LogWarning("ScreenCapture is supported after Unity 2022.1. Using main camera capture as fallback.");
+            CaptureFromCameraToAssetsFolder(Camera.main, captureName, size, false);
+#endif
 
             string projectRoot = GetProjectRootPath();
             string assetsRelativePath = normalizedFullPath;
