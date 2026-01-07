@@ -4,12 +4,16 @@
         <uie:Toolbar name="tab-toolbar" class="tab-toolbar">
             <uie:ToolbarToggle name="settings-tab" text="Settings" value="true" />
             <uie:ToolbarToggle name="tools-tab" text="Tools" />
+            <uie:ToolbarToggle name="features-tab" text="Features" />
         </uie:Toolbar>
         <ui:ScrollView name="settings-panel" class="panel-scroll" style="flex-grow: 1;">
             <ui:VisualElement name="settings-container" class="section-stack" />
         </ui:ScrollView>
         <ui:ScrollView name="tools-panel" class="panel-scroll hidden" style="flex-grow: 1;">
             <ui:VisualElement name="tools-container" class="section-stack" />
+        </ui:ScrollView>
+        <ui:ScrollView name="features-panel" class="panel-scroll hidden" style="flex-grow: 1;">
+            <ui:VisualElement name="features-container" class="section-stack" />
         </ui:ScrollView>
     </ui:VisualElement>
 </ui:UXML>

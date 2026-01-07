@@ -6,7 +6,9 @@ using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Windows.Components.ClientConfig;
 using MCPForUnity.Editor.Windows.Components.Connection;
+using MCPForUnity.Editor.Windows.Components.Features;
 using MCPForUnity.Editor.Windows.Components.Settings;
+using MCPForUnity.Editor.Windows.Components.Tools;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
@@ -23,11 +25,14 @@ namespace MCPForUnity.Editor.Windows
         private McpConnectionSection connectionSection;
         private McpClientConfigSection clientConfigSection;
         private McpToolsSection toolsSection;
+        private McpFeaturesSection featuresSection;
 
         private ToolbarToggle settingsTabToggle;
         private ToolbarToggle toolsTabToggle;
+        private ToolbarToggle featuresTabToggle;
         private VisualElement settingsPanel;
         private VisualElement toolsPanel;
+        private VisualElement featuresPanel;
 
         private static readonly HashSet<MCPForUnityEditorWindow> OpenWindows = new();
         private bool guiCreated = false;
@@ -37,7 +42,8 @@ namespace MCPForUnity.Editor.Windows
         private enum ActivePanel
         {
             Settings,
-            Tools
+            Tools,
+            Features
         }
 
         internal static void CloseAllWindows()
@@ -125,10 +131,12 @@ namespace MCPForUnity.Editor.Windows
 
             settingsPanel = rootVisualElement.Q<VisualElement>("settings-panel");
             toolsPanel = rootVisualElement.Q<VisualElement>("tools-panel");
+            featuresPanel = rootVisualElement.Q<VisualElement>("features-panel");
             var settingsContainer = rootVisualElement.Q<VisualElement>("settings-container");
             var toolsContainer = rootVisualElement.Q<VisualElement>("tools-container");
+            var featuresContainer = rootVisualElement.Q<VisualElement>("features-container");
 
-            if (settingsPanel == null || toolsPanel == null)
+            if (settingsPanel == null || toolsPanel == null || featuresPanel == null)
             {
                 McpLog.Error("Failed to find tab panels in UXML");
                 return;
@@ -143,6 +151,12 @@ namespace MCPForUnity.Editor.Windows
             if (toolsContainer == null)
             {
                 McpLog.Error("Failed to find tools-container in UXML");
+                return;
+            }
+
+            if (featuresContainer == null)
+            {
+                McpLog.Error("Failed to find features-container in UXML");
                 return;
             }
 
@@ -196,12 +210,32 @@ namespace MCPForUnity.Editor.Windows
                 var toolsRoot = toolsTree.Instantiate();
                 toolsContainer.Add(toolsRoot);
                 toolsSection = new McpToolsSection(toolsRoot);
-                toolsSection.Refresh();
+
+                if (toolsTabToggle != null && toolsTabToggle.value)
+                {
+                    EnsureToolsLoaded();
+                }
             }
             else
             {
                 McpLog.Warn("Failed to load tools section UXML. Tool configuration will be unavailable.");
             }
+
+            // Load and initialize Features section
+            var featuresTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
+                $"{basePath}/Editor/Windows/Components/Features/McpFeaturesSection.uxml"
+            );
+            if (featuresTree != null)
+            {
+                var featuresRoot = featuresTree.Instantiate();
+                featuresContainer.Add(featuresRoot);
+                featuresSection = new McpFeaturesSection(featuresRoot);
+            }
+            else
+            {
+                McpLog.Warn("Failed to load features section UXML. Feature tools will be unavailable.");
+            }
+
             guiCreated = true;
 
             // Initial updates
@@ -263,42 +297,25 @@ namespace MCPForUnity.Editor.Windows
         {
             settingsTabToggle = rootVisualElement.Q<ToolbarToggle>("settings-tab");
             toolsTabToggle = rootVisualElement.Q<ToolbarToggle>("tools-tab");
+            featuresTabToggle = rootVisualElement.Q<ToolbarToggle>("features-tab");
 
             settingsPanel?.RemoveFromClassList("hidden");
             toolsPanel?.RemoveFromClassList("hidden");
+            featuresPanel?.RemoveFromClassList("hidden");
 
             if (settingsTabToggle != null)
             {
-                settingsTabToggle.RegisterValueChangedCallback(evt =>
-                {
-                    if (!evt.newValue)
-                    {
-                        if (toolsTabToggle != null && !toolsTabToggle.value)
-                        {
-                            settingsTabToggle.SetValueWithoutNotify(true);
-                        }
-                        return;
-                    }
-
-                    SwitchPanel(ActivePanel.Settings);
-                });
+                RegisterTabToggle(settingsTabToggle, ActivePanel.Settings);
             }
 
             if (toolsTabToggle != null)
             {
-                toolsTabToggle.RegisterValueChangedCallback(evt =>
-                {
-                    if (!evt.newValue)
-                    {
-                        if (settingsTabToggle != null && !settingsTabToggle.value)
-                        {
-                            toolsTabToggle.SetValueWithoutNotify(true);
-                        }
-                        return;
-                    }
+                RegisterTabToggle(toolsTabToggle, ActivePanel.Tools);
+            }
 
-                    SwitchPanel(ActivePanel.Tools);
-                });
+            if (featuresTabToggle != null)
+            {
+                RegisterTabToggle(featuresTabToggle, ActivePanel.Features);
             }
 
             var savedPanel = EditorPrefs.GetString(EditorPrefKeys.EditorWindowActivePanel, ActivePanel.Settings.ToString());
@@ -319,45 +336,51 @@ namespace MCPForUnity.Editor.Windows
                 settingsPanel.style.display = showSettings ? DisplayStyle.Flex : DisplayStyle.None;
             }
 
+
             if (toolsPanel != null)
             {
-                toolsPanel.style.display = showSettings ? DisplayStyle.None : DisplayStyle.Flex;
+                toolsPanel.style.display = showTools ? DisplayStyle.Flex : DisplayStyle.None;
+            }
+
+            if (featuresPanel != null)
+            {
+                featuresPanel.style.display = showFeatures ? DisplayStyle.Flex : DisplayStyle.None;
             }
 
             settingsTabToggle?.SetValueWithoutNotify(showSettings);
-            toolsTabToggle?.SetValueWithoutNotify(!showSettings);
+            toolsTabToggle?.SetValueWithoutNotify(showTools);
+            featuresTabToggle?.SetValueWithoutNotify(showFeatures);
+
+            if (showTools)
+            {
+                EnsureToolsLoaded();
+            }
 
             EditorPrefs.SetString(EditorPrefKeys.EditorWindowActivePanel, panel.ToString());
         }
 
-        internal static void RequestHealthVerification()
+        private void RegisterTabToggle(ToolbarToggle toggle, ActivePanel panel)
         {
-            foreach (var window in OpenWindows)
+            toggle.RegisterValueChangedCallback(evt =>
             {
-                window?.ScheduleHealthCheck();
-            }
-        }
-
-        private void ScheduleHealthCheck()
-        {
-            EditorApplication.delayCall += async () =>
-            {
-                // Ensure window and components are still valid before execution
-                if (this == null || connectionSection == null)
+                if (!evt.newValue)
                 {
+                    if (!AnyTabSelected())
+                    {
+                        toggle.SetValueWithoutNotify(true);
+                    }
                     return;
                 }
 
-                try
-                {
-                    await connectionSection.VerifyBridgeConnectionAsync();
-                }
-                catch (Exception ex)
-                {
-                    // Log but don't crash if verification fails during cleanup
-                    McpLog.Warn($"Health check verification failed: {ex.Message}");
-                }
-            };
+                SwitchPanel(panel);
+            });
+        }
+
+        private bool AnyTabSelected()
+        {
+            return (settingsTabToggle != null && settingsTabToggle.value)
+                || (toolsTabToggle != null && toolsTabToggle.value)
+                || (featuresTabToggle != null && featuresTabToggle.value);
         }
     }
 }

@@ -167,6 +167,24 @@ namespace MCPForUnity.Editor.Tools
             return CaptureScreenshot(fileName, superSize);
         }
 
+        /// <summary>
+        /// Builds a scene graph payload for the active scene.
+        /// Public so the editor UI can reuse the logic.
+        /// </summary>
+        public static object ExecuteSceneGraph(bool includeTransform = false, bool includeComponents = false)
+        {
+            return BuildSceneGraph(includeTransform, includeComponents);
+        }
+
+        /// <summary>
+        /// Builds a concept table payload for the active scene.
+        /// Public so the editor UI can reuse the logic.
+        /// </summary>
+        public static object ExecuteConceptTable(string domain = null, bool includeUnmapped = false)
+        {
+            return BuildConceptTable(domain, includeUnmapped);
+        }
+
         private static object CreateScene(string fullPath, string relativePath)
         {
             if (File.Exists(fullPath))
@@ -395,6 +413,108 @@ namespace MCPForUnity.Editor.Tools
             }
         }
 
+        private static object BuildSceneGraph(bool includeTransform, bool includeComponents)
+        {
+            try
+            {
+                Scene activeScene = EditorSceneManager.GetActiveScene();
+                if (!activeScene.IsValid() || !activeScene.isLoaded)
+                {
+                    return new ErrorResponse("No valid and loaded scene is active to build a scene graph from.");
+                }
+
+                var nodes = new List<object>();
+                var edges = new List<object>();
+                var stack = new Stack<(GameObject go, int? parentId)>();
+
+                foreach (var root in activeScene.GetRootGameObjects())
+                {
+                    if (root != null) stack.Push((root, null));
+                }
+
+                while (stack.Count > 0)
+                {
+                    var (go, parentId) = stack.Pop();
+                    if (go == null) continue;
+
+                    int instanceId = go.GetInstanceID();
+                    var childIds = new List<int>();
+                    if (go.transform != null)
+                    {
+                        foreach (Transform child in go.transform)
+                        {
+                            if (child == null || child.gameObject == null) continue;
+                            int childId = child.gameObject.GetInstanceID();
+                            childIds.Add(childId);
+                            stack.Push((child.gameObject, instanceId));
+                        }
+                    }
+
+                    nodes.Add(BuildGraphNode(go, parentId, childIds, includeTransform, includeComponents));
+                    if (parentId.HasValue)
+                    {
+                        edges.Add(new Dictionary<string, object>
+                        {
+                            { "parentId", parentId.Value },
+                            { "childId", instanceId },
+                        });
+                    }
+                }
+
+                var payload = new
+                {
+                    scene = activeScene.name,
+                    path = activeScene.path,
+                    rootCount = activeScene.rootCount,
+                    nodeCount = nodes.Count,
+                    edgeCount = edges.Count,
+                    nodes = nodes,
+                    edges = edges,
+                };
+
+                return new SuccessResponse($"Built scene graph for '{activeScene.name}'.", payload);
+            }
+            catch (Exception e)
+            {
+                return new ErrorResponse($"Error building scene graph: {e.Message}");
+            }
+        }
+
+        private static object BuildConceptTable(string domain, bool includeUnmapped)
+        {
+            try
+            {
+                Scene activeScene = EditorSceneManager.GetActiveScene();
+                if (!activeScene.IsValid() || !activeScene.isLoaded)
+                {
+                    return new ErrorResponse("No valid and loaded scene is active to infer concepts from.");
+                }
+
+                string resolvedDomain = string.IsNullOrEmpty(domain) ? "generic" : domain.Trim().ToLowerInvariant();
+                var allObjects = GetAllSceneGameObjects(activeScene);
+
+                int unmappedCount;
+                var entries = BuildConceptTableEntries(allObjects, resolvedDomain, includeUnmapped, out unmappedCount);
+
+                var payload = new
+                {
+                    scene = activeScene.name,
+                    path = activeScene.path,
+                    domain = resolvedDomain,
+                    totalObjects = allObjects.Count,
+                    mappingCount = entries.Count,
+                    unmappedCount = unmappedCount,
+                    entries = entries,
+                };
+
+                return new SuccessResponse($"Inferred concept table for '{activeScene.name}'.", payload);
+            }
+            catch (Exception e)
+            {
+                return new ErrorResponse($"Error inferring concept table: {e.Message}");
+            }
+        }
+
         private static object GetActiveSceneInfo()
         {
             try
@@ -485,57 +605,364 @@ namespace MCPForUnity.Editor.Tools
             }
         }
 
-        /// <summary>
-        /// Recursively builds a data representation of a GameObject and its children.
-        /// </summary>
-        private static object GetGameObjectDataRecursive(GameObject go)
+        private static GameObject ResolveGameObject(JToken targetToken, Scene activeScene)
         {
-            if (go == null)
-                return null;
+            if (targetToken == null || targetToken.Type == JTokenType.Null) return null;
 
-            var childrenData = new List<object>();
-            foreach (Transform child in go.transform)
+            try
             {
-                childrenData.Add(GetGameObjectDataRecursive(child.gameObject));
+                if (targetToken.Type == JTokenType.Integer || int.TryParse(targetToken.ToString(), out _))
+                {
+                    if (int.TryParse(targetToken.ToString(), out int id))
+                    {
+                        var obj = EditorUtility.InstanceIDToObject(id);
+                        if (obj is GameObject go) return go;
+                        if (obj is Component c) return c.gameObject;
+                    }
+                }
+            }
+            catch { }
+
+            string s = targetToken.ToString();
+            if (string.IsNullOrEmpty(s)) return null;
+
+            // Path-based find (e.g., "Root/Child/GrandChild")
+            if (s.Contains("/"))
+            {
+                try { return GameObject.Find(s); } catch { }
             }
 
-            var gameObjectData = new Dictionary<string, object>
+            // Name-based find (first match, includes inactive)
+            try
+            {
+                var all = activeScene.GetRootGameObjects();
+                foreach (var root in all)
+                {
+                    if (root == null) continue;
+                    if (root.name == s) return root;
+                    var trs = root.GetComponentsInChildren<Transform>(includeInactive: true);
+                    foreach (var t in trs)
+                    {
+                        if (t != null && t.gameObject != null && t.gameObject.name == s) return t.gameObject;
+                    }
+                }
+            }
+            catch { }
+
+            return null;
+        }
+
+        private static object BuildGameObjectSummary(GameObject go, bool includeTransform, int maxChildrenPerNode)
+        {
+            if (go == null) return null;
+
+            int childCount = 0;
+            try { childCount = go.transform != null ? go.transform.childCount : 0; } catch { }
+            bool childrenTruncated = childCount > 0; // We do not inline children in summary mode.
+
+            // Get component type names (lightweight - no full serialization)
+            var componentTypes = new List<string>();
+            try
+            {
+                var components = go.GetComponents<Component>();
+                if (components != null)
+                {
+                    foreach (var c in components)
+                    {
+                        if (c != null)
+                        {
+                            componentTypes.Add(c.GetType().Name);
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            var d = new Dictionary<string, object>
             {
                 { "name", go.name },
+                { "instanceID", go.GetInstanceID() },
                 { "activeSelf", go.activeSelf },
                 { "activeInHierarchy", go.activeInHierarchy },
                 { "tag", go.tag },
                 { "layer", go.layer },
                 { "isStatic", go.isStatic },
-                { "instanceID", go.GetInstanceID() }, // Useful unique identifier
-                {
-                    "transform",
-                    new
-                    {
-                        position = new
-                        {
-                            x = go.transform.localPosition.x,
-                            y = go.transform.localPosition.y,
-                            z = go.transform.localPosition.z,
-                        },
-                        rotation = new
-                        {
-                            x = go.transform.localRotation.eulerAngles.x,
-                            y = go.transform.localRotation.eulerAngles.y,
-                            z = go.transform.localRotation.eulerAngles.z,
-                        }, // Euler for simplicity
-                        scale = new
-                        {
-                            x = go.transform.localScale.x,
-                            y = go.transform.localScale.y,
-                            z = go.transform.localScale.z,
-                        },
-                    }
-                },
-                { "children", childrenData },
+                { "path", GetGameObjectPath(go) },
+                { "childCount", childCount },
+                { "childrenTruncated", childrenTruncated },
+                { "childrenCursor", childCount > 0 ? "0" : null },
+                { "childrenPageSizeDefault", maxChildrenPerNode },
+                { "componentTypes", componentTypes },  // NEW: Lightweight component type list
             };
 
-            return gameObjectData;
+            if (includeTransform && go.transform != null)
+            {
+                var t = go.transform;
+                d["transform"] = new
+                {
+                    position = new[] { t.localPosition.x, t.localPosition.y, t.localPosition.z },
+                    rotation = new[] { t.localRotation.eulerAngles.x, t.localRotation.eulerAngles.y, t.localRotation.eulerAngles.z },
+                    scale = new[] { t.localScale.x, t.localScale.y, t.localScale.z },
+                };
+            }
+
+            return d;
         }
+
+        private static string GetGameObjectPath(GameObject go)
+        {
+            if (go == null) return string.Empty;
+            try
+            {
+                var names = new Stack<string>();
+                Transform t = go.transform;
+                while (t != null)
+                {
+                    names.Push(t.name);
+                    t = t.parent;
+                }
+                return string.Join("/", names);
+            }
+            catch
+            {
+                return go.name;
+            }
+        }
+
+        private static object BuildGraphNode(GameObject go, int? parentId, List<int> childIds, bool includeTransform, bool includeComponents)
+        {
+            var d = new Dictionary<string, object>
+            {
+                { "name", go.name },
+                { "instanceID", go.GetInstanceID() },
+                { "parentId", parentId },
+                { "path", GetGameObjectPath(go) },
+                { "activeSelf", go.activeSelf },
+                { "activeInHierarchy", go.activeInHierarchy },
+                { "tag", go.tag },
+                { "layer", go.layer },
+                { "isStatic", go.isStatic },
+                { "hideFlags", (int)go.hideFlags },
+                { "childIds", childIds },
+                { "childCount", childIds.Count },
+            };
+
+            if (includeTransform && go.transform != null)
+            {
+                var t = go.transform;
+                d["transform"] = new
+                {
+                    position = new[] { t.localPosition.x, t.localPosition.y, t.localPosition.z },
+                    rotation = new[] { t.localRotation.eulerAngles.x, t.localRotation.eulerAngles.y, t.localRotation.eulerAngles.z },
+                    scale = new[] { t.localScale.x, t.localScale.y, t.localScale.z },
+                };
+            }
+
+            if (includeComponents)
+            {
+                d["components"] = GetComponentTypeNames(go).OrderBy(n => n).ToArray();
+            }
+
+            return d;
+        }
+
+        private static List<object> BuildConceptTableEntries(List<GameObject> allObjects, string domain, bool includeUnmapped, out int unmappedCount)
+        {
+            var entries = new List<object>();
+            unmappedCount = 0;
+
+            foreach (var go in allObjects)
+            {
+                if (go == null) continue;
+                var componentTypes = GetComponentTypeNames(go);
+                var matches = InferConcepts(go, componentTypes, domain);
+
+                if (matches.Count == 0)
+                {
+                    unmappedCount++;
+                    if (includeUnmapped)
+                    {
+                        entries.Add(new Dictionary<string, object>
+                        {
+                            { "concept", "unmapped" },
+                            { "instanceID", go.GetInstanceID() },
+                            { "name", go.name },
+                            { "path", GetGameObjectPath(go) },
+                            { "confidence", 0.0f },
+                            { "evidence", new [] { "no_rule_match" } },
+                        });
+                    }
+                    continue;
+                }
+
+                foreach (var match in matches)
+                {
+                    entries.Add(new Dictionary<string, object>
+                    {
+                        { "concept", match.Concept },
+                        { "instanceID", go.GetInstanceID() },
+                        { "name", go.name },
+                        { "path", GetGameObjectPath(go) },
+                        { "confidence", match.Confidence },
+                        { "evidence", new [] { match.Evidence } },
+                    });
+                }
+            }
+
+            return entries;
+        }
+
+        private static List<GameObject> GetAllSceneGameObjects(Scene activeScene)
+        {
+            var results = new List<GameObject>();
+            var stack = new Stack<GameObject>();
+            foreach (var root in activeScene.GetRootGameObjects())
+            {
+                if (root != null) stack.Push(root);
+            }
+
+            while (stack.Count > 0)
+            {
+                var go = stack.Pop();
+                if (go == null) continue;
+                results.Add(go);
+
+                if (go.transform == null) continue;
+                foreach (Transform child in go.transform)
+                {
+                    if (child != null && child.gameObject != null)
+                    {
+                        stack.Push(child.gameObject);
+                    }
+                }
+            }
+
+            return results;
+        }
+
+        private static HashSet<string> GetComponentTypeNames(GameObject go)
+        {
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (go == null) return names;
+
+            foreach (var component in go.GetComponents<Component>())
+            {
+                if (component == null)
+                {
+                    names.Add("MissingScript");
+                    continue;
+                }
+
+                var type = component.GetType();
+                if (type.FullName != null) names.Add(type.FullName);
+                names.Add(type.Name);
+            }
+
+            return names;
+        }
+
+        private sealed class ConceptMatch
+        {
+            public string Concept { get; set; }
+            public float Confidence { get; set; }
+            public string Evidence { get; set; }
+        }
+
+        private static List<ConceptMatch> InferConcepts(GameObject go, HashSet<string> componentTypes, string domain)
+        {
+            var matches = new List<ConceptMatch>();
+            string name = go.name ?? string.Empty;
+            string nameLower = name.ToLowerInvariant();
+
+            void AddMatch(string concept, float confidence, string evidence)
+            {
+                matches.Add(new ConceptMatch { Concept = concept, Confidence = confidence, Evidence = evidence });
+            }
+
+            if (componentTypes.Contains("Camera")) AddMatch("camera", 0.9f, "component:Camera");
+            if (componentTypes.Contains("Light")) AddMatch("light", 0.9f, "component:Light");
+            if (componentTypes.Contains("AudioSource")) AddMatch("audio_source", 0.85f, "component:AudioSource");
+            if (componentTypes.Contains("Canvas")) AddMatch("ui_canvas", 0.85f, "component:Canvas");
+            if (componentTypes.Contains("Button") || componentTypes.Contains("UnityEngine.UI.Button")) AddMatch("ui_button", 0.8f, "component:Button");
+            if (componentTypes.Contains("Image") || componentTypes.Contains("UnityEngine.UI.Image")) AddMatch("ui_image", 0.75f, "component:Image");
+            if (componentTypes.Contains("Text") || componentTypes.Contains("UnityEngine.UI.Text") || componentTypes.Contains("TMP_Text") || componentTypes.Contains("TMPro.TMP_Text")) AddMatch("ui_text", 0.8f, "component:Text");
+            if (componentTypes.Contains("MeshRenderer") || componentTypes.Contains("SkinnedMeshRenderer")) AddMatch("visual", 0.6f, "component:Renderer");
+            if (componentTypes.Contains("Rigidbody") || componentTypes.Contains("Rigidbody2D")) AddMatch("physics_body", 0.7f, "component:Rigidbody");
+            if (componentTypes.Contains("Collider") || componentTypes.Contains("Collider2D")) AddMatch("collider", 0.65f, "component:Collider");
+            if (componentTypes.Contains("Animator")) AddMatch("animated", 0.7f, "component:Animator");
+
+            if (nameLower.Contains("manager")) AddMatch("manager", 0.6f, "name:manager");
+
+            if (domain == "game" || domain == "gaming")
+            {
+                if (HasTag(go, "Player") || NameContains(nameLower, "player", "hero", "character"))
+                {
+                    AddMatch("character", 0.85f, "game:player_or_character");
+                }
+                if (HasTag(go, "Enemy") || NameContains(nameLower, "enemy", "npc", "monster", "boss"))
+                {
+                    AddMatch("enemy", 0.8f, "game:enemy");
+                }
+                if (NameContains(nameLower, "weapon", "gun", "sword", "bow"))
+                {
+                    AddMatch("weapon", 0.7f, "game:weapon_name");
+                }
+                if (NameContains(nameLower, "pickup", "collect", "coin", "gem", "item"))
+                {
+                    AddMatch("collectible", 0.65f, "game:collectible_name");
+                }
+                if (componentTypes.Contains("Terrain") || NameContains(nameLower, "terrain", "ground", "level", "environment"))
+                {
+                    AddMatch("environment", 0.6f, "game:environment");
+                }
+            }
+            else if (domain == "education" || domain == "educational")
+            {
+                if (NameContains(nameLower, "concept", "topic", "lesson", "module", "card"))
+                {
+                    AddMatch("concept_element", 0.8f, "edu:concept_name");
+                }
+                if (NameContains(nameLower, "question", "quiz"))
+                {
+                    AddMatch("question", 0.75f, "edu:question_name");
+                }
+                if (NameContains(nameLower, "answer", "option"))
+                {
+                    AddMatch("answer_option", 0.7f, "edu:answer_name");
+                }
+                if (NameContains(nameLower, "teacher", "instructor"))
+                {
+                    AddMatch("instructor", 0.7f, "edu:teacher_name");
+                }
+                if (NameContains(nameLower, "student", "learner"))
+                {
+                    AddMatch("learner", 0.7f, "edu:learner_name");
+                }
+            }
+
+            return matches;
+        }
+
+        private static bool NameContains(string nameLower, params string[] tokens)
+        {
+            foreach (var token in tokens)
+            {
+                if (!string.IsNullOrEmpty(token) && nameLower.Contains(token)) return true;
+            }
+            return false;
+        }
+
+        private static bool HasTag(GameObject go, string tag)
+        {
+            try
+            {
+                return go != null && go.CompareTag(tag);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
     }
 }

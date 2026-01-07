@@ -1,0 +1,24 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+    <ui:VisualElement name="features-section" class="section">
+        <ui:Label text="Features" class="section-title" />
+        <ui:VisualElement class="section-content">
+            <ui:VisualElement name="features-actions" class="features-actions">
+                <ui:Button name="show-graph-button" text="Open Graph Viewer" class="tool-action-button" />
+                <ui:Button name="show-semantic-button" text="Open Semantic Viewer" class="tool-action-button" />
+                <ui:Button name="show-table-button" text="Open Concept Viewer" class="tool-action-button" />
+            </ui:VisualElement>
+            <ui:VisualElement name="features-options" class="features-options">
+                <ui:Label text="Domain" class="setting-label-small" />
+                <ui:DropdownField name="domain-dropdown" />
+            </ui:VisualElement>
+            <ui:TextField name="features-output" label="Last Export" multiline="true" class="features-output" />
+            <ui:VisualElement name="features-results" class="features-results">
+                <ui:Label name="graph-status" class="features-status" text="Layer: object | nodes: 0 | edges: 0" />
+                <ui:VisualElement name="graph-view" class="features-graph" />
+            </ui:VisualElement>
+            <ui:VisualElement name="mapping-viewer" class="mapping-viewer">
+                <ui:Label text="Structure Mapping Table" class="section-title" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
