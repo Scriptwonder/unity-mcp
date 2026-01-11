@@ -296,6 +296,67 @@ async def health_http(_: Request) -> JSONResponse:
     })
 
 
+@mcp.custom_route("/api/command", methods=["POST"])
+async def cli_command_route(request: Request) -> JSONResponse:
+    """REST endpoint for CLI commands to Unity."""
+    try:
+        body = await request.json()
+        command_type = body.get("type")
+        params = body.get("params", {})
+        unity_instance = body.get("unity_instance")
+        
+        if not command_type:
+            return JSONResponse({"success": False, "error": "Missing 'type' field"}, status_code=400)
+        
+        # Get available sessions
+        sessions = await PluginHub.get_sessions()
+        if not sessions.sessions:
+            return JSONResponse({
+                "success": False, 
+                "error": "No Unity instances connected. Make sure Unity is running with MCP plugin."
+            }, status_code=503)
+        
+        # Find target session
+        session_id = None
+        if unity_instance:
+            # Try to match by hash or project name
+            for sid, details in sessions.sessions.items():
+                if details.hash == unity_instance or details.project == unity_instance:
+                    session_id = sid
+                    break
+        
+        if not session_id:
+            # Use first available session
+            session_id = next(iter(sessions.sessions.keys()))
+        
+        # Send command to Unity
+        result = await PluginHub.send_command(session_id, command_type, params)
+        return JSONResponse(result)
+        
+    except Exception as e:
+        logger.error(f"CLI command error: {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@mcp.custom_route("/api/instances", methods=["GET"])
+async def cli_instances_route(_: Request) -> JSONResponse:
+    """REST endpoint to list connected Unity instances."""
+    try:
+        sessions = await PluginHub.get_sessions()
+        instances = []
+        for session_id, details in sessions.sessions.items():
+            instances.append({
+                "session_id": session_id,
+                "project": details.project,
+                "hash": details.hash,
+                "unity_version": details.unity_version,
+                "connected_at": details.connected_at,
+            })
+        return JSONResponse({"success": True, "instances": instances})
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
 @mcp.custom_route("/plugin/sessions", methods=["GET"])
 async def plugin_sessions_route(_: Request) -> JSONResponse:
     data = await PluginHub.get_sessions()
