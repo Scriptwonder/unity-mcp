@@ -17,11 +17,22 @@ class CLIConfig:
     
     @classmethod
     def from_env(cls) -> "CLIConfig":
-        """Create config from environment variables."""
+        port_raw = os.environ.get("UNITY_MCP_HTTP_PORT", "8080")
+        try:
+            port = int(port_raw)
+        except (ValueError, TypeError):
+            raise ValueError(f"Invalid UNITY_MCP_HTTP_PORT value: {port_raw!r}")
+
+        timeout_raw = os.environ.get("UNITY_MCP_TIMEOUT", "30")
+        try:
+            timeout = int(timeout_raw)
+        except (ValueError, TypeError):
+            raise ValueError(f"Invalid UNITY_MCP_TIMEOUT value: {timeout_raw!r}")
+
         return cls(
             host=os.environ.get("UNITY_MCP_HOST", "127.0.0.1"),
-            port=int(os.environ.get("UNITY_MCP_HTTP_PORT", "8080")),
-            timeout=int(os.environ.get("UNITY_MCP_TIMEOUT", "30")),
+            port=port,
+            timeout=timeout,
             format=os.environ.get("UNITY_MCP_FORMAT", "text"),
             unity_instance=os.environ.get("UNITY_MCP_INSTANCE"),
         )

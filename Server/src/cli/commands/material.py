@@ -89,7 +89,7 @@ def create(path: str, shader: str, properties: Optional[str]):
 @click.argument("r", type=float)
 @click.argument("g", type=float)
 @click.argument("b", type=float)
-@click.argument("a", type=float, default=1.0)
+@click.argument("a", type=float, default=1.0, show_default=True)
 @click.option(
     "--property", "-p",
     default="_Color",

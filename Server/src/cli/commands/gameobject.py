@@ -6,7 +6,7 @@ import click
 from typing import Optional, Tuple, Any
 
 from cli.utils.config import get_config
-from cli.utils.output import format_output, print_error, print_success
+from cli.utils.output import format_output, print_error, print_success, print_warning
 from cli.utils.connection import run_command, UnityConnectionError
 
 
@@ -181,12 +181,18 @@ def create(
         # Add components separately since componentsToAdd doesn't work
         if components and (result.get("success") or result.get("data") or result.get("result")):
             component_list = [c.strip() for c in components.split(",")]
+            failed_components = []
             for component in component_list:
-                run_command("manage_components", {
-                    "action": "add",
-                    "target": name,
-                    "componentType": component,
-                }, config)
+                try:
+                    run_command("manage_components", {
+                        "action": "add",
+                        "target": name,
+                        "componentType": component,
+                    }, config)
+                except UnityConnectionError:
+                    failed_components.append(component)
+            if failed_components:
+                print_warning(f"Failed to add components: {', '.join(failed_components)}")
         
         click.echo(format_output(result, config.format))
         if result.get("success") or result.get("result"):
@@ -288,7 +294,7 @@ def modify(
     """
     config = get_config()
     
-    params = {
+    params: dict[str, Any] = {
         "action": "modify",
         "target": target,
     }
@@ -405,7 +411,7 @@ def duplicate(
     """
     config = get_config()
     
-    params = {
+    params: dict[str, Any] = {
         "action": "duplicate",
         "target": target,
     }
@@ -475,7 +481,7 @@ def move(
     """
     config = get_config()
     
-    params = {
+    params: dict[str, Any] = {
         "action": "move_relative",
         "target": target,
         "reference_object": reference,

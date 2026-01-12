@@ -98,10 +98,15 @@ def read(path: str, start_line: Optional[int], line_count: Optional[int]):
     """
     config = get_config()
     
+    parts = path.rsplit("/", 1)
+    filename = parts[-1]
+    directory = parts[0] if len(parts) > 1 else "Assets"
+    name = filename[:-3] if filename.endswith(".cs") else filename
+
     params: dict[str, Any] = {
         "action": "read",
-        "name": path.split("/")[-1].replace(".cs", ""),
-        "path": "/".join(path.split("/")[:-1]) or "Assets",
+        "name": name,
+        "path": directory,
     }
     
     if start_line:
@@ -144,10 +149,15 @@ def delete(path: str, force: bool):
     if not force:
         click.confirm(f"Delete script '{path}'?", abort=True)
     
+    parts = path.rsplit("/", 1)
+    filename = parts[-1]
+    directory = parts[0] if len(parts) > 1 else "Assets"
+    name = filename[:-3] if filename.endswith(".cs") else filename
+
     params: dict[str, Any] = {
         "action": "delete",
-        "name": path.split("/")[-1].replace(".cs", ""),
-        "path": "/".join(path.split("/")[:-1]) or "Assets",
+        "name": name,
+        "path": directory,
     }
     
     try:

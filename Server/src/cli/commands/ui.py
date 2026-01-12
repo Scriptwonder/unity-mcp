@@ -103,6 +103,7 @@ def create_text(name: str, parent: str, text: str, position: tuple):
             "action": "create",
             "name": name,
             "parent": parent,
+            "position": list(position),
         }, config)
         
         if not (result.get("success") or result.get("data") or result.get("result")):
@@ -144,7 +145,7 @@ def create_text(name: str, parent: str, text: str, position: tuple):
     default="Button",
     help="Button label text."
 )
-def create_button(name: str, parent: str, text: str):
+def create_button(name: str, parent: str, text: str): #text current placeholder
     """Create a UI Button.
     
     \b

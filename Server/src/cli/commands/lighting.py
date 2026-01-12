@@ -63,19 +63,23 @@ def create(name: str, light_type: str, position: Tuple[float, float, float], col
             "position": list(position),
         }, config)
         
-        if not (create_result.get("success") or create_result.get("data") or create_result.get("result")):
+        if not (create_result.get("success")):
             click.echo(format_output(create_result, config.format))
             return
         
         # Step 2: Add Light component using manage_components
-        run_command("manage_components", {
+        add_result = run_command("manage_components", {
             "action": "add",
             "target": name,
             "componentType": "Light",
         }, config)
         
+        if not add_result.get("success"):
+            click.echo(format_output(add_result, config.format))
+            return
+        
         # Step 3: Set light type using manage_components set_property
-        run_command("manage_components", {
+        type_result = run_command("manage_components", {
             "action": "set_property",
             "target": name,
             "componentType": "Light",
@@ -83,25 +87,37 @@ def create(name: str, light_type: str, position: Tuple[float, float, float], col
             "value": light_type,
         }, config)
         
+        if not type_result.get("success"):
+            click.echo(format_output(type_result, config.format))
+            return
+        
         # Step 4: Set color if provided
         if color:
-            run_command("manage_components", {
-                "action": "set_property",
-                "target": name,
-                "componentType": "Light",
-                "property": "color",
-                "value": {"r": color[0], "g": color[1], "b": color[2], "a": 1},
+            color_result = run_command("manage_components", {
+            "action": "set_property",
+            "target": name,
+            "componentType": "Light",
+            "property": "color",
+            "value": {"r": color[0], "g": color[1], "b": color[2], "a": 1},
             }, config)
+            
+            if not color_result.get("success"):
+                click.echo(format_output(color_result, config.format))
+            return
         
         # Step 5: Set intensity if provided
         if intensity is not None:
-            run_command("manage_components", {
-                "action": "set_property",
-                "target": name,
-                "componentType": "Light",
-                "property": "intensity",
-                "value": intensity,
+            intensity_result = run_command("manage_components", {
+            "action": "set_property",
+            "target": name,
+            "componentType": "Light",
+            "property": "intensity",
+            "value": intensity,
             }, config)
+            
+            if not intensity_result.get("success"):
+                click.echo(format_output(intensity_result, config.format))
+            return
         
         # Output the result
         click.echo(format_output(create_result, config.format))

@@ -30,6 +30,7 @@ def animation():
     default=None,
     help="How to find the target."
 )
+
 def play(target: str, state_name: str, layer: int, search_method: Optional[str]):
     """Play an animation state on a target's Animator.
     
@@ -42,11 +43,11 @@ def play(target: str, state_name: str, layer: int, search_method: Optional[str])
     
     # Set Animator parameter to trigger state
     params: dict[str, Any] = {
-        "action": "set_property",
+        "action": "invoke_method",
         "target": target,
         "componentType": "Animator",
-        "property": "Play",
-        "value": state_name,
+        "method": "Play",
+        "args": [state_name, layer],
     }
     
     if search_method:
