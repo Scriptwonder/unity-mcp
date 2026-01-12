@@ -103,7 +103,7 @@ def create(name: str, light_type: str, position: Tuple[float, float, float], col
             
             if not color_result.get("success"):
                 click.echo(format_output(color_result, config.format))
-            return
+                return
         
         # Step 5: Set intensity if provided
         if intensity is not None:
@@ -117,7 +117,7 @@ def create(name: str, light_type: str, position: Tuple[float, float, float], col
             
             if not intensity_result.get("success"):
                 click.echo(format_output(intensity_result, config.format))
-            return
+                return
         
         # Output the result
         click.echo(format_output(create_result, config.format))

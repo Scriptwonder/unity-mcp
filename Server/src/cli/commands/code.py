@@ -1,4 +1,4 @@
-"""Code CLI commands - search and read source code."""
+"""Code CLI commands - read source code. search might be implemented later (but can be totally achievable with AI)."""
 
 import sys
 import click

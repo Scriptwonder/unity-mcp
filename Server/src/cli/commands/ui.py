@@ -222,6 +222,16 @@ def create_image(name: str, parent: str, sprite: Optional[str]):
             "componentType": "Image",
         }, config)
         
+        # Step 3: Set sprite if provided
+        if sprite:
+            run_command("manage_components", {
+                "action": "set_property",
+                "target": name,
+                "componentType": "Image",
+                "property": "sprite",
+                "value": sprite,
+            }, config)
+
         click.echo(format_output(result, config.format))
         print_success(f"Created Image: {name}")
     except UnityConnectionError as e:

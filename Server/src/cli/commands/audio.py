@@ -45,6 +45,9 @@ def play(target: str, clip: Optional[str], search_method: Optional[str]):
         "property": "Play",
         "value": True,
     }
+
+    if clip:
+        params["clip"] = clip
     
     if search_method:
         params["searchMethod"] = search_method
