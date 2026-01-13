@@ -1,6 +1,7 @@
 """Code CLI commands - read source code. search might be implemented later (but can be totally achievable with AI)."""
 
 import sys
+import os
 import click
 from typing import Optional, Any
 
@@ -41,7 +42,7 @@ def read(path: str, start_line: Optional[int], line_count: Optional[int]):
     
     # Extract name and directory from path
     parts = path.replace("\\", "/").split("/")
-    filename = parts[-1].replace(".cs", "")
+    filename = os.path.splitext(parts[-1])[0]
     directory = "/".join(parts[:-1]) or "Assets"
     
     params: dict[str, Any] = {

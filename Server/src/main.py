@@ -301,6 +301,7 @@ async def cli_command_route(request: Request) -> JSONResponse:
     """REST endpoint for CLI commands to Unity."""
     try:
         body = await request.json()
+        
         command_type = body.get("type")
         params = body.get("params", {})
         unity_instance = body.get("unity_instance")

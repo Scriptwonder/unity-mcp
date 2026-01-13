@@ -161,11 +161,11 @@ def create_button(name: str, parent: str, text: str): #text current placeholder
             "name": name,
             "parent": parent,
         }, config)
-        
+
         if not (result.get("success") or result.get("data") or result.get("result")):
             click.echo(format_output(result, config.format))
             return
-        
+
         # Step 2: Add Button and Image components
         for component in ["Image", "Button"]:
             run_command("manage_components", {
@@ -173,9 +173,31 @@ def create_button(name: str, parent: str, text: str): #text current placeholder
                 "target": name,
                 "componentType": component,
             }, config)
-        
+
+        # Step 3: Create child label GameObject
+        label_name = f"{name}_Label"
+        label_result = run_command("manage_gameobject", {
+            "action": "create",
+            "name": label_name,
+            "parent": name,
+        }, config)
+
+        # Step 4: Add TextMeshProUGUI to label and set text
+        run_command("manage_components", {
+            "action": "add",
+            "target": label_name,
+            "componentType": "TextMeshProUGUI",
+        }, config)
+        run_command("manage_components", {
+            "action": "set_property",
+            "target": label_name,
+            "componentType": "TextMeshProUGUI",
+            "property": "text",
+            "value": text,
+        }, config)
+
         click.echo(format_output(result, config.format))
-        print_success(f"Created Button: {name}")
+        print_success(f"Created Button: {name} (with label '{text}')")
     except UnityConnectionError as e:
         print_error(str(e))
         sys.exit(1)
@@ -221,7 +243,7 @@ def create_image(name: str, parent: str, sprite: Optional[str]):
             "target": name,
             "componentType": "Image",
         }, config)
-        
+
         # Step 3: Set sprite if provided
         if sprite:
             run_command("manage_components", {

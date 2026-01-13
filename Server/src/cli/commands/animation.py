@@ -22,7 +22,7 @@ def animation():
     "--layer", "-l",
     default=0,
     type=int,
-    help="Animator layer."
+    help="Animator layer(TODO)."
 )
 @click.option(
     "--search-method",
@@ -30,7 +30,6 @@ def animation():
     default=None,
     help="How to find the target."
 )
-
 def play(target: str, state_name: str, layer: int, search_method: Optional[str]):
     """Play an animation state on a target's Animator.
     
@@ -43,11 +42,12 @@ def play(target: str, state_name: str, layer: int, search_method: Optional[str])
     
     # Set Animator parameter to trigger state
     params: dict[str, Any] = {
-        "action": "invoke_method",
+        "action": "set_property",
         "target": target,
         "componentType": "Animator",
-        "method": "Play",
-        "args": [state_name, layer],
+        "property": "Play",
+        "value": state_name,
+        "layer": layer,
     }
     
     if search_method:
