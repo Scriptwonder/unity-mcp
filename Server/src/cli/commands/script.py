@@ -119,8 +119,8 @@ def read(path: str, start_line: Optional[int], line_count: Optional[int]):
         # For read, just output the content directly
         if result.get("success") and result.get("data"):
             data = result.get("data", {})
-            if isinstance(data, dict) and "content" in data:
-                click.echo(data["content"])
+            if isinstance(data, dict) and "contents" in data:
+                click.echo(data["contents"])
             else:
                 click.echo(format_output(result, config.format))
         else:
