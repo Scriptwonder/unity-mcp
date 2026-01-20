@@ -873,5 +873,309 @@ class TestIntegration:
             assert result.exit_code == 0
 
 
+# =============================================================================
+# Instance Command Tests
+# =============================================================================
+
+class TestInstanceCommands:
+    """Tests for instance management commands."""
+
+    def test_instance_list(self, runner):
+        """Test listing Unity instances."""
+        mock_instances = {
+            "instances": [
+                {"project": "TestProject", "hash": "abc123", "unity_version": "2022.3.10f1", "session_id": "sess-1"}
+            ]
+        }
+        with patch("cli.commands.instance.run_list_instances", return_value=mock_instances):
+            result = runner.invoke(cli, ["instance", "list"])
+            assert result.exit_code == 0
+            assert "TestProject" in result.output
+
+    def test_instance_set(self, runner, mock_unity_response):
+        """Test setting active instance."""
+        with patch("cli.commands.instance.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, ["instance", "set", "TestProject@abc123"])
+            assert result.exit_code == 0
+
+    def test_instance_current(self, runner):
+        """Test showing current instance."""
+        result = runner.invoke(cli, ["instance", "current"])
+        assert result.exit_code == 0
+        # Should show info message about no instance set
+        assert "instance" in result.output.lower()
+
+
+# =============================================================================
+# Shader Command Tests
+# =============================================================================
+
+class TestShaderCommands:
+    """Tests for shader commands."""
+
+    def test_shader_read(self, runner):
+        """Test reading a shader."""
+        read_response = {
+            "success": True,
+            "data": {"contents": "Shader \"Custom/Test\" { ... }"}
+        }
+        with patch("cli.commands.shader.run_command", return_value=read_response):
+            result = runner.invoke(cli, ["shader", "read", "Assets/Shaders/Test.shader"])
+            assert result.exit_code == 0
+
+    def test_shader_create(self, runner, mock_unity_response):
+        """Test creating a shader."""
+        with patch("cli.commands.shader.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, ["shader", "create", "NewShader", "--path", "Assets/Shaders"])
+            assert result.exit_code == 0
+
+    def test_shader_delete(self, runner, mock_unity_response):
+        """Test deleting a shader."""
+        with patch("cli.commands.shader.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, ["shader", "delete", "Assets/Shaders/Old.shader", "--force"])
+            assert result.exit_code == 0
+
+
+# =============================================================================
+# VFX Command Tests
+# =============================================================================
+
+class TestVfxCommands:
+    """Tests for VFX commands."""
+
+    def test_vfx_particle_info(self, runner, mock_unity_response):
+        """Test getting particle system info."""
+        with patch("cli.commands.vfx.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, ["vfx", "particle", "info", "Fire"])
+            assert result.exit_code == 0
+
+    def test_vfx_particle_play(self, runner, mock_unity_response):
+        """Test playing a particle system."""
+        with patch("cli.commands.vfx.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, ["vfx", "particle", "play", "Fire"])
+            assert result.exit_code == 0
+
+    def test_vfx_particle_stop(self, runner, mock_unity_response):
+        """Test stopping a particle system."""
+        with patch("cli.commands.vfx.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, ["vfx", "particle", "stop", "Fire"])
+            assert result.exit_code == 0
+
+    def test_vfx_line_info(self, runner, mock_unity_response):
+        """Test getting line renderer info."""
+        with patch("cli.commands.vfx.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, ["vfx", "line", "info", "LaserBeam"])
+            assert result.exit_code == 0
+
+    def test_vfx_line_create_line(self, runner, mock_unity_response):
+        """Test creating a line."""
+        with patch("cli.commands.vfx.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, ["vfx", "line", "create-line", "Line", "--start", "0", "0", "0", "--end", "10", "5", "0"])
+            assert result.exit_code == 0
+
+    def test_vfx_line_create_circle(self, runner, mock_unity_response):
+        """Test creating a circle."""
+        with patch("cli.commands.vfx.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, ["vfx", "line", "create-circle", "Circle", "--radius", "5"])
+            assert result.exit_code == 0
+
+    def test_vfx_trail_info(self, runner, mock_unity_response):
+        """Test getting trail renderer info."""
+        with patch("cli.commands.vfx.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, ["vfx", "trail", "info", "Trail"])
+            assert result.exit_code == 0
+
+    def test_vfx_trail_set_time(self, runner, mock_unity_response):
+        """Test setting trail time."""
+        with patch("cli.commands.vfx.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, ["vfx", "trail", "set-time", "Trail", "2.0"])
+            assert result.exit_code == 0
+
+    def test_vfx_raw(self, runner, mock_unity_response):
+        """Test raw VFX action."""
+        with patch("cli.commands.vfx.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, ["vfx", "raw", "particle_set_main", "Fire", "--params", '{"duration": 5}'])
+            assert result.exit_code == 0
+
+    def test_vfx_raw_invalid_json(self, runner):
+        """Test raw VFX action with invalid JSON."""
+        result = runner.invoke(cli, ["vfx", "raw", "particle_set_main", "Fire", "--params", "invalid json"])
+        assert result.exit_code == 1
+        assert "Invalid JSON" in result.output
+
+
+# =============================================================================
+# Batch Command Tests
+# =============================================================================
+
+class TestBatchCommands:
+    """Tests for batch commands."""
+
+    def test_batch_inline(self, runner, mock_unity_response):
+        """Test inline batch execution."""
+        batch_response = {
+            "success": True,
+            "data": {"results": [{"success": True}]}
+        }
+        with patch("cli.commands.batch.run_command", return_value=batch_response):
+            result = runner.invoke(cli, ["batch", "inline", '[{"tool": "manage_scene", "params": {"action": "get_active"}}]'])
+            assert result.exit_code == 0
+
+    def test_batch_inline_invalid_json(self, runner):
+        """Test inline batch with invalid JSON."""
+        result = runner.invoke(cli, ["batch", "inline", "not valid json"])
+        assert result.exit_code == 1
+        assert "Invalid JSON" in result.output
+
+    def test_batch_template(self, runner):
+        """Test generating batch template."""
+        result = runner.invoke(cli, ["batch", "template"])
+        assert result.exit_code == 0
+        # Template should be valid JSON
+        import json
+        template = json.loads(result.output)
+        assert isinstance(template, list)
+        assert len(template) > 0
+        assert "tool" in template[0]
+
+    def test_batch_run_file(self, runner, tmp_path, mock_unity_response):
+        """Test running batch from file."""
+        # Create a temp batch file
+        batch_file = tmp_path / "commands.json"
+        batch_file.write_text('[{"tool": "manage_scene", "params": {"action": "get_active"}}]')
+        
+        batch_response = {
+            "success": True,
+            "data": {"results": [{"success": True}]}
+        }
+        with patch("cli.commands.batch.run_command", return_value=batch_response):
+            result = runner.invoke(cli, ["batch", "run", str(batch_file)])
+            assert result.exit_code == 0
+
+
+# =============================================================================
+# Enhanced Editor Command Tests
+# =============================================================================
+
+class TestEditorEnhancedCommands:
+    """Tests for new editor subcommands."""
+
+    def test_editor_refresh(self, runner, mock_unity_response):
+        """Test editor refresh."""
+        with patch("cli.commands.editor.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, ["editor", "refresh"])
+            assert result.exit_code == 0
+
+    def test_editor_refresh_with_compile(self, runner, mock_unity_response):
+        """Test editor refresh with compile flag."""
+        with patch("cli.commands.editor.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, ["editor", "refresh", "--compile"])
+            assert result.exit_code == 0
+
+    def test_editor_custom_tool(self, runner, mock_unity_response):
+        """Test executing custom tool."""
+        with patch("cli.commands.editor.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, ["editor", "custom-tool", "MyTool"])
+            assert result.exit_code == 0
+
+    def test_editor_custom_tool_with_params(self, runner, mock_unity_response):
+        """Test executing custom tool with parameters."""
+        with patch("cli.commands.editor.run_command", return_value=mock_unity_response):
+            result = runner.invoke(cli, ["editor", "custom-tool", "BuildTool", "--params", '{"target": "Android"}'])
+            assert result.exit_code == 0
+
+    def test_editor_custom_tool_invalid_json(self, runner):
+        """Test custom tool with invalid JSON params."""
+        result = runner.invoke(cli, ["editor", "custom-tool", "MyTool", "--params", "bad json"])
+        assert result.exit_code == 1
+        assert "Invalid JSON" in result.output
+
+    def test_editor_tests_async(self, runner):
+        """Test async test execution."""
+        async_response = {
+            "success": True,
+            "data": {"job_id": "test-job-123", "status": "running"}
+        }
+        with patch("cli.commands.editor.run_command", return_value=async_response):
+            result = runner.invoke(cli, ["editor", "tests", "--async"])
+            assert result.exit_code == 0
+            assert "test-job-123" in result.output
+
+    def test_editor_poll_test(self, runner):
+        """Test polling test job."""
+        poll_response = {
+            "success": True,
+            "data": {
+                "job_id": "test-job-123",
+                "status": "succeeded",
+                "result": {"summary": {"total": 10, "passed": 10, "failed": 0}}
+            }
+        }
+        with patch("cli.commands.editor.run_command", return_value=poll_response):
+            result = runner.invoke(cli, ["editor", "poll-test", "test-job-123"])
+            assert result.exit_code == 0
+
+
+# =============================================================================
+# Code Search Tests
+# =============================================================================
+
+class TestCodeSearchCommand:
+    """Tests for code search command."""
+
+    def test_code_search(self, runner):
+        """Test code search."""
+        # Mock manage_script response with file contents
+        read_response = {
+            "status": "success",
+            "result": {
+                "success": True,
+                "data": {
+                    "contents": "using UnityEngine;\n\npublic class Player : MonoBehaviour\n{\n    void Start() {}\n}\n",
+                    "contentsEncoded": False,
+                }
+            }
+        }
+        with patch("cli.commands.code.run_command", return_value=read_response):
+            result = runner.invoke(cli, ["code", "search", "class.*Player", "Assets/Scripts/Player.cs"])
+            assert result.exit_code == 0
+            assert "Line 3" in result.output
+            assert "class Player" in result.output
+
+    def test_code_search_no_matches(self, runner):
+        """Test code search with no matches."""
+        read_response = {
+            "status": "success",
+            "result": {
+                "success": True,
+                "data": {
+                    "contents": "using UnityEngine;\n\npublic class Test : MonoBehaviour {}\n",
+                    "contentsEncoded": False,
+                }
+            }
+        }
+        with patch("cli.commands.code.run_command", return_value=read_response):
+            result = runner.invoke(cli, ["code", "search", "nonexistent", "Assets/Scripts/Test.cs"])
+            assert result.exit_code == 0
+            assert "No matches" in result.output
+
+    def test_code_search_with_options(self, runner):
+        """Test code search with options."""
+        read_response = {
+            "status": "success",
+            "result": {
+                "success": True,
+                "data": {
+                    "contents": "// TODO: implement this\n// FIXME: bug here\nclass Test {}\n",
+                    "contentsEncoded": False,
+                }
+            }
+        }
+        with patch("cli.commands.code.run_command", return_value=read_response):
+            result = runner.invoke(cli, ["code", "search", "TODO", "Assets/Utils.cs", "--max-results", "100", "--case-sensitive"])
+            assert result.exit_code == 0
+            assert "Line 1" in result.output
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

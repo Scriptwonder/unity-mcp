@@ -258,6 +258,34 @@ def register_commands():
         cli.add_command(ui)
     except ImportError:
         pass
+    
+    # New commands - instance management
+    try:
+        from cli.commands.instance import instance
+        cli.add_command(instance)
+    except ImportError:
+        pass
+    
+    # New commands - shader management
+    try:
+        from cli.commands.shader import shader
+        cli.add_command(shader)
+    except ImportError:
+        pass
+    
+    # New commands - VFX management
+    try:
+        from cli.commands.vfx import vfx
+        cli.add_command(vfx)
+    except ImportError:
+        pass
+    
+    # New commands - batch execution
+    try:
+        from cli.commands.batch import batch
+        cli.add_command(batch)
+    except ImportError:
+        pass
 
 
 # Register commands on import
