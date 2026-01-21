@@ -30,14 +30,14 @@ def audio():
 )
 def play(target: str, clip: Optional[str], search_method: Optional[str]):
     """Play audio on a target's AudioSource.
-    
+
     \b
     Examples:
         unity-mcp audio play "MusicPlayer"
         unity-mcp audio play "SFXSource" --clip "Assets/Audio/explosion.wav"
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {
         "action": "set_property",
         "target": target,
@@ -48,10 +48,10 @@ def play(target: str, clip: Optional[str], search_method: Optional[str]):
 
     if clip:
         params["clip"] = clip
-    
+
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_components", params, config)
         click.echo(format_output(result, config.format))
@@ -70,13 +70,13 @@ def play(target: str, clip: Optional[str], search_method: Optional[str]):
 )
 def stop(target: str, search_method: Optional[str]):
     """Stop audio on a target's AudioSource.
-    
+
     \b
     Examples:
         unity-mcp audio stop "MusicPlayer"
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {
         "action": "set_property",
         "target": target,
@@ -84,10 +84,10 @@ def stop(target: str, search_method: Optional[str]):
         "property": "Stop",
         "value": True,
     }
-    
+
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_components", params, config)
         click.echo(format_output(result, config.format))
@@ -107,13 +107,13 @@ def stop(target: str, search_method: Optional[str]):
 )
 def volume(target: str, level: float, search_method: Optional[str]):
     """Set audio volume on a target's AudioSource.
-    
+
     \b
     Examples:
         unity-mcp audio volume "MusicPlayer" 0.5
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {
         "action": "set_property",
         "target": target,
@@ -121,10 +121,10 @@ def volume(target: str, level: float, search_method: Optional[str]):
         "property": "volume",
         "value": level,
     }
-    
+
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_components", params, config)
         click.echo(format_output(result, config.format))

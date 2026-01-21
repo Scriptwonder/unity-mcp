@@ -8,26 +8,28 @@ from typing import Optional
 @dataclass
 class CLIConfig:
     """Configuration for CLI connection to Unity."""
-    
+
     host: str = "127.0.0.1"
     port: int = 8080
     timeout: int = 30
     format: str = "text"  # text, json, table
     unity_instance: Optional[str] = None
-    
+
     @classmethod
     def from_env(cls) -> "CLIConfig":
         port_raw = os.environ.get("UNITY_MCP_HTTP_PORT", "8080")
         try:
             port = int(port_raw)
         except (ValueError, TypeError):
-            raise ValueError(f"Invalid UNITY_MCP_HTTP_PORT value: {port_raw!r}")
+            raise ValueError(
+                f"Invalid UNITY_MCP_HTTP_PORT value: {port_raw!r}")
 
         timeout_raw = os.environ.get("UNITY_MCP_TIMEOUT", "30")
         try:
             timeout = int(timeout_raw)
         except (ValueError, TypeError):
-            raise ValueError(f"Invalid UNITY_MCP_TIMEOUT value: {timeout_raw!r}")
+            raise ValueError(
+                f"Invalid UNITY_MCP_TIMEOUT value: {timeout_raw!r}")
 
         return cls(
             host=os.environ.get("UNITY_MCP_HOST", "127.0.0.1"),

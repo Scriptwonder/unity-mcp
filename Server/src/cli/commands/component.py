@@ -32,7 +32,7 @@ def component():
 )
 def add(target: str, component_type: str, search_method: Optional[str], properties: Optional[str]):
     """Add a component to a GameObject.
-    
+
     \b
     Examples:
         unity-mcp component add "Player" Rigidbody
@@ -40,13 +40,13 @@ def add(target: str, component_type: str, search_method: Optional[str], properti
         unity-mcp component add "Enemy" Rigidbody --properties '{"mass": 5.0, "useGravity": true}'
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {
         "action": "add",
         "target": target,
         "componentType": component_type,
     }
-    
+
     if search_method:
         params["searchMethod"] = search_method
     if properties:
@@ -55,7 +55,7 @@ def add(target: str, component_type: str, search_method: Optional[str], properti
         except json.JSONDecodeError as e:
             print_error(f"Invalid JSON for properties: {e}")
             sys.exit(1)
-    
+
     try:
         result = run_command("manage_components", params, config)
         click.echo(format_output(result, config.format))
@@ -82,26 +82,26 @@ def add(target: str, component_type: str, search_method: Optional[str], properti
 )
 def remove(target: str, component_type: str, search_method: Optional[str], force: bool):
     """Remove a component from a GameObject.
-    
+
     \b
     Examples:
         unity-mcp component remove "Player" Rigidbody
         unity-mcp component remove "-81840" BoxCollider --search-method by_id --force
     """
     config = get_config()
-    
+
     if not force:
         click.confirm(f"Remove {component_type} from '{target}'?", abort=True)
-    
+
     params: dict[str, Any] = {
         "action": "remove",
         "target": target,
         "componentType": component_type,
     }
-    
+
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_components", params, config)
         click.echo(format_output(result, config.format))
@@ -125,7 +125,7 @@ def remove(target: str, component_type: str, search_method: Optional[str], force
 )
 def set_property(target: str, component_type: str, property_name: str, value: str, search_method: Optional[str]):
     """Set a single property on a component.
-    
+
     \b
     Examples:
         unity-mcp component set "Player" Rigidbody mass 5.0
@@ -133,14 +133,14 @@ def set_property(target: str, component_type: str, property_name: str, value: st
         unity-mcp component set "-81840" Light intensity 2.5 --search-method by_id
     """
     config = get_config()
-    
+
     # Try to parse value as JSON for complex types
     try:
         parsed_value = json.loads(value)
     except json.JSONDecodeError:
         # Keep as string if not valid JSON
         parsed_value = value
-    
+
     params: dict[str, Any] = {
         "action": "set_property",
         "target": target,
@@ -148,10 +148,10 @@ def set_property(target: str, component_type: str, property_name: str, value: st
         "property": property_name,
         "value": parsed_value,
     }
-    
+
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_components", params, config)
         click.echo(format_output(result, config.format))
@@ -178,30 +178,30 @@ def set_property(target: str, component_type: str, property_name: str, value: st
 )
 def modify(target: str, component_type: str, properties: str, search_method: Optional[str]):
     """Set multiple properties on a component at once.
-    
+
     \b
     Examples:
         unity-mcp component modify "Player" Rigidbody --properties '{"mass": 5.0, "useGravity": false}'
         unity-mcp component modify "Light" Light --properties '{"intensity": 2.0, "color": [1, 0, 0, 1]}'
     """
     config = get_config()
-    
+
     try:
         props_dict = json.loads(properties)
     except json.JSONDecodeError as e:
         print_error(f"Invalid JSON for properties: {e}")
         sys.exit(1)
-    
+
     params: dict[str, Any] = {
         "action": "set_property",
         "target": target,
         "componentType": component_type,
         "properties": props_dict,
     }
-    
+
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_components", params, config)
         click.echo(format_output(result, config.format))

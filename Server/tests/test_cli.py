@@ -178,13 +178,13 @@ class TestOutputFormatting:
     def test_format_output_dispatch(self):
         """Test format_output dispatches correctly."""
         data = {"key": "value"}
-        
+
         json_result = format_output(data, "json")
         assert json.loads(json_result) == data
-        
+
         text_result = format_output(data, "text")
         assert "key" in text_result
-        
+
         table_result = format_output(data, "table")
         assert "key" in table_result.lower() or "Key" in table_result
 
@@ -306,7 +306,8 @@ class TestCLICommands:
     def test_raw_command(self, runner, mock_unity_response):
         """Test raw command."""
         with patch("cli.main.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["raw", "test_command", '{"param": "value"}'])
+            result = runner.invoke(
+                cli, ["raw", "test_command", '{"param": "value"}'])
             assert result.exit_code == 0
 
     def test_raw_command_invalid_json(self, runner):
@@ -368,13 +369,15 @@ class TestGameObjectCommands:
     def test_gameobject_delete(self, runner, mock_unity_response):
         """Test gameobject delete command."""
         with patch("cli.commands.gameobject.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["gameobject", "delete", "OldObject", "--force"])
+            result = runner.invoke(
+                cli, ["gameobject", "delete", "OldObject", "--force"])
             assert result.exit_code == 0
 
     def test_gameobject_delete_confirmation(self, runner, mock_unity_response):
         """Test gameobject delete with confirmation prompt."""
         with patch("cli.commands.gameobject.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["gameobject", "delete", "OldObject"], input="y\n")
+            result = runner.invoke(
+                cli, ["gameobject", "delete", "OldObject"], input="y\n")
             assert result.exit_code == 0
 
     def test_gameobject_duplicate(self, runner, mock_unity_response):
@@ -409,19 +412,22 @@ class TestComponentCommands:
     def test_component_add(self, runner, mock_unity_response):
         """Test component add command."""
         with patch("cli.commands.component.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["component", "add", "Player", "Rigidbody"])
+            result = runner.invoke(
+                cli, ["component", "add", "Player", "Rigidbody"])
             assert result.exit_code == 0
 
     def test_component_remove(self, runner, mock_unity_response):
         """Test component remove command."""
         with patch("cli.commands.component.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["component", "remove", "Player", "Rigidbody", "--force"])
+            result = runner.invoke(
+                cli, ["component", "remove", "Player", "Rigidbody", "--force"])
             assert result.exit_code == 0
 
     def test_component_set(self, runner, mock_unity_response):
         """Test component set command."""
         with patch("cli.commands.component.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["component", "set", "Player", "Rigidbody", "mass", "5.0"])
+            result = runner.invoke(
+                cli, ["component", "set", "Player", "Rigidbody", "mass", "5.0"])
             assert result.exit_code == 0
 
     def test_component_modify(self, runner, mock_unity_response):
@@ -466,7 +472,8 @@ class TestSceneCommands:
     def test_scene_load(self, runner, mock_unity_response):
         """Test scene load command."""
         with patch("cli.commands.scene.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["scene", "load", "Assets/Scenes/Main.unity"])
+            result = runner.invoke(
+                cli, ["scene", "load", "Assets/Scenes/Main.unity"])
             assert result.exit_code == 0
 
     def test_scene_save(self, runner, mock_unity_response):
@@ -484,7 +491,8 @@ class TestSceneCommands:
     def test_scene_screenshot(self, runner, mock_unity_response):
         """Test scene screenshot command."""
         with patch("cli.commands.scene.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["scene", "screenshot", "--filename", "test"])
+            result = runner.invoke(
+                cli, ["scene", "screenshot", "--filename", "test"])
             assert result.exit_code == 0
 
 
@@ -504,19 +512,22 @@ class TestAssetCommands:
     def test_asset_info(self, runner, mock_unity_response):
         """Test asset info command."""
         with patch("cli.commands.asset.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["asset", "info", "Assets/Materials/Red.mat"])
+            result = runner.invoke(
+                cli, ["asset", "info", "Assets/Materials/Red.mat"])
             assert result.exit_code == 0
 
     def test_asset_create(self, runner, mock_unity_response):
         """Test asset create command."""
         with patch("cli.commands.asset.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["asset", "create", "Assets/Materials/New.mat", "Material"])
+            result = runner.invoke(
+                cli, ["asset", "create", "Assets/Materials/New.mat", "Material"])
             assert result.exit_code == 0
 
     def test_asset_delete(self, runner, mock_unity_response):
         """Test asset delete command."""
         with patch("cli.commands.asset.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["asset", "delete", "Assets/Old.mat", "--force"])
+            result = runner.invoke(
+                cli, ["asset", "delete", "Assets/Old.mat", "--force"])
             assert result.exit_code == 0
 
     def test_asset_duplicate(self, runner, mock_unity_response):
@@ -592,7 +603,8 @@ class TestEditorCommands:
     def test_editor_add_layer(self, runner, mock_unity_response):
         """Test editor add-layer command."""
         with patch("cli.commands.editor.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["editor", "add-layer", "Interactable"])
+            result = runner.invoke(
+                cli, ["editor", "add-layer", "Interactable"])
             assert result.exit_code == 0
 
     def test_editor_menu(self, runner, mock_unity_response):
@@ -604,7 +616,8 @@ class TestEditorCommands:
     def test_editor_tests(self, runner, mock_unity_response):
         """Test editor tests command."""
         with patch("cli.commands.editor.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["editor", "tests", "--mode", "EditMode"])
+            result = runner.invoke(
+                cli, ["editor", "tests", "--mode", "EditMode"])
             assert result.exit_code == 0
 
 
@@ -618,7 +631,8 @@ class TestPrefabCommands:
     def test_prefab_open(self, runner, mock_unity_response):
         """Test prefab open command."""
         with patch("cli.commands.prefab.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["prefab", "open", "Assets/Prefabs/Player.prefab"])
+            result = runner.invoke(
+                cli, ["prefab", "open", "Assets/Prefabs/Player.prefab"])
             assert result.exit_code == 0
 
     def test_prefab_close(self, runner, mock_unity_response):
@@ -652,13 +666,15 @@ class TestMaterialCommands:
     def test_material_info(self, runner, mock_unity_response):
         """Test material info command."""
         with patch("cli.commands.material.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["material", "info", "Assets/Materials/Red.mat"])
+            result = runner.invoke(
+                cli, ["material", "info", "Assets/Materials/Red.mat"])
             assert result.exit_code == 0
 
     def test_material_create(self, runner, mock_unity_response):
         """Test material create command."""
         with patch("cli.commands.material.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["material", "create", "Assets/Materials/New.mat"])
+            result = runner.invoke(
+                cli, ["material", "create", "Assets/Materials/New.mat"])
             assert result.exit_code == 0
 
     def test_material_set_color(self, runner, mock_unity_response):
@@ -698,7 +714,8 @@ class TestScriptCommands:
     def test_script_create(self, runner, mock_unity_response):
         """Test script create command."""
         with patch("cli.commands.script.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["script", "create", "PlayerController"])
+            result = runner.invoke(
+                cli, ["script", "create", "PlayerController"])
             assert result.exit_code == 0
 
     def test_script_create_with_options(self, runner, mock_unity_response):
@@ -718,13 +735,15 @@ class TestScriptCommands:
             "data": {"content": "using UnityEngine;\n\npublic class Test {}"}
         }
         with patch("cli.commands.script.run_command", return_value=mock_response):
-            result = runner.invoke(cli, ["script", "read", "Assets/Scripts/Test.cs"])
+            result = runner.invoke(
+                cli, ["script", "read", "Assets/Scripts/Test.cs"])
             assert result.exit_code == 0
 
     def test_script_delete(self, runner, mock_unity_response):
         """Test script delete command."""
         with patch("cli.commands.script.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["script", "delete", "Assets/Scripts/Old.cs", "--force"])
+            result = runner.invoke(
+                cli, ["script", "delete", "Assets/Scripts/Old.cs", "--force"])
             assert result.exit_code == 0
 
 
@@ -739,7 +758,8 @@ class TestGlobalOptions:
         """Test custom host option."""
         with patch("cli.main.run_check_connection", return_value=True):
             with patch("cli.main.run_list_instances", return_value={"instances": []}):
-                result = runner.invoke(cli, ["--host", "192.168.1.100", "status"])
+                result = runner.invoke(
+                    cli, ["--host", "192.168.1.100", "status"])
                 assert result.exit_code == 0
 
     def test_custom_port(self, runner, mock_unity_response):
@@ -752,13 +772,15 @@ class TestGlobalOptions:
     def test_json_format(self, runner, mock_unity_response):
         """Test JSON output format."""
         with patch("cli.commands.scene.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["--format", "json", "scene", "active"])
+            result = runner.invoke(
+                cli, ["--format", "json", "scene", "active"])
             assert result.exit_code == 0
 
     def test_table_format(self, runner, mock_unity_response):
         """Test table output format."""
         with patch("cli.commands.scene.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["--format", "table", "scene", "active"])
+            result = runner.invoke(
+                cli, ["--format", "table", "scene", "active"])
             assert result.exit_code == 0
 
     def test_timeout_option(self, runner, mock_unity_response):
@@ -824,18 +846,21 @@ class TestIntegration:
 
         # Create
         with patch("cli.commands.gameobject.run_command", return_value=create_response):
-            result = runner.invoke(cli, ["gameobject", "create", "TestObject", "--primitive", "Cube"])
+            result = runner.invoke(
+                cli, ["gameobject", "create", "TestObject", "--primitive", "Cube"])
             assert result.exit_code == 0
             assert "Created" in result.output
 
         # Modify
         with patch("cli.commands.gameobject.run_command", return_value=modify_response):
-            result = runner.invoke(cli, ["gameobject", "modify", "TestObject", "--position", "0", "5", "0"])
+            result = runner.invoke(
+                cli, ["gameobject", "modify", "TestObject", "--position", "0", "5", "0"])
             assert result.exit_code == 0
 
         # Delete
         with patch("cli.commands.gameobject.run_command", return_value=delete_response):
-            result = runner.invoke(cli, ["gameobject", "delete", "TestObject", "--force"])
+            result = runner.invoke(
+                cli, ["gameobject", "delete", "TestObject", "--force"])
             assert result.exit_code == 0
             assert "Deleted" in result.output
 
@@ -846,7 +871,8 @@ class TestIntegration:
             "data": {
                 "nodes": [
                     {"name": "Main Camera", "instanceID": -100, "childCount": 0},
-                    {"name": "Directional Light", "instanceID": -200, "childCount": 0},
+                    {"name": "Directional Light",
+                        "instanceID": -200, "childCount": 0},
                     {"name": "Player", "instanceID": -300, "childCount": 2},
                 ]
             }
@@ -884,7 +910,8 @@ class TestInstanceCommands:
         """Test listing Unity instances."""
         mock_instances = {
             "instances": [
-                {"project": "TestProject", "hash": "abc123", "unity_version": "2022.3.10f1", "session_id": "sess-1"}
+                {"project": "TestProject", "hash": "abc123",
+                    "unity_version": "2022.3.10f1", "session_id": "sess-1"}
             ]
         }
         with patch("cli.commands.instance.run_list_instances", return_value=mock_instances):
@@ -895,7 +922,8 @@ class TestInstanceCommands:
     def test_instance_set(self, runner, mock_unity_response):
         """Test setting active instance."""
         with patch("cli.commands.instance.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["instance", "set", "TestProject@abc123"])
+            result = runner.invoke(
+                cli, ["instance", "set", "TestProject@abc123"])
             assert result.exit_code == 0
 
     def test_instance_current(self, runner):
@@ -920,19 +948,22 @@ class TestShaderCommands:
             "data": {"contents": "Shader \"Custom/Test\" { ... }"}
         }
         with patch("cli.commands.shader.run_command", return_value=read_response):
-            result = runner.invoke(cli, ["shader", "read", "Assets/Shaders/Test.shader"])
+            result = runner.invoke(
+                cli, ["shader", "read", "Assets/Shaders/Test.shader"])
             assert result.exit_code == 0
 
     def test_shader_create(self, runner, mock_unity_response):
         """Test creating a shader."""
         with patch("cli.commands.shader.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["shader", "create", "NewShader", "--path", "Assets/Shaders"])
+            result = runner.invoke(
+                cli, ["shader", "create", "NewShader", "--path", "Assets/Shaders"])
             assert result.exit_code == 0
 
     def test_shader_delete(self, runner, mock_unity_response):
         """Test deleting a shader."""
         with patch("cli.commands.shader.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["shader", "delete", "Assets/Shaders/Old.shader", "--force"])
+            result = runner.invoke(
+                cli, ["shader", "delete", "Assets/Shaders/Old.shader", "--force"])
             assert result.exit_code == 0
 
 
@@ -970,13 +1001,15 @@ class TestVfxCommands:
     def test_vfx_line_create_line(self, runner, mock_unity_response):
         """Test creating a line."""
         with patch("cli.commands.vfx.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["vfx", "line", "create-line", "Line", "--start", "0", "0", "0", "--end", "10", "5", "0"])
+            result = runner.invoke(
+                cli, ["vfx", "line", "create-line", "Line", "--start", "0", "0", "0", "--end", "10", "5", "0"])
             assert result.exit_code == 0
 
     def test_vfx_line_create_circle(self, runner, mock_unity_response):
         """Test creating a circle."""
         with patch("cli.commands.vfx.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["vfx", "line", "create-circle", "Circle", "--radius", "5"])
+            result = runner.invoke(
+                cli, ["vfx", "line", "create-circle", "Circle", "--radius", "5"])
             assert result.exit_code == 0
 
     def test_vfx_trail_info(self, runner, mock_unity_response):
@@ -988,18 +1021,21 @@ class TestVfxCommands:
     def test_vfx_trail_set_time(self, runner, mock_unity_response):
         """Test setting trail time."""
         with patch("cli.commands.vfx.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["vfx", "trail", "set-time", "Trail", "2.0"])
+            result = runner.invoke(
+                cli, ["vfx", "trail", "set-time", "Trail", "2.0"])
             assert result.exit_code == 0
 
     def test_vfx_raw(self, runner, mock_unity_response):
         """Test raw VFX action."""
         with patch("cli.commands.vfx.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["vfx", "raw", "particle_set_main", "Fire", "--params", '{"duration": 5}'])
+            result = runner.invoke(
+                cli, ["vfx", "raw", "particle_set_main", "Fire", "--params", '{"duration": 5}'])
             assert result.exit_code == 0
 
     def test_vfx_raw_invalid_json(self, runner):
         """Test raw VFX action with invalid JSON."""
-        result = runner.invoke(cli, ["vfx", "raw", "particle_set_main", "Fire", "--params", "invalid json"])
+        result = runner.invoke(
+            cli, ["vfx", "raw", "particle_set_main", "Fire", "--params", "invalid json"])
         assert result.exit_code == 1
         assert "Invalid JSON" in result.output
 
@@ -1018,7 +1054,8 @@ class TestBatchCommands:
             "data": {"results": [{"success": True}]}
         }
         with patch("cli.commands.batch.run_command", return_value=batch_response):
-            result = runner.invoke(cli, ["batch", "inline", '[{"tool": "manage_scene", "params": {"action": "get_active"}}]'])
+            result = runner.invoke(
+                cli, ["batch", "inline", '[{"tool": "manage_scene", "params": {"action": "get_active"}}]'])
             assert result.exit_code == 0
 
     def test_batch_inline_invalid_json(self, runner):
@@ -1042,8 +1079,9 @@ class TestBatchCommands:
         """Test running batch from file."""
         # Create a temp batch file
         batch_file = tmp_path / "commands.json"
-        batch_file.write_text('[{"tool": "manage_scene", "params": {"action": "get_active"}}]')
-        
+        batch_file.write_text(
+            '[{"tool": "manage_scene", "params": {"action": "get_active"}}]')
+
         batch_response = {
             "success": True,
             "data": {"results": [{"success": True}]}
@@ -1081,12 +1119,14 @@ class TestEditorEnhancedCommands:
     def test_editor_custom_tool_with_params(self, runner, mock_unity_response):
         """Test executing custom tool with parameters."""
         with patch("cli.commands.editor.run_command", return_value=mock_unity_response):
-            result = runner.invoke(cli, ["editor", "custom-tool", "BuildTool", "--params", '{"target": "Android"}'])
+            result = runner.invoke(
+                cli, ["editor", "custom-tool", "BuildTool", "--params", '{"target": "Android"}'])
             assert result.exit_code == 0
 
     def test_editor_custom_tool_invalid_json(self, runner):
         """Test custom tool with invalid JSON params."""
-        result = runner.invoke(cli, ["editor", "custom-tool", "MyTool", "--params", "bad json"])
+        result = runner.invoke(
+            cli, ["editor", "custom-tool", "MyTool", "--params", "bad json"])
         assert result.exit_code == 1
         assert "Invalid JSON" in result.output
 
@@ -1112,7 +1152,8 @@ class TestEditorEnhancedCommands:
             }
         }
         with patch("cli.commands.editor.run_command", return_value=poll_response):
-            result = runner.invoke(cli, ["editor", "poll-test", "test-job-123"])
+            result = runner.invoke(
+                cli, ["editor", "poll-test", "test-job-123"])
             assert result.exit_code == 0
 
 
@@ -1137,7 +1178,8 @@ class TestCodeSearchCommand:
             }
         }
         with patch("cli.commands.code.run_command", return_value=read_response):
-            result = runner.invoke(cli, ["code", "search", "class.*Player", "Assets/Scripts/Player.cs"])
+            result = runner.invoke(
+                cli, ["code", "search", "class.*Player", "Assets/Scripts/Player.cs"])
             assert result.exit_code == 0
             assert "Line 3" in result.output
             assert "class Player" in result.output
@@ -1155,7 +1197,8 @@ class TestCodeSearchCommand:
             }
         }
         with patch("cli.commands.code.run_command", return_value=read_response):
-            result = runner.invoke(cli, ["code", "search", "nonexistent", "Assets/Scripts/Test.cs"])
+            result = runner.invoke(
+                cli, ["code", "search", "nonexistent", "Assets/Scripts/Test.cs"])
             assert result.exit_code == 0
             assert "No matches" in result.output
 
@@ -1172,7 +1215,8 @@ class TestCodeSearchCommand:
             }
         }
         with patch("cli.commands.code.run_command", return_value=read_response):
-            result = runner.invoke(cli, ["code", "search", "TODO", "Assets/Utils.cs", "--max-results", "100", "--case-sensitive"])
+            result = runner.invoke(
+                cli, ["code", "search", "TODO", "Assets/Utils.cs", "--max-results", "100", "--case-sensitive"])
             assert result.exit_code == 0
             assert "Line 1" in result.output
 

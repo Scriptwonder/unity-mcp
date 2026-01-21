@@ -26,7 +26,8 @@ def script():
 @click.option(
     "--type", "-t",
     "script_type",
-    type=click.Choice(["MonoBehaviour", "ScriptableObject", "Editor", "EditorWindow", "Plain"]),
+    type=click.Choice(["MonoBehaviour", "ScriptableObject",
+                      "Editor", "EditorWindow", "Plain"]),
     default="MonoBehaviour",
     help="Type of script to create."
 )
@@ -42,7 +43,7 @@ def script():
 )
 def create(name: str, path: str, script_type: str, namespace: Optional[str], contents: Optional[str]):
     """Create a new C# script.
-    
+
     \b
     Examples:
         unity-mcp script create "PlayerController"
@@ -51,19 +52,19 @@ def create(name: str, path: str, script_type: str, namespace: Optional[str], con
         unity-mcp script create "CustomEditor" --type Editor --namespace "MyGame.Editor"
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {
         "action": "create",
         "name": name,
         "path": path,
         "scriptType": script_type,
     }
-    
+
     if namespace:
         params["namespace"] = namespace
     if contents:
         params["contents"] = contents
-    
+
     try:
         result = run_command("manage_script", params, config)
         click.echo(format_output(result, config.format))
@@ -90,14 +91,14 @@ def create(name: str, path: str, script_type: str, namespace: Optional[str], con
 )
 def read(path: str, start_line: Optional[int], line_count: Optional[int]):
     """Read a C# script file.
-    
+
     \b
     Examples:
         unity-mcp script read "Assets/Scripts/Player.cs"
         unity-mcp script read "Assets/Scripts/Player.cs" --start-line 10 --line-count 20
     """
     config = get_config()
-    
+
     parts = path.rsplit("/", 1)
     filename = parts[-1]
     directory = parts[0] if len(parts) > 1 else "Assets"
@@ -108,12 +109,12 @@ def read(path: str, start_line: Optional[int], line_count: Optional[int]):
         "name": name,
         "path": directory,
     }
-    
+
     if start_line:
         params["startLine"] = start_line
     if line_count:
         params["lineCount"] = line_count
-    
+
     try:
         result = run_command("manage_script", params, config)
         # For read, just output the content directly
@@ -139,16 +140,16 @@ def read(path: str, start_line: Optional[int], line_count: Optional[int]):
 )
 def delete(path: str, force: bool):
     """Delete a C# script.
-    
+
     \b
     Examples:
         unity-mcp script delete "Assets/Scripts/OldScript.cs"
     """
     config = get_config()
-    
+
     if not force:
         click.confirm(f"Delete script '{path}'?", abort=True)
-    
+
     parts = path.rsplit("/", 1)
     filename = parts[-1]
     directory = parts[0] if len(parts) > 1 else "Assets"
@@ -159,7 +160,7 @@ def delete(path: str, force: bool):
         "name": name,
         "path": directory,
     }
-    
+
     try:
         result = run_command("manage_script", params, config)
         click.echo(format_output(result, config.format))
@@ -179,24 +180,24 @@ def delete(path: str, force: bool):
 )
 def edit(path: str, edits: str):
     """Apply text edits to a script.
-    
+
     \b
     Examples:
         unity-mcp script edit "Assets/Scripts/Player.cs" --edits '[{"startLine": 10, "startCol": 1, "endLine": 10, "endCol": 20, "newText": "// Modified"}]'
     """
     config = get_config()
-    
+
     try:
         edits_list = json.loads(edits)
     except json.JSONDecodeError as e:
         print_error(f"Invalid JSON for edits: {e}")
         sys.exit(1)
-    
+
     params: dict[str, Any] = {
         "uri": path,
         "edits": edits_list,
     }
-    
+
     try:
         result = run_command("apply_text_edits", params, config)
         click.echo(format_output(result, config.format))
@@ -217,20 +218,20 @@ def edit(path: str, edits: str):
 )
 def validate(path: str, level: str):
     """Validate a C# script for errors.
-    
+
     \b
     Examples:
         unity-mcp script validate "Assets/Scripts/Player.cs"
         unity-mcp script validate "Assets/Scripts/Player.cs" --level standard
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {
         "uri": path,
         "level": level,
         "include_diagnostics": True,
     }
-    
+
     try:
         result = run_command("validate_script", params, config)
         click.echo(format_output(result, config.format))

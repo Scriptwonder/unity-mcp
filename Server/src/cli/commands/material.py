@@ -20,13 +20,13 @@ def material():
 @click.argument("path")
 def info(path: str):
     """Get information about a material.
-    
+
     \b
     Examples:
         unity-mcp material info "Assets/Materials/Red.mat"
     """
     config = get_config()
-    
+
     try:
         result = run_command("manage_material", {
             "action": "get_material_info",
@@ -52,7 +52,7 @@ def info(path: str):
 )
 def create(path: str, shader: str, properties: Optional[str]):
     """Create a new material.
-    
+
     \b
     Examples:
         unity-mcp material create "Assets/Materials/NewMat.mat"
@@ -60,20 +60,20 @@ def create(path: str, shader: str, properties: Optional[str]):
         unity-mcp material create "Assets/Materials/Blue.mat" --properties '{"_Color": [0,0,1,1]}'
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {
         "action": "create",
         "materialPath": path,
         "shader": shader,
     }
-    
+
     if properties:
         try:
             params["properties"] = json.loads(properties)
         except json.JSONDecodeError as e:
             print_error(f"Invalid JSON for properties: {e}")
             sys.exit(1)
-    
+
     try:
         result = run_command("manage_material", params, config)
         click.echo(format_output(result, config.format))
@@ -97,7 +97,7 @@ def create(path: str, shader: str, properties: Optional[str]):
 )
 def set_color(path: str, r: float, g: float, b: float, a: float, property: str):
     """Set a material's color.
-    
+
     \b
     Examples:
         unity-mcp material set-color "Assets/Materials/Red.mat" 1 0 0
@@ -105,14 +105,14 @@ def set_color(path: str, r: float, g: float, b: float, a: float, property: str):
         unity-mcp material set-color "Assets/Materials/Mat.mat" 1 1 0 --property "_BaseColor"
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {
         "action": "set_material_color",
         "materialPath": path,
         "property": property,
         "color": [r, g, b, a],
     }
-    
+
     try:
         result = run_command("manage_material", params, config)
         click.echo(format_output(result, config.format))
@@ -129,7 +129,7 @@ def set_color(path: str, r: float, g: float, b: float, a: float, property: str):
 @click.argument("value")
 def set_property(path: str, property_name: str, value: str):
     """Set a shader property on a material.
-    
+
     \b
     Examples:
         unity-mcp material set-property "Assets/Materials/Mat.mat" _Metallic 0.5
@@ -137,7 +137,7 @@ def set_property(path: str, property_name: str, value: str):
         unity-mcp material set-property "Assets/Materials/Mat.mat" _MainTex "Assets/Textures/Tex.png"
     """
     config = get_config()
-    
+
     # Try to parse value as JSON for complex types
     try:
         parsed_value = json.loads(value)
@@ -147,14 +147,14 @@ def set_property(path: str, property_name: str, value: str):
             parsed_value = float(value)
         except ValueError:
             parsed_value = value
-    
+
     params: dict[str, Any] = {
         "action": "set_material_shader_property",
         "materialPath": path,
         "property": property_name,
         "value": parsed_value,
     }
-    
+
     try:
         result = run_command("manage_material", params, config)
         click.echo(format_output(result, config.format))
@@ -170,7 +170,8 @@ def set_property(path: str, property_name: str, value: str):
 @click.argument("target")
 @click.option(
     "--search-method",
-    type=click.Choice(["by_name", "by_path", "by_tag", "by_layer", "by_component"]),
+    type=click.Choice(["by_name", "by_path", "by_tag",
+                      "by_layer", "by_component"]),
     default=None,
     help="How to find the target GameObject."
 )
@@ -188,7 +189,7 @@ def set_property(path: str, property_name: str, value: str):
 )
 def assign(material_path: str, target: str, search_method: Optional[str], slot: int, mode: str):
     """Assign a material to a GameObject's renderer.
-    
+
     \b
     Examples:
         unity-mcp material assign "Assets/Materials/Red.mat" "Cube"
@@ -196,7 +197,7 @@ def assign(material_path: str, target: str, search_method: Optional[str], slot: 
         unity-mcp material assign "Assets/Materials/Mat.mat" "-81840" --search-method by_id --slot 1
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {
         "action": "assign_material_to_renderer",
         "materialPath": material_path,
@@ -204,10 +205,10 @@ def assign(material_path: str, target: str, search_method: Optional[str], slot: 
         "slot": slot,
         "mode": mode,
     }
-    
+
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_material", params, config)
         click.echo(format_output(result, config.format))
@@ -226,7 +227,8 @@ def assign(material_path: str, target: str, search_method: Optional[str], slot: 
 @click.argument("a", type=float, default=1.0)
 @click.option(
     "--search-method",
-    type=click.Choice(["by_name", "by_path", "by_tag", "by_layer", "by_component"]),
+    type=click.Choice(["by_name", "by_path", "by_tag",
+                      "by_layer", "by_component"]),
     default=None,
     help="How to find the target GameObject."
 )
@@ -238,24 +240,24 @@ def assign(material_path: str, target: str, search_method: Optional[str], slot: 
 )
 def set_renderer_color(target: str, r: float, g: float, b: float, a: float, search_method: Optional[str], mode: str):
     """Set a renderer's material color directly.
-    
+
     \b
     Examples:
         unity-mcp material set-renderer-color "Cube" 1 0 0
         unity-mcp material set-renderer-color "Player" 0 1 0 --mode instance
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {
         "action": "set_renderer_color",
         "target": target,
         "color": [r, g, b, a],
         "mode": mode,
     }
-    
+
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_material", params, config)
         click.echo(format_output(result, config.format))

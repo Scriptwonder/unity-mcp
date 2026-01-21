@@ -20,7 +20,8 @@ def gameobject():
 @click.argument("search_term")
 @click.option(
     "--method", "-m",
-    type=click.Choice(["by_name", "by_tag", "by_layer", "by_component", "by_path", "by_id"]),
+    type=click.Choice(["by_name", "by_tag", "by_layer",
+                      "by_component", "by_path", "by_id"]),
     default="by_name",
     help="Search method."
 )
@@ -43,7 +44,7 @@ def gameobject():
 )
 def find(search_term: str, method: str, include_inactive: bool, limit: int, cursor: int):
     """Find GameObjects by search criteria.
-    
+
     \b
     Examples:
         unity-mcp gameobject find "Player"
@@ -53,7 +54,7 @@ def find(search_term: str, method: str, include_inactive: bool, limit: int, curs
         unity-mcp gameobject find "/Canvas/Panel" --method by_path
     """
     config = get_config()
-    
+
     try:
         result = run_command("find_gameobjects", {
             "searchMethod": method,
@@ -72,7 +73,8 @@ def find(search_term: str, method: str, include_inactive: bool, limit: int, curs
 @click.argument("name")
 @click.option(
     "--primitive", "-p",
-    type=click.Choice(["Cube", "Sphere", "Cylinder", "Plane", "Capsule", "Quad"]),
+    type=click.Choice(["Cube", "Sphere", "Cylinder",
+                      "Plane", "Capsule", "Quad"]),
     help="Create a primitive type."
 )
 @click.option(
@@ -140,7 +142,7 @@ def create(
     prefab_path: Optional[str],
 ):
     """Create a new GameObject.
-    
+
     \b
     Examples:
         unity-mcp gameobject create "MyCube" --primitive Cube
@@ -150,12 +152,12 @@ def create(
         unity-mcp gameobject create "Item" --components "Rigidbody,BoxCollider"
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {
         "action": "create",
         "name": name,
     }
-    
+
     if primitive:
         params["primitiveType"] = primitive
     if position:
@@ -174,10 +176,10 @@ def create(
         params["saveAsPrefab"] = True
     if prefab_path:
         params["prefabPath"] = prefab_path
-    
+
     try:
         result = run_command("manage_gameobject", params, config)
-        
+
         # Add components separately since componentsToAdd doesn't work
         if components and (result.get("success") or result.get("data") or result.get("result")):
             component_list = [c.strip() for c in components.split(",")]
@@ -192,8 +194,9 @@ def create(
                 except UnityConnectionError:
                     failed_components.append(component)
             if failed_components:
-                print_warning(f"Failed to add components: {', '.join(failed_components)}")
-        
+                print_warning(
+                    f"Failed to add components: {', '.join(failed_components)}")
+
         click.echo(format_output(result, config.format))
         if result.get("success") or result.get("result"):
             print_success(f"Created GameObject '{name}'")
@@ -281,9 +284,9 @@ def modify(
     search_method: Optional[str],
 ):
     """Modify an existing GameObject.
-    
+
     TARGET can be a name, path, instance ID, or tag depending on --search-method.
-    
+
     \b
     Examples:
         unity-mcp gameobject modify "Player" --position 0 5 0
@@ -293,12 +296,12 @@ def modify(
         unity-mcp gameobject modify "Cube" --add-components "Rigidbody,BoxCollider"
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {
         "action": "modify",
         "target": target,
     }
-    
+
     if name:
         params["name"] = name
     if position:
@@ -316,12 +319,14 @@ def modify(
     if active is not None:
         params["setActive"] = active
     if add_components:
-        params["componentsToAdd"] = [c.strip() for c in add_components.split(",")]
+        params["componentsToAdd"] = [c.strip()
+                                     for c in add_components.split(",")]
     if remove_components:
-        params["componentsToRemove"] = [c.strip() for c in remove_components.split(",")]
+        params["componentsToRemove"] = [c.strip()
+                                        for c in remove_components.split(",")]
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_gameobject", params, config)
         click.echo(format_output(result, config.format))
@@ -345,7 +350,7 @@ def modify(
 )
 def delete(target: str, search_method: Optional[str], force: bool):
     """Delete a GameObject.
-    
+
     \b
     Examples:
         unity-mcp gameobject delete "OldObject"
@@ -353,18 +358,18 @@ def delete(target: str, search_method: Optional[str], force: bool):
         unity-mcp gameobject delete "TempObjects" --search-method by_tag --force
     """
     config = get_config()
-    
+
     if not force:
         click.confirm(f"Delete GameObject '{target}'?", abort=True)
-    
+
     params = {
         "action": "delete",
         "target": target,
     }
-    
+
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_gameobject", params, config)
         click.echo(format_output(result, config.format))
@@ -402,7 +407,7 @@ def duplicate(
     search_method: Optional[str],
 ):
     """Duplicate a GameObject.
-    
+
     \b
     Examples:
         unity-mcp gameobject duplicate "Player"
@@ -410,19 +415,19 @@ def duplicate(
         unity-mcp gameobject duplicate "-81840" --search-method by_id
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {
         "action": "duplicate",
         "target": target,
     }
-    
+
     if name:
         params["new_name"] = name
     if offset:
         params["offset"] = list(offset)
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_gameobject", params, config)
         click.echo(format_output(result, config.format))
@@ -442,7 +447,8 @@ def duplicate(
 )
 @click.option(
     "--direction", "-d",
-    type=click.Choice(["left", "right", "up", "down", "forward", "back", "front", "backward", "behind"]),
+    type=click.Choice(["left", "right", "up", "down", "forward",
+                      "back", "front", "backward", "behind"]),
     required=True,
     help="Direction to move."
 )
@@ -472,7 +478,7 @@ def move(
     search_method: Optional[str],
 ):
     """Move a GameObject relative to another object.
-    
+
     \b
     Examples:
         unity-mcp gameobject move "Chair" --reference "Table" --direction right --distance 2
@@ -480,7 +486,7 @@ def move(
         unity-mcp gameobject move "NPC" --reference "Player" --direction forward --local
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {
         "action": "move_relative",
         "target": target,
@@ -489,15 +495,16 @@ def move(
         "distance": distance,
         "world_space": not local,
     }
-    
+
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_gameobject", params, config)
         click.echo(format_output(result, config.format))
         if result.get("success"):
-            print_success(f"Moved '{target}' {direction} of '{reference}' by {distance} units")
+            print_success(
+                f"Moved '{target}' {direction} of '{reference}' by {distance} units")
     except UnityConnectionError as e:
         print_error(str(e))
         sys.exit(1)

@@ -19,25 +19,25 @@ def shader():
 @click.argument("path")
 def read_shader(path: str):
     """Read a shader file.
-    
+
     \\b
     Examples:
         unity-mcp shader read "Assets/Shaders/MyShader.shader"
     """
     config = get_config()
-    
+
     # Extract name from path
     import os
     name = os.path.splitext(os.path.basename(path))[0]
     directory = os.path.dirname(path)
-    
+
     try:
         result = run_command("manage_shader", {
             "action": "read",
             "name": name,
             "path": directory or "Assets/",
         }, config)
-        
+
         # If successful, display the contents nicely
         if result.get("success") and result.get("data", {}).get("contents"):
             click.echo(result["data"]["contents"])
@@ -69,7 +69,7 @@ def read_shader(path: str):
 )
 def create_shader(name: str, path: str, contents: Optional[str], file_path: Optional[str]):
     """Create a new shader.
-    
+
     \\b
     Examples:
         unity-mcp shader create "MyShader" --path "Assets/Shaders"
@@ -77,7 +77,7 @@ def create_shader(name: str, path: str, contents: Optional[str], file_path: Opti
         echo "Shader code..." | unity-mcp shader create "MyShader"
     """
     config = get_config()
-    
+
     # Get contents from file, option, or stdin
     if file_path:
         with open(file_path, 'r') as f:
@@ -126,7 +126,7 @@ def create_shader(name: str, path: str, contents: Optional[str], file_path: Opti
     FallBack "Diffuse"
 }}
 '''
-    
+
     try:
         result = run_command("manage_shader", {
             "action": "create",
@@ -158,18 +158,18 @@ def create_shader(name: str, path: str, contents: Optional[str], file_path: Opti
 )
 def update_shader(path: str, contents: Optional[str], file_path: Optional[str]):
     """Update an existing shader.
-    
+
     \\b
     Examples:
         unity-mcp shader update "Assets/Shaders/MyShader.shader" --file updated.shader
         echo "New shader code" | unity-mcp shader update "Assets/Shaders/MyShader.shader"
     """
     config = get_config()
-    
+
     import os
     name = os.path.splitext(os.path.basename(path))[0]
     directory = os.path.dirname(path)
-    
+
     # Get contents from file, option, or stdin
     if file_path:
         with open(file_path, 'r') as f:
@@ -181,9 +181,10 @@ def update_shader(path: str, contents: Optional[str], file_path: Optional[str]):
         if not sys.stdin.isatty():
             shader_contents = sys.stdin.read()
         else:
-            print_error("No shader contents provided. Use --contents, --file, or pipe via stdin.")
+            print_error(
+                "No shader contents provided. Use --contents, --file, or pipe via stdin.")
             sys.exit(1)
-    
+
     try:
         result = run_command("manage_shader", {
             "action": "update",
@@ -208,21 +209,21 @@ def update_shader(path: str, contents: Optional[str], file_path: Optional[str]):
 )
 def delete_shader(path: str, force: bool):
     """Delete a shader.
-    
+
     \\b
     Examples:
         unity-mcp shader delete "Assets/Shaders/OldShader.shader"
         unity-mcp shader delete "Assets/Shaders/OldShader.shader" --force
     """
     config = get_config()
-    
+
     if not force:
         click.confirm(f"Delete shader '{path}'?", abort=True)
-    
+
     import os
     name = os.path.splitext(os.path.basename(path))[0]
     directory = os.path.dirname(path)
-    
+
     try:
         result = run_command("manage_shader", {
             "action": "delete",

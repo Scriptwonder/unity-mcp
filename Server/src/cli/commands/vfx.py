@@ -31,7 +31,7 @@ def particle():
 @click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
 def particle_info(target: str, search_method: Optional[str]):
     """Get particle system info.
-    
+
     \\b
     Examples:
         unity-mcp vfx particle info "Fire"
@@ -41,7 +41,7 @@ def particle_info(target: str, search_method: Optional[str]):
     params: dict[str, Any] = {"action": "particle_get_info", "target": target}
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_vfx", params, config)
         click.echo(format_output(result, config.format))
@@ -56,7 +56,7 @@ def particle_info(target: str, search_method: Optional[str]):
 @click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
 def particle_play(target: str, with_children: bool, search_method: Optional[str]):
     """Play a particle system.
-    
+
     \\b
     Examples:
         unity-mcp vfx particle play "Fire"
@@ -68,7 +68,7 @@ def particle_play(target: str, with_children: bool, search_method: Optional[str]
         params["withChildren"] = True
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_vfx", params, config)
         click.echo(format_output(result, config.format))
@@ -91,7 +91,7 @@ def particle_stop(target: str, with_children: bool, search_method: Optional[str]
         params["withChildren"] = True
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_vfx", params, config)
         click.echo(format_output(result, config.format))
@@ -111,7 +111,7 @@ def particle_pause(target: str, search_method: Optional[str]):
     params: dict[str, Any] = {"action": "particle_pause", "target": target}
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_vfx", params, config)
         click.echo(format_output(result, config.format))
@@ -132,7 +132,7 @@ def particle_restart(target: str, with_children: bool, search_method: Optional[s
         params["withChildren"] = True
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_vfx", params, config)
         click.echo(format_output(result, config.format))
@@ -153,7 +153,7 @@ def particle_clear(target: str, with_children: bool, search_method: Optional[str
         params["withChildren"] = True
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_vfx", params, config)
         click.echo(format_output(result, config.format))
@@ -177,7 +177,7 @@ def line():
 @click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
 def line_info(target: str, search_method: Optional[str]):
     """Get line renderer info.
-    
+
     \\b
     Examples:
         unity-mcp vfx line info "LaserBeam"
@@ -186,7 +186,7 @@ def line_info(target: str, search_method: Optional[str]):
     params: dict[str, Any] = {"action": "line_get_info", "target": target}
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_vfx", params, config)
         click.echo(format_output(result, config.format))
@@ -201,19 +201,19 @@ def line_info(target: str, search_method: Optional[str]):
 @click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
 def line_set_positions(target: str, positions: str, search_method: Optional[str]):
     """Set all positions on a line renderer.
-    
+
     \\b
     Examples:
         unity-mcp vfx line set-positions "Line" --positions "[[0,0,0], [5,2,0], [10,0,0]]"
     """
     config = get_config()
-    
+
     try:
         positions_list = json.loads(positions)
     except json.JSONDecodeError as e:
         print_error(f"Invalid JSON for positions: {e}")
         sys.exit(1)
-    
+
     params: dict[str, Any] = {
         "action": "line_set_positions",
         "target": target,
@@ -221,7 +221,7 @@ def line_set_positions(target: str, positions: str, search_method: Optional[str]
     }
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_vfx", params, config)
         click.echo(format_output(result, config.format))
@@ -237,7 +237,7 @@ def line_set_positions(target: str, positions: str, search_method: Optional[str]
 @click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
 def line_create_line(target: str, start: Tuple[float, float, float], end: Tuple[float, float, float], search_method: Optional[str]):
     """Create a simple line between two points.
-    
+
     \\b
     Examples:
         unity-mcp vfx line create-line "MyLine" --start 0 0 0 --end 10 5 0
@@ -251,7 +251,7 @@ def line_create_line(target: str, start: Tuple[float, float, float], end: Tuple[
     }
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_vfx", params, config)
         click.echo(format_output(result, config.format))
@@ -268,7 +268,7 @@ def line_create_line(target: str, start: Tuple[float, float, float], end: Tuple[
 @click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
 def line_create_circle(target: str, center: Tuple[float, float, float], radius: float, segments: int, search_method: Optional[str]):
     """Create a circle shape.
-    
+
     \\b
     Examples:
         unity-mcp vfx line create-circle "Circle" --radius 5 --segments 64
@@ -284,7 +284,7 @@ def line_create_circle(target: str, center: Tuple[float, float, float], radius: 
     }
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_vfx", params, config)
         click.echo(format_output(result, config.format))
@@ -302,7 +302,7 @@ def line_clear(target: str, search_method: Optional[str]):
     params: dict[str, Any] = {"action": "line_clear", "target": target}
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_vfx", params, config)
         click.echo(format_output(result, config.format))
@@ -330,7 +330,7 @@ def trail_info(target: str, search_method: Optional[str]):
     params: dict[str, Any] = {"action": "trail_get_info", "target": target}
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_vfx", params, config)
         click.echo(format_output(result, config.format))
@@ -345,7 +345,7 @@ def trail_info(target: str, search_method: Optional[str]):
 @click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
 def trail_set_time(target: str, duration: float, search_method: Optional[str]):
     """Set trail duration.
-    
+
     \\b
     Examples:
         unity-mcp vfx trail set-time "PlayerTrail" 2.0
@@ -358,7 +358,7 @@ def trail_set_time(target: str, duration: float, search_method: Optional[str]):
     }
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_vfx", params, config)
         click.echo(format_output(result, config.format))
@@ -376,7 +376,7 @@ def trail_clear(target: str, search_method: Optional[str]):
     params: dict[str, Any] = {"action": "trail_clear", "target": target}
     if search_method:
         params["searchMethod"] = search_method
-    
+
     try:
         result = run_command("manage_vfx", params, config)
         click.echo(format_output(result, config.format))
@@ -396,16 +396,16 @@ def trail_clear(target: str, search_method: Optional[str]):
 @click.option("--search-method", type=click.Choice(["by_name", "by_path", "by_id", "by_tag"]), default=None)
 def vfx_raw(action: str, target: Optional[str], params: str, search_method: Optional[str]):
     """Execute any VFX action directly.
-    
+
     For advanced users who need access to all 60+ VFX actions.
-    
+
     \\b
     Actions include:
         particle_*: particle_set_main, particle_set_emission, particle_set_shape, ...
         vfx_*: vfx_set_float, vfx_send_event, vfx_play, ...
         line_*: line_create_arc, line_create_bezier, ...
         trail_*: trail_set_width, trail_set_color, ...
-    
+
     \\b
     Examples:
         unity-mcp vfx raw particle_set_main "Fire" --params '{"duration": 5, "looping": true}'
@@ -413,22 +413,22 @@ def vfx_raw(action: str, target: Optional[str], params: str, search_method: Opti
         unity-mcp vfx raw vfx_send_event "Explosion" --params '{"eventName": "OnSpawn"}'
     """
     config = get_config()
-    
+
     try:
         extra_params = json.loads(params)
     except json.JSONDecodeError as e:
         print_error(f"Invalid JSON for params: {e}")
         sys.exit(1)
-    
+
     request_params: dict[str, Any] = {"action": action}
     if target:
         request_params["target"] = target
     if search_method:
         request_params["searchMethod"] = search_method
-    
+
     # Merge extra params
     request_params.update(extra_params)
-    
+
     try:
         result = run_command("manage_vfx", request_params, config)
         click.echo(format_output(result, config.format))

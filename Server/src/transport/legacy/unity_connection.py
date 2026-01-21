@@ -246,7 +246,8 @@ class UnityConnection:
             raise ValueError("MCP call missing command_type")
         if params is None:
             return MCPResponse(success=False, error="MCP call received with no parameters (client placeholder?)")
-        attempts = max(config.max_retries, 5) if max_attempts is None else max_attempts
+        attempts = max(config.max_retries,
+                       5) if max_attempts is None else max_attempts
         base_backoff = max(0.5, config.retry_delay)
 
         def read_status_file(target_hash: str | None = None) -> dict | None:
@@ -781,7 +782,8 @@ def send_command_with_retry(
     # Commands that trigger compilation/reload shouldn't retry on disconnect
     send_max_attempts = None if retry_on_reload else 0
 
-    response = conn.send_command(command_type, params, max_attempts=send_max_attempts)
+    response = conn.send_command(
+        command_type, params, max_attempts=send_max_attempts)
     retries = 0
     wait_started = None
     reason = _extract_response_reason(response)

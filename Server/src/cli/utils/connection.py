@@ -17,15 +17,15 @@ class UnityConnectionError(Exception):
 
 def warn_if_remote_host(config: CLIConfig) -> None:
     """Warn user if connecting to a non-localhost server.
-    
+
     This is a security measure to alert users that connecting to remote
     servers exposes Unity control to potential network attacks.
-    
+
     Args:
         config: CLI configuration with host setting
     """
     import click
-    
+
     local_hosts = ("127.0.0.1", "localhost", "::1", "0.0.0.0")
     if config.host.lower() not in local_hosts:
         click.echo(
@@ -44,30 +44,30 @@ async def send_command(
     timeout: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Send a command to Unity via the MCP HTTP server.
-    
+
     Args:
         command_type: The command type (e.g., 'manage_gameobject', 'manage_scene')
         params: Command parameters
         config: Optional CLI configuration
         timeout: Optional timeout override
-        
+
     Returns:
         Response dict from Unity
-        
+
     Raises:
         UnityConnectionError: If connection fails
     """
     cfg = config or get_config()
     url = f"http://{cfg.host}:{cfg.port}/api/command"
-    
+
     payload = {
         "type": command_type,
         "params": params,
     }
-    
+
     if cfg.unity_instance:
         payload["unity_instance"] = cfg.unity_instance
-    
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -103,13 +103,13 @@ def run_command(
     timeout: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Synchronous wrapper for send_command.
-    
+
     Args:
         command_type: The command type
         params: Command parameters
         config: Optional CLI configuration
         timeout: Optional timeout override
-        
+
     Returns:
         Response dict from Unity
     """
@@ -118,16 +118,16 @@ def run_command(
 
 async def check_connection(config: Optional[CLIConfig] = None) -> bool:
     """Check if we can connect to the Unity MCP server.
-    
+
     Args:
         config: Optional CLI configuration
-        
+
     Returns:
         True if connection successful, False otherwise
     """
     cfg = config or get_config()
     url = f"http://{cfg.host}:{cfg.port}/health"
-    
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(url, timeout=5)
@@ -143,21 +143,21 @@ def run_check_connection(config: Optional[CLIConfig] = None) -> bool:
 
 async def list_unity_instances(config: Optional[CLIConfig] = None) -> Dict[str, Any]:
     """List available Unity instances.
-    
+
     Args:
         config: Optional CLI configuration
-        
+
     Returns:
         Dict with list of Unity instances
     """
     cfg = config or get_config()
-    
+
     # Try the new /api/instances endpoint first, fall back to /plugin/sessions
     urls_to_try = [
         f"http://{cfg.host}:{cfg.port}/api/instances",
         f"http://{cfg.host}:{cfg.port}/plugin/sessions",
     ]
-    
+
     async with httpx.AsyncClient() as client:
         for url in urls_to_try:
             try:
@@ -181,8 +181,9 @@ async def list_unity_instances(config: Optional[CLIConfig] = None) -> Dict[str, 
                         return {"success": True, "instances": instances}
             except Exception:
                 continue
-    
-    raise UnityConnectionError("Failed to list Unity instances: No working endpoint found")
+
+    raise UnityConnectionError(
+        "Failed to list Unity instances: No working endpoint found")
 
 
 def run_list_instances(config: Optional[CLIConfig] = None) -> Dict[str, Any]:

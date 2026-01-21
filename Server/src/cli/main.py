@@ -69,16 +69,16 @@ pass_context = click.make_pass_decorator(Context, ensure=True)
 @pass_context
 def cli(ctx: Context, host: str, port: int, timeout: int, format: str, instance: Optional[str], verbose: bool):
     """Unity MCP Command Line Interface.
-    
+
     Control Unity Editor directly from the command line using the Model Context Protocol.
-    
+
     \b
     Examples:
         unity-mcp status
         unity-mcp gameobject find "Player"
         unity-mcp scene hierarchy --format json
         unity-mcp editor play
-    
+
     \b
     Environment Variables:
         UNITY_MCP_HOST      Server host (default: 127.0.0.1)
@@ -94,10 +94,10 @@ def cli(ctx: Context, host: str, port: int, timeout: int, format: str, instance:
         format=format,
         unity_instance=instance,
     )
-    
+
     # Security warning for non-localhost connections
     warn_if_remote_host(config)
-    
+
     set_config(config)
     ctx.config = config
     ctx.verbose = verbose
@@ -108,16 +108,18 @@ def cli(ctx: Context, host: str, port: int, timeout: int, format: str, instance:
 def status(ctx: Context):
     """Check connection status to Unity MCP server."""
     config = ctx.config or get_config()
-    
+
     click.echo(f"Checking connection to {config.host}:{config.port}...")
-    
+
     if run_check_connection(config):
-        print_success(f"Connected to Unity MCP server at {config.host}:{config.port}")
-        
+        print_success(
+            f"Connected to Unity MCP server at {config.host}:{config.port}")
+
         # Try to get Unity instances
         try:
             result = run_list_instances(config)
-            instances = result.get("instances", []) if isinstance(result, dict) else []
+            instances = result.get("instances", []) if isinstance(
+                result, dict) else []
             if instances:
                 click.echo("\nConnected Unity instances:")
                 for inst in instances:
@@ -130,7 +132,8 @@ def status(ctx: Context):
         except UnityConnectionError as e:
             print_info(f"Could not retrieve Unity instances: {e}")
     else:
-        print_error(f"Cannot connect to Unity MCP server at {config.host}:{config.port}")
+        print_error(
+            f"Cannot connect to Unity MCP server at {config.host}:{config.port}")
         sys.exit(1)
 
 
@@ -139,7 +142,7 @@ def status(ctx: Context):
 def list_instances(ctx: Context):
     """List available Unity instances."""
     config = ctx.config or get_config()
-    
+
     try:
         instances = run_list_instances(config)
         click.echo(format_output(instances, config.format))
@@ -154,7 +157,7 @@ def list_instances(ctx: Context):
 @pass_context
 def raw_command(ctx: Context, command_type: str, params: str):
     """Send a raw command to Unity.
-    
+
     \b
     Examples:
         unity-mcp raw manage_scene '{"action": "get_hierarchy"}'
@@ -162,13 +165,13 @@ def raw_command(ctx: Context, command_type: str, params: str):
     """
     import json
     config = ctx.config or get_config()
-    
+
     try:
         params_dict = json.loads(params)
     except json.JSONDecodeError as e:
         print_error(f"Invalid JSON params: {e}")
         sys.exit(1)
-    
+
     try:
         result = run_command(command_type, params_dict, config)
         click.echo(format_output(result, config.format))
@@ -186,100 +189,100 @@ def register_commands():
         cli.add_command(gameobject)
     except ImportError:
         pass
-    
+
     try:
         from cli.commands.component import component
         cli.add_command(component)
     except ImportError:
         pass
-    
+
     try:
         from cli.commands.scene import scene
         cli.add_command(scene)
     except ImportError:
         pass
-    
+
     try:
         from cli.commands.asset import asset
         cli.add_command(asset)
     except ImportError:
         pass
-    
+
     try:
         from cli.commands.script import script
         cli.add_command(script)
     except ImportError:
         pass
-    
+
     try:
         from cli.commands.code import code
         cli.add_command(code)
     except ImportError:
         pass
-    
+
     try:
         from cli.commands.editor import editor
         cli.add_command(editor)
     except ImportError:
         pass
-    
+
     try:
         from cli.commands.prefab import prefab
         cli.add_command(prefab)
     except ImportError:
         pass
-    
+
     try:
         from cli.commands.material import material
         cli.add_command(material)
     except ImportError:
         pass
-    
+
     try:
         from cli.commands.lighting import lighting
         cli.add_command(lighting)
     except ImportError:
         pass
-    
+
     try:
         from cli.commands.animation import animation
         cli.add_command(animation)
     except ImportError:
         pass
-    
+
     try:
         from cli.commands.audio import audio
         cli.add_command(audio)
     except ImportError:
         pass
-    
+
     try:
         from cli.commands.ui import ui
         cli.add_command(ui)
     except ImportError:
         pass
-    
+
     # New commands - instance management
     try:
         from cli.commands.instance import instance
         cli.add_command(instance)
     except ImportError:
         pass
-    
+
     # New commands - shader management
     try:
         from cli.commands.shader import shader
         cli.add_command(shader)
     except ImportError:
         pass
-    
+
     # New commands - VFX management
     try:
         from cli.commands.vfx import vfx
         cli.add_command(vfx)
     except ImportError:
         pass
-    
+
     # New commands - batch execution
     try:
         from cli.commands.batch import batch

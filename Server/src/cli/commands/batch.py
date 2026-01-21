@@ -22,9 +22,9 @@ def batch():
 @click.option("--fail-fast", is_flag=True, help="Stop on first failure.")
 def batch_run(file: str, parallel: bool, fail_fast: bool):
     """Execute commands from a JSON file.
-    
+
     The JSON file should contain an array of command objects with 'tool' and 'params' keys.
-    
+
     \\b
     File format:
         [
@@ -32,7 +32,7 @@ def batch_run(file: str, parallel: bool, fail_fast: bool):
             {"tool": "manage_gameobject", "params": {"action": "create", "name": "Cube2"}},
             {"tool": "manage_components", "params": {"action": "add", "target": "Cube1", "componentType": "Rigidbody"}}
         ]
-    
+
     \\b
     Examples:
         unity-mcp batch run commands.json
@@ -40,7 +40,7 @@ def batch_run(file: str, parallel: bool, fail_fast: bool):
         unity-mcp batch run critical.json --fail-fast
     """
     config = get_config()
-    
+
     try:
         with open(file, 'r') as f:
             commands = json.load(f)
@@ -50,34 +50,35 @@ def batch_run(file: str, parallel: bool, fail_fast: bool):
     except IOError as e:
         print_error(f"Error reading file: {e}")
         sys.exit(1)
-    
+
     if not isinstance(commands, list):
         print_error("JSON file must contain an array of commands")
         sys.exit(1)
-    
+
     if len(commands) > 25:
         print_error(f"Maximum 25 commands per batch, got {len(commands)}")
         sys.exit(1)
-    
+
     params: dict[str, Any] = {"commands": commands}
     if parallel:
         params["parallel"] = True
     if fail_fast:
         params["failFast"] = True
-    
+
     click.echo(f"Executing {len(commands)} commands...")
-    
+
     try:
         result = run_command("batch_execute", params, config)
         click.echo(format_output(result, config.format))
-        
+
         if isinstance(result, dict):
             results = result.get("data", {}).get("results", [])
             succeeded = sum(1 for r in results if r.get("success"))
             failed = len(results) - succeeded
-            
+
             if failed == 0:
-                print_success(f"All {succeeded} commands completed successfully")
+                print_success(
+                    f"All {succeeded} commands completed successfully")
             else:
                 print_info(f"{succeeded} succeeded, {failed} failed")
     except UnityConnectionError as e:
@@ -91,38 +92,38 @@ def batch_run(file: str, parallel: bool, fail_fast: bool):
 @click.option("--fail-fast", is_flag=True, help="Stop on first failure.")
 def batch_inline(commands_json: str, parallel: bool, fail_fast: bool):
     """Execute commands from inline JSON.
-    
+
     \\b
     Examples:
         unity-mcp batch inline '[{"tool": "manage_scene", "params": {"action": "get_active"}}]'
-        
+
         unity-mcp batch inline '[
             {"tool": "manage_gameobject", "params": {"action": "create", "name": "A", "primitiveType": "Cube"}},
             {"tool": "manage_gameobject", "params": {"action": "create", "name": "B", "primitiveType": "Sphere"}}
         ]'
     """
     config = get_config()
-    
+
     try:
         commands = json.loads(commands_json)
     except json.JSONDecodeError as e:
         print_error(f"Invalid JSON: {e}")
         sys.exit(1)
-    
+
     if not isinstance(commands, list):
         print_error("Commands must be an array")
         sys.exit(1)
-    
+
     if len(commands) > 25:
         print_error(f"Maximum 25 commands per batch, got {len(commands)}")
         sys.exit(1)
-    
+
     params: dict[str, Any] = {"commands": commands}
     if parallel:
         params["parallel"] = True
     if fail_fast:
         params["failFast"] = True
-    
+
     try:
         result = run_command("batch_execute", params, config)
         click.echo(format_output(result, config.format))
@@ -135,7 +136,7 @@ def batch_inline(commands_json: str, parallel: bool, fail_fast: bool):
 @click.option("--output", "-o", type=click.Path(), help="Output file (default: stdout)")
 def batch_template(output: Optional[str]):
     """Generate a sample batch commands file.
-    
+
     \\b
     Examples:
         unity-mcp batch template > commands.json
@@ -172,9 +173,9 @@ def batch_template(output: Optional[str]):
             }
         }
     ]
-    
+
     json_output = json.dumps(template, indent=2)
-    
+
     if output:
         with open(output, 'w') as f:
             f.write(json_output)

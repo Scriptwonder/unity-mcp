@@ -52,7 +52,7 @@ def hierarchy(
     cursor: int,
 ):
     """Get the scene hierarchy.
-    
+
     \b
     Examples:
         unity-mcp scene hierarchy
@@ -61,20 +61,20 @@ def hierarchy(
         unity-mcp scene hierarchy --format json
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {
         "action": "get_hierarchy",
         "pageSize": limit,
         "cursor": cursor,
     }
-    
+
     if parent:
         params["parent"] = parent
     if max_depth is not None:
         params["maxDepth"] = max_depth
     if include_transform:
         params["includeTransform"] = True
-    
+
     try:
         result = run_command("manage_scene", params, config)
         click.echo(format_output(result, config.format))
@@ -87,7 +87,7 @@ def hierarchy(
 def active():
     """Get information about the active scene."""
     config = get_config()
-    
+
     try:
         result = run_command("manage_scene", {"action": "get_active"}, config)
         click.echo(format_output(result, config.format))
@@ -105,7 +105,7 @@ def active():
 )
 def load(scene: str, by_index: bool):
     """Load a scene.
-    
+
     \b
     Examples:
         unity-mcp scene load "Assets/Scenes/Main.unity"
@@ -113,9 +113,9 @@ def load(scene: str, by_index: bool):
         unity-mcp scene load 0 --by-index
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {"action": "load"}
-    
+
     if by_index:
         try:
             params["buildIndex"] = int(scene)
@@ -127,7 +127,7 @@ def load(scene: str, by_index: bool):
             params["path"] = scene
         else:
             params["name"] = scene
-    
+
     try:
         result = run_command("manage_scene", params, config)
         click.echo(format_output(result, config.format))
@@ -146,18 +146,18 @@ def load(scene: str, by_index: bool):
 )
 def save(path: Optional[str]):
     """Save the current scene.
-    
+
     \b
     Examples:
         unity-mcp scene save
         unity-mcp scene save --path "Assets/Scenes/NewScene.unity"
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {"action": "save"}
     if path:
         params["path"] = path
-    
+
     try:
         result = run_command("manage_scene", params, config)
         click.echo(format_output(result, config.format))
@@ -177,21 +177,21 @@ def save(path: Optional[str]):
 )
 def create(name: str, path: Optional[str]):
     """Create a new scene.
-    
+
     \b
     Examples:
         unity-mcp scene create "NewLevel"
         unity-mcp scene create "TestScene" --path "Assets/Scenes/Test"
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {
         "action": "create",
         "name": name,
     }
     if path:
         params["path"] = path
-    
+
     try:
         result = run_command("manage_scene", params, config)
         click.echo(format_output(result, config.format))
@@ -206,9 +206,10 @@ def create(name: str, path: Optional[str]):
 def build_settings():
     """Get scenes in build settings."""
     config = get_config()
-    
+
     try:
-        result = run_command("manage_scene", {"action": "get_build_settings"}, config)
+        result = run_command(
+            "manage_scene", {"action": "get_build_settings"}, config)
         click.echo(format_output(result, config.format))
     except UnityConnectionError as e:
         print_error(str(e))
@@ -229,7 +230,7 @@ def build_settings():
 )
 def screenshot(filename: Optional[str], supersize: int):
     """Capture a screenshot of the scene.
-    
+
     \b
     Examples:
         unity-mcp scene screenshot
@@ -237,13 +238,13 @@ def screenshot(filename: Optional[str], supersize: int):
         unity-mcp scene screenshot --supersize 2
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {"action": "screenshot"}
     if filename:
         params["fileName"] = filename
     if supersize > 1:
         params["superSize"] = supersize
-    
+
     try:
         result = run_command("manage_scene", params, config)
         click.echo(format_output(result, config.format))

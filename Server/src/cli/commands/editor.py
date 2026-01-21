@@ -19,7 +19,7 @@ def editor():
 def play():
     """Enter play mode."""
     config = get_config()
-    
+
     try:
         result = run_command("manage_editor", {"action": "play"}, config)
         click.echo(format_output(result, config.format))
@@ -34,7 +34,7 @@ def play():
 def pause():
     """Pause play mode."""
     config = get_config()
-    
+
     try:
         result = run_command("manage_editor", {"action": "pause"}, config)
         click.echo(format_output(result, config.format))
@@ -49,7 +49,7 @@ def pause():
 def stop():
     """Stop play mode."""
     config = get_config()
-    
+
     try:
         result = run_command("manage_editor", {"action": "stop"}, config)
         click.echo(format_output(result, config.format))
@@ -93,7 +93,7 @@ def stop():
 )
 def console(log_types: tuple, count: int, filter_text: Optional[str], stacktrace: bool, clear: bool):
     """Read or clear the Unity console.
-    
+
     \b
     Examples:
         unity-mcp editor console
@@ -102,7 +102,7 @@ def console(log_types: tuple, count: int, filter_text: Optional[str], stacktrace
         unity-mcp editor console --clear
     """
     config = get_config()
-    
+
     if clear:
         try:
             result = run_command("read_console", {"action": "clear"}, config)
@@ -113,17 +113,17 @@ def console(log_types: tuple, count: int, filter_text: Optional[str], stacktrace
             print_error(str(e))
             sys.exit(1)
         return
-    
+
     params: dict[str, Any] = {
         "action": "get",
         "types": list(log_types),
         "count": count,
         "include_stacktrace": stacktrace,
     }
-    
+
     if filter_text:
         params["filter_text"] = filter_text
-    
+
     try:
         result = run_command("read_console", params, config)
         click.echo(format_output(result, config.format))
@@ -136,16 +136,17 @@ def console(log_types: tuple, count: int, filter_text: Optional[str], stacktrace
 @click.argument("tag_name")
 def add_tag(tag_name: str):
     """Add a new tag.
-    
+
     \b
     Examples:
         unity-mcp editor add-tag "Enemy"
         unity-mcp editor add-tag "Collectible"
     """
     config = get_config()
-    
+
     try:
-        result = run_command("manage_editor", {"action": "add_tag", "tagName": tag_name}, config)
+        result = run_command(
+            "manage_editor", {"action": "add_tag", "tagName": tag_name}, config)
         click.echo(format_output(result, config.format))
         if result.get("success"):
             print_success(f"Added tag: {tag_name}")
@@ -158,15 +159,16 @@ def add_tag(tag_name: str):
 @click.argument("tag_name")
 def remove_tag(tag_name: str):
     """Remove a tag.
-    
+
     \b
     Examples:
         unity-mcp editor remove-tag "OldTag"
     """
     config = get_config()
-    
+
     try:
-        result = run_command("manage_editor", {"action": "remove_tag", "tagName": tag_name}, config)
+        result = run_command(
+            "manage_editor", {"action": "remove_tag", "tagName": tag_name}, config)
         click.echo(format_output(result, config.format))
         if result.get("success"):
             print_success(f"Removed tag: {tag_name}")
@@ -179,15 +181,16 @@ def remove_tag(tag_name: str):
 @click.argument("layer_name")
 def add_layer(layer_name: str):
     """Add a new layer.
-    
+
     \b
     Examples:
         unity-mcp editor add-layer "Interactable"
     """
     config = get_config()
-    
+
     try:
-        result = run_command("manage_editor", {"action": "add_layer", "layerName": layer_name}, config)
+        result = run_command(
+            "manage_editor", {"action": "add_layer", "layerName": layer_name}, config)
         click.echo(format_output(result, config.format))
         if result.get("success"):
             print_success(f"Added layer: {layer_name}")
@@ -200,15 +203,16 @@ def add_layer(layer_name: str):
 @click.argument("layer_name")
 def remove_layer(layer_name: str):
     """Remove a layer.
-    
+
     \b
     Examples:
         unity-mcp editor remove-layer "OldLayer"
     """
     config = get_config()
-    
+
     try:
-        result = run_command("manage_editor", {"action": "remove_layer", "layerName": layer_name}, config)
+        result = run_command(
+            "manage_editor", {"action": "remove_layer", "layerName": layer_name}, config)
         click.echo(format_output(result, config.format))
         if result.get("success"):
             print_success(f"Removed layer: {layer_name}")
@@ -221,7 +225,7 @@ def remove_layer(layer_name: str):
 @click.argument("tool_name")
 def set_tool(tool_name: str):
     """Set the active editor tool.
-    
+
     \b
     Examples:
         unity-mcp editor tool "Move"
@@ -229,9 +233,10 @@ def set_tool(tool_name: str):
         unity-mcp editor tool "Scale"
     """
     config = get_config()
-    
+
     try:
-        result = run_command("manage_editor", {"action": "set_active_tool", "toolName": tool_name}, config)
+        result = run_command(
+            "manage_editor", {"action": "set_active_tool", "toolName": tool_name}, config)
         click.echo(format_output(result, config.format))
         if result.get("success"):
             print_success(f"Set active tool: {tool_name}")
@@ -244,7 +249,7 @@ def set_tool(tool_name: str):
 @click.argument("menu_path")
 def execute_menu(menu_path: str):
     """Execute a menu item.
-    
+
     \b
     Examples:
         unity-mcp editor menu "File/Save"
@@ -252,9 +257,10 @@ def execute_menu(menu_path: str):
         unity-mcp editor menu "GameObject/Create Empty"
     """
     config = get_config()
-    
+
     try:
-        result = run_command("execute_menu_item", {"menu_path": menu_path}, config)
+        result = run_command("execute_menu_item", {
+                             "menu_path": menu_path}, config)
         click.echo(format_output(result, config.format))
         if result.get("success"):
             print_success(f"Executed: {menu_path}")
@@ -293,7 +299,7 @@ def execute_menu(menu_path: str):
 )
 def run_tests(mode: str, async_mode: bool, wait: Optional[int], details: bool, failed_only: bool):
     """Run Unity tests.
-    
+
     \b
     Examples:
         unity-mcp editor tests
@@ -302,16 +308,16 @@ def run_tests(mode: str, async_mode: bool, wait: Optional[int], details: bool, f
         unity-mcp editor tests --wait 60 --failed-only
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {"mode": mode}
     if details:
         params["include_details"] = True
     if failed_only:
         params["include_failed_tests"] = True
-    
+
     try:
         result = run_command("run_tests", params, config)
-        
+
         # For async mode, just show job ID
         if async_mode and result.get("success"):
             job_id = result.get("data", {}).get("job_id")
@@ -319,7 +325,7 @@ def run_tests(mode: str, async_mode: bool, wait: Optional[int], details: bool, f
                 click.echo(f"Test job started: {job_id}")
                 print_info("Poll with: unity-mcp editor poll-test " + job_id)
                 return
-        
+
         click.echo(format_output(result, config.format))
     except UnityConnectionError as e:
         print_error(str(e))
@@ -346,7 +352,7 @@ def run_tests(mode: str, async_mode: bool, wait: Optional[int], details: bool, f
 )
 def poll_test(job_id: str, wait: int, details: bool, failed_only: bool):
     """Poll an async test job for status/results.
-    
+
     \b
     Examples:
         unity-mcp editor poll-test abc123
@@ -354,7 +360,7 @@ def poll_test(job_id: str, wait: int, details: bool, failed_only: bool):
         unity-mcp editor poll-test abc123 --failed-only
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {"job_id": job_id}
     if wait:
         params["wait_timeout"] = wait
@@ -362,11 +368,11 @@ def poll_test(job_id: str, wait: int, details: bool, failed_only: bool):
         params["include_details"] = True
     if failed_only:
         params["include_failed_tests"] = True
-    
+
     try:
         result = run_command("get_test_job", params, config)
         click.echo(format_output(result, config.format))
-        
+
         if isinstance(result, dict) and result.get("success"):
             data = result.get("data", {})
             status = data.get("status", "unknown")
@@ -411,7 +417,7 @@ def poll_test(job_id: str, wait: int, details: bool, failed_only: bool):
 )
 def refresh(mode: str, scope: str, compile: bool, no_wait: bool):
     """Force Unity to refresh assets/scripts.
-    
+
     \b
     Examples:
         unity-mcp editor refresh
@@ -420,7 +426,7 @@ def refresh(mode: str, scope: str, compile: bool, no_wait: bool):
         unity-mcp editor refresh --scope scripts --compile
     """
     config = get_config()
-    
+
     params: dict[str, Any] = {
         "mode": mode,
         "scope": scope,
@@ -428,7 +434,7 @@ def refresh(mode: str, scope: str, compile: bool, no_wait: bool):
     }
     if compile:
         params["compile"] = "request"
-    
+
     try:
         click.echo("Refreshing Unity...")
         result = run_command("refresh_unity", params, config)
@@ -449,9 +455,9 @@ def refresh(mode: str, scope: str, compile: bool, no_wait: bool):
 )
 def custom_tool(tool_name: str, params: str):
     """Execute a custom Unity tool.
-    
+
     Custom tools are registered by Unity projects via the MCP plugin.
-    
+
     \b
     Examples:
         unity-mcp editor custom-tool "MyCustomTool"
@@ -459,13 +465,13 @@ def custom_tool(tool_name: str, params: str):
     """
     import json
     config = get_config()
-    
+
     try:
         params_dict = json.loads(params)
     except json.JSONDecodeError as e:
         print_error(f"Invalid JSON for params: {e}")
         sys.exit(1)
-    
+
     try:
         result = run_command("execute_custom_tool", {
             "tool_name": tool_name,
