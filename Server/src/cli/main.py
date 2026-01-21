@@ -1,6 +1,8 @@
 """Unity MCP Command Line Interface - Main Entry Point."""
 
 import sys
+from importlib import import_module
+
 import click
 from typing import Optional
 
@@ -184,111 +186,53 @@ def raw_command(ctx: Context, command_type: str, params: str):
 # These will be implemented in subsequent TODOs
 def register_commands():
     """Register all command groups."""
-    try:
-        from cli.commands.gameobject import gameobject
-        cli.add_command(gameobject)
-    except ImportError:
-        pass
+    def register_optional_command(module_name: str, command_name: str) -> None:
+        try:
+            module = import_module(module_name)
+        except ModuleNotFoundError as e:
+            if e.name == module_name:
+                return
+            print_error(
+                f"Failed to load command module '{module_name}': {e}"
+            )
+            return
+        except Exception as e:
+            print_error(
+                f"Failed to load command module '{module_name}': {e}"
+            )
+            return
 
-    try:
-        from cli.commands.component import component
-        cli.add_command(component)
-    except ImportError:
-        pass
+        command = getattr(module, command_name, None)
+        if command is None:
+            print_error(
+                f"Command '{command_name}' not found in '{module_name}'"
+            )
+            return
 
-    try:
-        from cli.commands.scene import scene
-        cli.add_command(scene)
-    except ImportError:
-        pass
+        cli.add_command(command)
 
-    try:
-        from cli.commands.asset import asset
-        cli.add_command(asset)
-    except ImportError:
-        pass
+    optional_commands = [
+        ("cli.commands.gameobject", "gameobject"),
+        ("cli.commands.component", "component"),
+        ("cli.commands.scene", "scene"),
+        ("cli.commands.asset", "asset"),
+        ("cli.commands.script", "script"),
+        ("cli.commands.code", "code"),
+        ("cli.commands.editor", "editor"),
+        ("cli.commands.prefab", "prefab"),
+        ("cli.commands.material", "material"),
+        ("cli.commands.lighting", "lighting"),
+        ("cli.commands.animation", "animation"),
+        ("cli.commands.audio", "audio"),
+        ("cli.commands.ui", "ui"),
+        ("cli.commands.instance", "instance"),
+        ("cli.commands.shader", "shader"),
+        ("cli.commands.vfx", "vfx"),
+        ("cli.commands.batch", "batch"),
+    ]
 
-    try:
-        from cli.commands.script import script
-        cli.add_command(script)
-    except ImportError:
-        pass
-
-    try:
-        from cli.commands.code import code
-        cli.add_command(code)
-    except ImportError:
-        pass
-
-    try:
-        from cli.commands.editor import editor
-        cli.add_command(editor)
-    except ImportError:
-        pass
-
-    try:
-        from cli.commands.prefab import prefab
-        cli.add_command(prefab)
-    except ImportError:
-        pass
-
-    try:
-        from cli.commands.material import material
-        cli.add_command(material)
-    except ImportError:
-        pass
-
-    try:
-        from cli.commands.lighting import lighting
-        cli.add_command(lighting)
-    except ImportError:
-        pass
-
-    try:
-        from cli.commands.animation import animation
-        cli.add_command(animation)
-    except ImportError:
-        pass
-
-    try:
-        from cli.commands.audio import audio
-        cli.add_command(audio)
-    except ImportError:
-        pass
-
-    try:
-        from cli.commands.ui import ui
-        cli.add_command(ui)
-    except ImportError:
-        pass
-
-    # New commands - instance management
-    try:
-        from cli.commands.instance import instance
-        cli.add_command(instance)
-    except ImportError:
-        pass
-
-    # New commands - shader management
-    try:
-        from cli.commands.shader import shader
-        cli.add_command(shader)
-    except ImportError:
-        pass
-
-    # New commands - VFX management
-    try:
-        from cli.commands.vfx import vfx
-        cli.add_command(vfx)
-    except ImportError:
-        pass
-
-    # New commands - batch execution
-    try:
-        from cli.commands.batch import batch
-        cli.add_command(batch)
-    except ImportError:
-        pass
+    for module_name, command_name in optional_commands:
+        register_optional_command(module_name, command_name)
 
 
 # Register commands on import
