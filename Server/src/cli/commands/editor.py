@@ -310,6 +310,8 @@ def run_tests(mode: str, async_mode: bool, wait: Optional[int], details: bool, f
     config = get_config()
 
     params: dict[str, Any] = {"mode": mode}
+    if wait is not None:
+        params["wait_timeout"] = wait
     if details:
         params["include_details"] = True
     if failed_only:
