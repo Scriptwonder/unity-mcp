@@ -1,6 +1,6 @@
 # Unity MCP CLI Usage Guide
 
-The Unity MCP CLI provides command-line access to control Unity Editor through the Model Context Protocol. Now only support Local HTTP.
+The Unity MCP CLI provides command-line access to control Unity Editor through the Model Context Protocol. Currently only supports local HTTP.
 
 Note: Some tools are still experimental and might fail under circumstances. Please submit an issue for us to make it better.
 
