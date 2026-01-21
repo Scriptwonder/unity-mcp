@@ -1,3 +1,18 @@
+from starlette.requests import Request
+from transport.unity_instance_middleware import (
+    UnityInstanceMiddleware,
+    get_unity_instance_middleware
+)
+from transport.legacy.unity_connection import get_unity_connection_pool, UnityConnectionPool
+from services.tools import register_all_tools
+from core.telemetry import record_milestone, record_telemetry, MilestoneType, RecordType, get_package_version
+from services.resources import register_all_resources
+from transport.plugin_registry import PluginRegistry
+from transport.plugin_hub import PluginHub
+from services.custom_tool_service import CustomToolService
+from core.config import config
+from starlette.routing import WebSocketRoute
+from starlette.responses import JSONResponse
 import argparse
 import asyncio
 import logging
@@ -50,22 +65,7 @@ class WindowsSafeRotatingFileHandler(RotatingFileHandler):
             # On Windows, another process may have the log file open.
             # Skip rotation this time - we'll try again on the next rollover.
             pass
-from starlette.requests import Request
-from starlette.responses import JSONResponse
-from starlette.routing import WebSocketRoute
 
-from core.config import config
-from services.custom_tool_service import CustomToolService
-from transport.plugin_hub import PluginHub
-from transport.plugin_registry import PluginRegistry
-from services.resources import register_all_resources
-from core.telemetry import record_milestone, record_telemetry, MilestoneType, RecordType, get_package_version
-from services.tools import register_all_tools
-from transport.legacy.unity_connection import get_unity_connection_pool, UnityConnectionPool
-from transport.unity_instance_middleware import (
-    UnityInstanceMiddleware,
-    get_unity_instance_middleware
-)
 
 # Configure logging using settings from config
 logging.basicConfig(
@@ -342,7 +342,7 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
             sessions = await PluginHub.get_sessions()
             if not sessions.sessions:
                 return JSONResponse({
-                    "success": False, 
+                    "success": False,
                     "error": "No Unity instances connected. Make sure Unity is running with MCP plugin."
                 }, status_code=503)
 
@@ -367,7 +367,6 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
             logger.error(f"CLI command error: {e}")
             return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
-
     @mcp.custom_route("/api/instances", methods=["GET"])
     async def cli_instances_route(_: Request) -> JSONResponse:
         """REST endpoint to list connected Unity instances."""
@@ -385,7 +384,6 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
             return JSONResponse({"success": True, "instances": instances})
         except Exception as e:
             return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-
 
     @mcp.custom_route("/plugin/sessions", methods=["GET"])
     async def plugin_sessions_route(_: Request) -> JSONResponse:
@@ -532,7 +530,8 @@ Examples:
     try:
         _env_port = int(_env_port_str) if _env_port_str is not None else None
     except ValueError:
-        logger.warning("Invalid UNITY_MCP_HTTP_PORT value '%s', ignoring", _env_port_str)
+        logger.warning(
+            "Invalid UNITY_MCP_HTTP_PORT value '%s', ignoring", _env_port_str)
         _env_port = None
 
     http_port = args.http_port or _env_port or parsed_url.port or 8080
