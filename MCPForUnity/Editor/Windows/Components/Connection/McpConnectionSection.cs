@@ -132,7 +132,7 @@ namespace MCPForUnity.Editor.Windows.Components.Connection
             {
                 projectScopedToolsToggle.value = EditorPrefs.GetBool(
                     EditorPrefKeys.ProjectScopedToolsLocalHttp,
-                    true
+                    false
                 );
             }
 
