@@ -419,6 +419,9 @@ def vfx_raw(action: str, target: Optional[str], params: str, search_method: Opti
     except json.JSONDecodeError as e:
         print_error(f"Invalid JSON for params: {e}")
         sys.exit(1)
+    if not isinstance(extra_params, dict):
+        print_error("Invalid JSON for params: expected an object")
+        sys.exit(1)
 
     request_params: dict[str, Any] = {"action": action}
     if target:
@@ -428,7 +431,6 @@ def vfx_raw(action: str, target: Optional[str], params: str, search_method: Opti
 
     # Merge extra params
     request_params.update(extra_params)
-
     try:
         result = run_command("manage_vfx", request_params, config)
         click.echo(format_output(result, config.format))
