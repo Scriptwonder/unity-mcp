@@ -355,8 +355,17 @@ def create_mcp_server(project_scoped_tools: bool) -> FastMCP:
                         session_id = sid
                         break
 
-            if not session_id:
-                # Use first available session
+                # If a specific unity_instance was requested but not found, return an error
+                if not session_id:
+                    return JSONResponse(
+                        {
+                            "success": False,
+                            "error": f"Unity instance '{unity_instance}' not found",
+                        },
+                        status_code=404,
+                    )
+            else:
+                # No specific unity_instance requested: use first available session
                 session_id = next(iter(sessions.sessions.keys()))
 
             # Send command to Unity
