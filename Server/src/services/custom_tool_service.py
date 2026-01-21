@@ -20,6 +20,7 @@ from transport.legacy.unity_connection import (
 )
 from transport.plugin_hub import PluginHub
 from services.tools import get_unity_instance_from_context
+from services.registry import get_registered_tools
 
 logger = logging.getLogger("mcp-for-unity-server")
 
@@ -287,8 +288,18 @@ class CustomToolService:
     def register_global_tools(self, tools: list[ToolDefinitionModel]) -> None:
         if self._project_scoped_tools:
             return
+        builtin_names = self._get_builtin_tool_names()
         for tool in tools:
+            if tool.name in builtin_names:
+                logger.info(
+                    "Skipping global custom tool registration for built-in tool '%s'",
+                    tool.name,
+                )
+                continue
             self._register_global_tool(tool)
+
+    def _get_builtin_tool_names(self) -> set[str]:
+        return {tool["name"] for tool in get_registered_tools()}
 
     def _register_global_tool(self, definition: ToolDefinitionModel) -> None:
         existing = self._global_tools.get(definition.name)
