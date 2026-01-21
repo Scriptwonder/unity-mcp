@@ -5,9 +5,9 @@ import pytest
 
 
 # locate server src dynamically to avoid hardcoded layout assumptions
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]  # tests/integration -> tests -> Server
 candidates = [
-    ROOT / "Server",
+    ROOT / "src",
 ]
 SRC = next((p for p in candidates if p.exists()), None)
 if SRC is None:
@@ -16,11 +16,6 @@ if SRC is None:
         "MCP for Unity server source not found. Tried:\n" + searched,
         allow_module_level=True,
     )
-
-
-@pytest.mark.skip(reason="TODO: ensure server logs only to stderr and rotating file")
-def test_no_stdout_output_from_tools():
-    pass
 
 
 def test_no_print_statements_in_codebase():

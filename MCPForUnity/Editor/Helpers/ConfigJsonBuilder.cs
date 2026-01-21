@@ -77,6 +77,11 @@ namespace MCPForUnity.Editor.Helpers
                 {
                     unity["type"] = "http";
                 }
+                // Also add type for Claude Code (uses mcpServers layout but needs type field)
+                else if (client?.name == "Claude Code")
+                {
+                    unity["type"] = "http";
+                }
             }
             else
             {
@@ -110,8 +115,8 @@ namespace MCPForUnity.Editor.Helpers
                 }
             }
 
-            // Remove type for non-VSCode clients
-            if (!isVSCode && unity["type"] != null)
+            // Remove type for non-VSCode clients (except Claude Code which needs it)
+            if (!isVSCode && client?.name != "Claude Code" && unity["type"] != null)
             {
                 unity.Remove("type");
             }
@@ -154,10 +159,11 @@ namespace MCPForUnity.Editor.Helpers
         private static IList<string> BuildUvxArgs(string fromUrl, string packageName)
         {
             // Dev mode: force a fresh install/resolution (avoids stale cached builds while iterating).
-            // `--no-cache` is the key flag; `--refresh` ensures metadata is revalidated.
+            // `--no-cache` avoids reading from cache; `--refresh` ensures metadata is revalidated.
+            // Note: --reinstall is not supported by uvx and will cause a warning.
             // Keep ordering consistent with other uvx builders: dev flags first, then --from <url>, then package name.
             var args = new List<string>();
-            
+
             // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
             if (AssetPathUtility.ShouldForceUvxRefresh())
             {

@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using MCPForUnity.Editor.Constants;
@@ -598,6 +599,75 @@ namespace MCPForUnity.Editor.Services
             {
                 return false;
             }
+        }
+
+        public bool IsLocalHttpServerReachable()
+        {
+            try
+            {
+                string httpUrl = HttpEndpointUtility.GetBaseUrl();
+                if (!IsLocalUrl(httpUrl))
+                {
+                    return false;
+                }
+
+                if (!Uri.TryCreate(httpUrl, UriKind.Absolute, out var uri) || uri.Port <= 0)
+                {
+                    return false;
+                }
+
+                return TryConnectToLocalPort(uri.Host, uri.Port, timeoutMs: 50);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool TryConnectToLocalPort(string host, int port, int timeoutMs)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(host))
+                {
+                    host = "127.0.0.1";
+                }
+
+                var hosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { host };
+                if (host == "localhost" || host == "0.0.0.0")
+                {
+                    hosts.Add("127.0.0.1");
+                }
+                if (host == "::" || host == "0:0:0:0:0:0:0:0")
+                {
+                    hosts.Add("::1");
+                }
+
+                foreach (var target in hosts)
+                {
+                    try
+                    {
+                        using (var client = new TcpClient())
+                        {
+                            var connectTask = client.ConnectAsync(target, port);
+                            if (connectTask.Wait(timeoutMs) && client.Connected)
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore per-host failures.
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore probe failures and treat as unreachable.
+            }
+
+            return false;
         }
 
         private bool StopLocalHttpServerInternal(bool quiet, int? portOverride = null, bool allowNonLocalUrl = false)
@@ -1240,10 +1310,16 @@ namespace MCPForUnity.Editor.Services
             }
 
             // Use central helper that checks both DevModeForceServerRefresh AND local path detection.
+            // Note: --reinstall is not supported by uvx, use --no-cache --refresh instead
             string devFlags = AssetPathUtility.ShouldForceUvxRefresh() ? "--no-cache --refresh " : string.Empty;
+            bool projectScopedTools = EditorPrefs.GetBool(
+                EditorPrefKeys.ProjectScopedToolsLocalHttp,
+                true
+            );
+            string scopedFlag = projectScopedTools ? " --project-scoped-tools" : string.Empty;
             string args = string.IsNullOrEmpty(fromUrl)
-                ? $"{devFlags}{packageName} --transport http --http-url {httpUrl}"
-                : $"{devFlags}--from {fromUrl} {packageName} --transport http --http-url {httpUrl}";
+                ? $"{devFlags}{packageName} --transport http --http-url {httpUrl}{scopedFlag}"
+                : $"{devFlags}--from {fromUrl} {packageName} --transport http --http-url {httpUrl}{scopedFlag}";
 
             fileName = uvxPath;
             arguments = args;

@@ -107,7 +107,8 @@ namespace MCPForUnity.Editor.Helpers
         {
             if (string.Equals(alias, "lit", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(alias, "default", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(alias, "default_lit", StringComparison.OrdinalIgnoreCase))
+                string.Equals(alias, "default_lit", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(alias, "standard", StringComparison.OrdinalIgnoreCase))
             {
                 return ResolveDefaultLitShader(pipeline);
             }
