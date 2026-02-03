@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 namespace MCPForUnity.Editor.Services.Transport
 {
     /// <summary>
-    /// Abstraction for MCP transport implementations (e.g. WebSocket push, stdio).
+    /// Abstraction for MCP transport implementations (e.g. WebSocket push).
     /// </summary>
     public interface IMcpTransportClient
     {

@@ -83,7 +83,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
             if (uvxPathOverride != null)
                 uvxPathOverride.tooltip = "Override path to uvx executable. Leave empty for auto-detection.";
             if (gitUrlOverride != null)
-                gitUrlOverride.tooltip = "Override server source for uvx --from. Leave empty to use default PyPI package. Example local dev: /path/to/unity-mcp/Server";
+                gitUrlOverride.tooltip = "Override server source for uvx --from. Leave empty to use default PyPI package. Example local dev: /path/to/unity-mcp";
             if (debugLogsToggle != null)
             {
                 debugLogsToggle.tooltip = "Enable verbose debug logging to the Unity Console.";
@@ -99,7 +99,7 @@ namespace MCPForUnity.Editor.Windows.Components.Advanced
                     forceRefreshLabel.tooltip = devModeForceRefreshToggle.tooltip;
             }
             if (testConnectionButton != null)
-                testConnectionButton.tooltip = "Test the connection between Unity and the MCP server.";
+                testConnectionButton.tooltip = "Test the connection between Unity and the CLI bridge server.";
             if (deploySourcePath != null)
                 deploySourcePath.tooltip = "Copy a MCPForUnity folder into this project's package location.";
 

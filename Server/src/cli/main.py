@@ -64,14 +64,14 @@ click.Group.resolve_command = _resolve_command_with_suggestions  # type: ignore[
     "--host", "-h",
     default="127.0.0.1",
     envvar="UNITY_MCP_HOST",
-    help="MCP server host address."
+    help="CLI bridge host address."
 )
 @click.option(
     "--port", "-p",
     default=8080,
     type=int,
     envvar="UNITY_MCP_HTTP_PORT",
-    help="MCP server port."
+    help="CLI bridge port."
 )
 @click.option(
     "--timeout", "-t",
@@ -102,7 +102,7 @@ click.Group.resolve_command = _resolve_command_with_suggestions  # type: ignore[
 def cli(ctx: Context, host: str, port: int, timeout: int, format: str, instance: Optional[str], verbose: bool):
     """Unity MCP Command Line Interface.
 
-    Control Unity Editor directly from the command line using the Model Context Protocol.
+    Control Unity Editor directly from the command line via the Unity CLI bridge.
 
     \b
     Examples:
@@ -113,8 +113,8 @@ def cli(ctx: Context, host: str, port: int, timeout: int, format: str, instance:
 
     \b
     Environment Variables:
-        UNITY_MCP_HOST      Server host (default: 127.0.0.1)
-        UNITY_MCP_HTTP_PORT Server port (default: 8080)
+        UNITY_MCP_HOST      CLI bridge host (default: 127.0.0.1)
+        UNITY_MCP_HTTP_PORT CLI bridge port (default: 8080)
         UNITY_MCP_TIMEOUT   Timeout in seconds (default: 30)
         UNITY_MCP_FORMAT    Output format (default: text)
         UNITY_MCP_INSTANCE  Target Unity instance
@@ -138,14 +138,14 @@ def cli(ctx: Context, host: str, port: int, timeout: int, format: str, instance:
 @cli.command("status")
 @pass_context
 def status(ctx: Context):
-    """Check connection status to Unity MCP server."""
+    """Check connection status to Unity CLI bridge."""
     config = ctx.config or get_config()
 
     click.echo(f"Checking connection to {config.host}:{config.port}...")
 
     if run_check_connection(config):
         print_success(
-            f"Connected to Unity MCP server at {config.host}:{config.port}")
+            f"Connected to Unity CLI bridge at {config.host}:{config.port}")
 
         # Try to get Unity instances
         try:
@@ -165,7 +165,7 @@ def status(ctx: Context):
             print_info(f"Could not retrieve Unity instances: {e}")
     else:
         print_error(
-            f"Cannot connect to Unity MCP server at {config.host}:{config.port}")
+            f"Cannot connect to Unity CLI bridge at {config.host}:{config.port}")
         sys.exit(1)
 
 

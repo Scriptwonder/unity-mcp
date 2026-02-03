@@ -1,7 +1,6 @@
 using System;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services.Transport;
-using MCPForUnity.Editor.Services.Transport.Transports;
 
 namespace MCPForUnity.Editor.Services
 {
@@ -11,7 +10,6 @@ namespace MCPForUnity.Editor.Services
     public static class MCPServiceLocator
     {
         private static IBridgeControlService _bridgeService;
-        private static IClientConfigurationService _clientService;
         private static IPathResolverService _pathService;
         private static ITestRunnerService _testRunnerService;
         private static IPackageUpdateService _packageUpdateService;
@@ -22,7 +20,6 @@ namespace MCPForUnity.Editor.Services
         private static IPackageDeploymentService _packageDeploymentService;
 
         public static IBridgeControlService Bridge => _bridgeService ??= new BridgeControlService();
-        public static IClientConfigurationService Client => _clientService ??= new ClientConfigurationService();
         public static IPathResolverService Paths => _pathService ??= new PathResolverService();
         public static ITestRunnerService Tests => _testRunnerService ??= new TestRunnerService();
         public static IPackageUpdateService Updates => _packageUpdateService ??= new PackageUpdateService();
@@ -41,8 +38,6 @@ namespace MCPForUnity.Editor.Services
         {
             if (implementation is IBridgeControlService b)
                 _bridgeService = b;
-            else if (implementation is IClientConfigurationService c)
-                _clientService = c;
             else if (implementation is IPathResolverService p)
                 _pathService = p;
             else if (implementation is ITestRunnerService t)
@@ -67,7 +62,6 @@ namespace MCPForUnity.Editor.Services
         public static void Reset()
         {
             (_bridgeService as IDisposable)?.Dispose();
-            (_clientService as IDisposable)?.Dispose();
             (_pathService as IDisposable)?.Dispose();
             (_testRunnerService as IDisposable)?.Dispose();
             (_packageUpdateService as IDisposable)?.Dispose();
@@ -78,7 +72,6 @@ namespace MCPForUnity.Editor.Services
             (_packageDeploymentService as IDisposable)?.Dispose();
 
             _bridgeService = null;
-            _clientService = null;
             _pathService = null;
             _testRunnerService = null;
             _packageUpdateService = null;

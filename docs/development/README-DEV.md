@@ -5,6 +5,8 @@
 
 Welcome to the MCP for Unity development environment! This directory contains tools and utilities to streamline MCP for Unity core development.
 
+> **Note**: The repo now ships a CLI-only bridge server. MCP client configurators and stdio-related docs are legacy and live under `Server/legacy_mcp`.
+
 ## 🛠️ Development Setup
 
 ### Installing Development Dependencies
@@ -12,31 +14,20 @@ Welcome to the MCP for Unity development environment! This directory contains to
 To contribute or run tests, you need to install the development dependencies using `uv`:
 
 ```bash
-# Navigate to the server source directory
-cd Server
-
-# Install the package in editable mode with dev dependencies
+# From the repo root
 uv pip install -e ".[dev]"
 ```
 
 This installs:
 
-- **Runtime dependencies**: `httpx`, `fastmcp`, `mcp`, `pydantic`, `tomli`
-- **Development dependencies**: `pytest`, `pytest-asyncio`
+- **Runtime dependencies**: `httpx`, `pydantic`, `fastapi`, `uvicorn`, `click`
+- **Development dependencies**: `pytest`, `pytest-asyncio`, `pytest-cov`
 
 ### Running Tests
 
 ```bash
-# From the server source directory
-cd Server
-uv run pytest tests/ -v
-```
-
-Or from the repo root:
-
-```bash
-# Using uv from the server directory
-cd Server && uv run pytest tests/ -v
+# CLI-only server currently has no dedicated test suite.
+# Legacy MCP server tests live in Server/legacy_mcp/tests.
 ```
 
 To run only integration tests:

@@ -1,13 +1,13 @@
 # Unity MCP CLI Usage Guide
 
-The Unity MCP CLI provides command-line access to control the Unity Editor through the Model Context Protocol. It currently only supports local HTTP.
+The Unity MCP CLI provides command-line access to control the Unity Editor through the HTTP CLI bridge.
 
 Note: Some tools are still experimental and might fail under some circumstances. Please submit an issue to help us make it better.
 
 ## Installation
 
 ```bash
-cd Server
+# From the repo root
 pip install -e .
 # Or with uv:
 uv pip install -e .
@@ -16,6 +16,9 @@ uv pip install -e .
 ## Quick Start
 
 ```bash
+# Start the CLI bridge server (HTTP)
+mcp-for-unity --http-url http://localhost:8080
+
 # Check connection
 unity-mcp status
 
@@ -29,12 +32,14 @@ unity-mcp scene hierarchy
 unity-mcp gameobject find "Player"
 ```
 
+Unity will auto-connect to the local server when HTTP scope is Local, so you don't need to open the MCP for Unity window.
+
 ## Global Options
 
 | Option | Env Variable | Description |
 |--------|--------------|-------------|
-| `-h, --host` | `UNITY_MCP_HOST` | Server host (default: 127.0.0.1) |
-| `-p, --port` | `UNITY_MCP_HTTP_PORT` | Server port (default: 8080) |
+| `-h, --host` | `UNITY_MCP_HOST` | CLI bridge host (default: 127.0.0.1) |
+| `-p, --port` | `UNITY_MCP_HTTP_PORT` | CLI bridge port (default: 8080) |
 | `-t, --timeout` | `UNITY_MCP_TIMEOUT` | Timeout in seconds (default: 30) |
 | `-f, --format` | `UNITY_MCP_FORMAT` | Output format: text, json, table |
 | `-i, --instance` | `UNITY_MCP_INSTANCE` | Target Unity instance |
@@ -316,7 +321,7 @@ unity-mcp ui create-image "Background" --parent "MainCanvas"
 
 ### Raw Commands
 
-For any MCP tool not covered by dedicated commands:
+For any tool not covered by dedicated commands:
 
 ```bash
 unity-mcp raw manage_scene '{"action": "get_hierarchy", "max_nodes": 100}'
@@ -386,14 +391,14 @@ export UNITY_MCP_INSTANCE=MyProject@abc123
 # Check server status
 unity-mcp status
 
-# Verify Unity is running with MCP plugin
-# Check Unity console for MCP connection messages
+# Verify Unity is running with the MCP for Unity plugin
+# Check Unity console for CLI bridge connection messages
 ```
 
 ### Common Errors
 
 | Error | Solution |
 |-------|----------|
-| Cannot connect to server | Ensure Unity MCP server is running |
+| Cannot connect to server | Ensure Unity CLI bridge is running |
 | Unknown command type | Unity plugin may not support this tool |
 | Timeout | Increase timeout with `-t 60` |

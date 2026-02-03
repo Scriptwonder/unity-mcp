@@ -3,7 +3,7 @@ using Newtonsoft.Json.Linq;
 namespace MCPForUnity.Editor.Models
 {
     /// <summary>
-    /// Represents a command received from the MCP client
+    /// Represents a command received from the CLI bridge server
     /// </summary>
     public class Command
     {
@@ -18,4 +18,3 @@ namespace MCPForUnity.Editor.Models
         public JObject @params { get; set; }
     }
 }
-

@@ -83,7 +83,7 @@ namespace MCPForUnity.Editor.Services
                     // built-in pipeline schedules SaveModifiedSceneTask early, but that task uses
                     // EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo which throws once play mode is
                     // active. To minimize that window we pre-save dirty scenes and disable domain reload (so the
-                    // MCP bridge stays alive). We do NOT force runSynchronously here because that can freeze the
+                    // CLI bridge stays alive). We do NOT force runSynchronously here because that can freeze the
                     // editor in some projects. If the TestRunner still hits the save task after entering play, the
                     // run can fail; in that case, rerun from a clean Edit Mode state.
                     adjustedPlayModeOptions = EnsurePlayModeRunsWithoutDomainReload(

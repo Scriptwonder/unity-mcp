@@ -30,9 +30,7 @@ namespace MCPForUnity.Editor.Services
                 var transport = MCPServiceLocator.TransportManager;
 
                 Task stopHttp = transport.StopAsync(TransportMode.Http);
-                Task stopStdio = transport.StopAsync(TransportMode.Stdio);
-
-                try { Task.WaitAll(new[] { stopHttp, stopStdio }, 750); } catch { }
+                try { Task.WaitAll(new[] { stopHttp }, 750); } catch { }
             }
             catch (Exception ex)
             {
@@ -43,15 +41,13 @@ namespace MCPForUnity.Editor.Services
             // 2) Stop local HTTP server if it was Unity-managed (best-effort).
             try
             {
-                bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
                 string scope = string.Empty;
                 try { scope = EditorPrefs.GetString(EditorPrefKeys.HttpTransportScope, string.Empty); } catch { }
 
                 bool stopped = false;
                 bool httpLocalSelected =
-                    useHttp &&
-                    (string.Equals(scope, "local", StringComparison.OrdinalIgnoreCase)
-                     || (string.IsNullOrEmpty(scope) && MCPServiceLocator.Server.IsLocalUrl()));
+                    string.Equals(scope, "local", StringComparison.OrdinalIgnoreCase)
+                    || (string.IsNullOrEmpty(scope) && MCPServiceLocator.Server.IsLocalUrl());
 
                 if (httpLocalSelected)
                 {
@@ -61,7 +57,7 @@ namespace MCPForUnity.Editor.Services
                 }
 
                 // Always attempt to stop a Unity-managed server if one exists.
-                // This covers cases where the user switched transports (e.g. to stdio) or StopLocalHttpServer refused.
+                // This covers cases where the server URL was changed or StopLocalHttpServer refused.
                 if (!stopped)
                 {
                     MCPServiceLocator.Server.StopManagedLocalHttpServer();
@@ -74,4 +70,3 @@ namespace MCPForUnity.Editor.Services
         }
     }
 }
-

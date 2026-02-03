@@ -65,13 +65,14 @@ namespace MyProject.Editor.CustomTools
 }
 ```
 
-## Step 2: Refresh Your MCP Client
+## Step 2: Refresh the CLI Bridge Tool Registry
 
-Once you've created your tool, you'll need to let your AI assistant know about it. While the MCP server can dynamically register new tools, not all clients pick up these changes automatically.
+Once you've created your tool, Unity will re-register tools on the next session. If the CLI bridge server is already running and the tool doesn't appear:
 
-**The easiest approach:** Disconnect and reconnect to the MCP server in your client. This forces a fresh tool discovery.
+- Stop/Start the Unity session in the Connect tab, or
+- Restart the CLI bridge server.
 
-**If that doesn't work:** Some clients (like Windsurf) may need you to remove and reconfigure the MCP for Unity server entirely. It's a bit more work, but it guarantees your new tools will appear.
+Then re-run `unity-mcp tool list` to confirm the tool is available.
 
 ## Step 3: List and Call Your Tool from the CLI
 

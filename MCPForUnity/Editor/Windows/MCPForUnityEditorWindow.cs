@@ -6,7 +6,6 @@ using MCPForUnity.Editor.Constants;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Windows.Components.Advanced;
-using MCPForUnity.Editor.Windows.Components.ClientConfig;
 using MCPForUnity.Editor.Windows.Components.Connection;
 using MCPForUnity.Editor.Windows.Components.Tools;
 using MCPForUnity.Editor.Windows.Components.Validation;
@@ -21,7 +20,6 @@ namespace MCPForUnity.Editor.Windows
     {
         // Section controllers
         private McpConnectionSection connectionSection;
-        private McpClientConfigSection clientConfigSection;
         private McpValidationSection validationSection;
         private McpAdvancedSection advancedSection;
         private McpToolsSection toolsSection;
@@ -199,26 +197,6 @@ namespace MCPForUnity.Editor.Windows
                 var connectionRoot = connectionTree.Instantiate();
                 clientsContainer.Add(connectionRoot);
                 connectionSection = new McpConnectionSection(connectionRoot);
-                connectionSection.OnManualConfigUpdateRequested += () =>
-                    clientConfigSection?.UpdateManualConfiguration();
-                connectionSection.OnTransportChanged += () =>
-                    clientConfigSection?.RefreshSelectedClient(forceImmediate: true);
-            }
-
-            // Load and initialize Client Configuration section
-            var clientConfigTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
-                $"{basePath}/Editor/Windows/Components/ClientConfig/McpClientConfigSection.uxml"
-            );
-            if (clientConfigTree != null)
-            {
-                var clientConfigRoot = clientConfigTree.Instantiate();
-                clientsContainer.Add(clientConfigRoot);
-                clientConfigSection = new McpClientConfigSection(clientConfigRoot);
-
-                // Wire up transport mismatch detection: when client status is checked,
-                // update the connection section's warning banner if there's a mismatch
-                clientConfigSection.OnClientTransportDetected += (clientName, transport) =>
-                    connectionSection?.UpdateTransportMismatchWarning(clientName, transport);
             }
 
             // Load and initialize Validation section
@@ -243,8 +221,6 @@ namespace MCPForUnity.Editor.Windows
                 advancedSection = new McpAdvancedSection(advancedRoot);
 
                 // Wire up events from Advanced section
-                advancedSection.OnGitUrlChanged += () =>
-                    clientConfigSection?.UpdateManualConfiguration();
                 advancedSection.OnHttpServerCommandUpdateRequested += () =>
                     connectionSection?.UpdateHttpServerCommandDisplay();
                 advancedSection.OnTestConnectionRequested += async () =>
@@ -391,7 +367,6 @@ namespace MCPForUnity.Editor.Windows
             }
 
             advancedSection?.UpdatePathOverrides();
-            clientConfigSection?.RefreshSelectedClient();
         }
 
         private void SetupTabs()

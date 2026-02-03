@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using MCPForUnity.Editor.Constants;
-using MCPForUnity.Editor.Services.Transport.Transports;
+using UnityEditor;
 using UnityEngine;
 
 namespace MCPForUnity.Editor.Helpers
@@ -83,8 +83,8 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
-        /// Send telemetry data to MCP server for processing
-        /// This is a lightweight bridge - the actual telemetry logic is in the MCP server
+        /// Send telemetry data to the CLI bridge server for processing
+        /// This is a lightweight bridge - the actual telemetry logic is in the CLI server
         /// </summary>
         public static void RecordEvent(string eventType, Dictionary<string, object> data = null)
         {
@@ -108,9 +108,9 @@ namespace MCPForUnity.Editor.Helpers
                     telemetryData["data"] = data;
                 }
 
-                // Send to MCP server via existing bridge communication
-                // The MCP server will handle actual telemetry transmission
-                SendTelemetryToMcpServer(telemetryData);
+                // Send to CLI bridge server via existing bridge communication
+                // The CLI server will handle actual telemetry transmission
+                SendTelemetryToServer(telemetryData);
             }
             catch (Exception e)
             {
@@ -143,7 +143,7 @@ namespace MCPForUnity.Editor.Helpers
             RecordEvent("bridge_startup", new Dictionary<string, object>
             {
                 ["bridge_version"] = AssetPathUtility.GetPackageVersion(),
-                ["auto_connect"] = StdioBridgeHost.IsAutoConnectMode()
+                ["auto_connect"] = EditorPrefs.GetBool(EditorPrefKeys.AutoConnectHttp, true)
             });
         }
 
@@ -185,7 +185,7 @@ namespace MCPForUnity.Editor.Helpers
             RecordEvent("tool_execution_unity", data);
         }
 
-        private static void SendTelemetryToMcpServer(Dictionary<string, object> telemetryData)
+        private static void SendTelemetryToServer(Dictionary<string, object> telemetryData)
         {
             var sender = Volatile.Read(ref s_sender);
             if (sender != null)

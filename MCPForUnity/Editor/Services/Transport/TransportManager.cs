@@ -11,28 +11,22 @@ namespace MCPForUnity.Editor.Services.Transport
     public class TransportManager
     {
         private IMcpTransportClient _httpClient;
-        private IMcpTransportClient _stdioClient;
         private TransportState _httpState = TransportState.Disconnected("http");
-        private TransportState _stdioState = TransportState.Disconnected("stdio");
         private Func<IMcpTransportClient> _webSocketFactory;
-        private Func<IMcpTransportClient> _stdioFactory;
 
         public TransportManager()
         {
             Configure(
-                () => new WebSocketTransportClient(MCPServiceLocator.ToolDiscovery),
-                () => new StdioTransportClient());
+                () => new WebSocketTransportClient(MCPServiceLocator.ToolDiscovery));
         }
 
-        public IMcpTransportClient ActiveTransport => null; // Deprecated single-transport accessor
-        public TransportMode? ActiveMode => null; // Deprecated single-transport accessor
+        public IMcpTransportClient ActiveTransport => _httpClient; // Legacy accessor
+        public TransportMode? ActiveMode => TransportMode.Http; // Legacy accessor
 
         public void Configure(
-            Func<IMcpTransportClient> webSocketFactory,
-            Func<IMcpTransportClient> stdioFactory)
+            Func<IMcpTransportClient> webSocketFactory)
         {
             _webSocketFactory = webSocketFactory ?? throw new ArgumentNullException(nameof(webSocketFactory));
-            _stdioFactory = stdioFactory ?? throw new ArgumentNullException(nameof(stdioFactory));
         }
 
         private IMcpTransportClient GetOrCreateClient(TransportMode mode)
@@ -40,7 +34,6 @@ namespace MCPForUnity.Editor.Services.Transport
             return mode switch
             {
                 TransportMode.Http => _httpClient ??= _webSocketFactory(),
-                TransportMode.Stdio => _stdioClient ??= _stdioFactory(),
                 _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported transport mode"),
             };
         }
@@ -50,7 +43,6 @@ namespace MCPForUnity.Editor.Services.Transport
             return mode switch
             {
                 TransportMode.Http => _httpClient,
-                TransportMode.Stdio => _stdioClient,
                 _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported transport mode"),
             };
         }
@@ -88,21 +80,13 @@ namespace MCPForUnity.Editor.Services.Transport
                 finally { UpdateState(clientMode, TransportState.Disconnected(client.TransportName)); }
             }
 
-            if (mode == null)
+            if (mode == null || mode == TransportMode.Http)
             {
                 await StopClient(_httpClient, TransportMode.Http);
-                await StopClient(_stdioClient, TransportMode.Stdio);
                 return;
             }
 
-            if (mode == TransportMode.Http)
-            {
-                await StopClient(_httpClient, TransportMode.Http);
-            }
-            else
-            {
-                await StopClient(_stdioClient, TransportMode.Stdio);
-            }
+            throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported transport mode");
         }
 
         public async Task<bool> VerifyAsync(TransportMode mode)
@@ -124,7 +108,6 @@ namespace MCPForUnity.Editor.Services.Transport
             return mode switch
             {
                 TransportMode.Http => _httpState,
-                TransportMode.Stdio => _stdioState,
                 _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported transport mode"),
             };
         }
@@ -138,9 +121,6 @@ namespace MCPForUnity.Editor.Services.Transport
                 case TransportMode.Http:
                     _httpState = state;
                     break;
-                case TransportMode.Stdio:
-                    _stdioState = state;
-                    break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported transport mode");
             }
@@ -149,7 +129,6 @@ namespace MCPForUnity.Editor.Services.Transport
 
     public enum TransportMode
     {
-        Http,
-        Stdio
+        Http
     }
 }

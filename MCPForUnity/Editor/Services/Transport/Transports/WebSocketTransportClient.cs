@@ -17,7 +17,7 @@ using UnityEngine;
 namespace MCPForUnity.Editor.Services.Transport.Transports
 {
     /// <summary>
-    /// Maintains a persistent WebSocket connection to the MCP server plugin hub.
+    /// Maintains a persistent WebSocket connection to the CLI bridge server plugin hub.
     /// Handles registration, keep-alives, and command dispatch back into Unity via
     /// <see cref="TransportCommandDispatcher"/>.
     /// </summary>
@@ -662,7 +662,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                     {
                         _state = TransportState.Connected(TransportDisplayName, sessionId: _sessionId, details: _endpointUri.ToString());
                         _isConnected = true;
-                        McpLog.Info("[WebSocket] Reconnected to MCP server");
+                        McpLog.Info("[WebSocket] Reconnected to CLI bridge server");
                         return;
                     }
                 }
@@ -679,7 +679,7 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
         {
             if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var httpUri))
             {
-                throw new InvalidOperationException($"Invalid MCP base URL: {baseUrl}");
+                throw new InvalidOperationException($"Invalid CLI bridge base URL: {baseUrl}");
             }
 
             // Replace bind-only addresses with localhost for client connections

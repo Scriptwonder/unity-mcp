@@ -17,6 +17,9 @@
 
 <img alt="MCP for Unity building a scene" src="docs/images/building_scene.gif">
 
+> [!NOTE]
+> This repo now ships a **CLI-only lightweight server** (no MCP client endpoints). Legacy MCP server code is preserved in `Server/legacy_mcp`.
+
 ---
 
 ## Quick Start
@@ -25,7 +28,7 @@
 
 * **Unity 2021.3 LTS+** — [Download Unity](https://unity.com/download)
 * **Python 3.10+** and **uv** — [Install uv](https://docs.astral.sh/uv/getting-started/installation/)
-* **An MCP Client** — [Claude Desktop](https://claude.ai/download) | [Cursor](https://www.cursor.com/en/downloads) | [VS Code Copilot](https://code.visualstudio.com/docs/copilot/overview) | [Windsurf](https://windsurf.com)
+* **A terminal** — for running the local CLI
 
 ### 1. Install the Unity Package
 
@@ -58,11 +61,20 @@ openupm add com.coplaydev.unity-mcp
 
 1. In Unity: `Window > MCP for Unity`
 2. Click **Start Server** (launches HTTP server on `localhost:8080`)
-3. Select your MCP Client from the dropdown and click **Configure**
-4. Look for 🟢 "Connected ✓"
-5. **Connect your client:** Some clients (Cursor, Windsurf, Antigravity) require enabling an MCP toggle in settings, while others (Claude Desktop, Claude Code) auto-connect after configuration.
+3. Unity will auto-connect to the local server (no MCP client required)
+4. Use the CLI from your terminal
 
-**That's it!** Try a prompt like: *"Create a red, blue and yellow cube"* or *"Build a simple player controller"*
+> [!TIP]
+> **CLI usage:**
+> ```bash
+> # Start the server (HTTP)
+> mcp-for-unity --http-url http://localhost:8080
+>
+> # Use the CLI
+> unity-mcp status
+> unity-mcp scene hierarchy
+> ```
+> Unity will auto-connect to the local server when HTTP scope is Local, so the MCP for Unity window is optional.
 
 ---
 
@@ -70,85 +82,24 @@ openupm add com.coplaydev.unity-mcp
 <summary><strong>Features & Tools</strong></summary>
 
 ### Key Features
-* **Natural Language Control** — Instruct your LLM to perform Unity tasks
+* **CLI-first control** — Drive Unity Editor tasks from the terminal
 * **Powerful Tools** — Manage assets, scenes, materials, scripts, and editor functions
 * **Automation** — Automate repetitive Unity workflows
-* **Extensible** — Works with various MCP Clients
+* **Extensible** — Custom tools registered by Unity projects
 
 ### Available Tools
 `manage_asset` • `manage_editor` • `manage_gameobject` • `manage_components` • `manage_material` • `manage_prefabs` • `manage_scene` • `manage_script` • `manage_scriptable_object` • `manage_shader` • `manage_vfx` • `manage_texture` • `batch_execute` • `find_gameobjects` • `find_in_file` • `read_console` • `refresh_unity` • `run_tests` • `get_test_job` • `execute_menu_item` • `apply_text_edits` • `script_apply_edits` • `validate_script` • `create_script` • `delete_script` • `get_sha`
-
-### Available Resources
-`custom_tools` • `unity_instances` • `menu_items` • `get_tests` • `gameobject` • `gameobject_components` • `prefab_api` • `prefab_info` • `prefab_hierarchy` • `editor_state` • `editor_selection` • `editor_prefab_stage` • `project_info` • `project_tags` • `project_layers`
 
 **Performance Tip:** Use `batch_execute` for multiple operations — it's 10-100x faster than individual calls!
 </details>
 
 <details>
-<summary><strong>Manual Configuration</strong></summary>
-
-If auto-setup doesn't work, add this to your MCP client's config file:
-
-**HTTP (default — works with Claude Desktop, Cursor, Windsurf):**
-```json
-{
-  "mcpServers": {
-    "unityMCP": {
-      "url": "http://localhost:8080/mcp"
-    }
-  }
-}
-```
-
-**VS Code:**
-```json
-{
-  "servers": {
-    "unityMCP": {
-      "type": "http",
-      "url": "http://localhost:8080/mcp"
-    }
-  }
-}
-```
-
-<details>
-<summary>Stdio configuration (uvx)</summary>
-
-**macOS/Linux:**
-```json
-{
-  "mcpServers": {
-    "unityMCP": {
-      "command": "uvx",
-      "args": ["--from", "mcpforunityserver", "mcp-for-unity", "--transport", "stdio"]
-    }
-  }
-}
-```
-
-**Windows:**
-```json
-{
-  "mcpServers": {
-    "unityMCP": {
-      "command": "C:/Users/YOUR_USERNAME/AppData/Local/Microsoft/WinGet/Links/uvx.exe",
-      "args": ["--from", "mcpforunityserver", "mcp-for-unity", "--transport", "stdio"]
-    }
-  }
-}
-```
-</details>
-</details>
-
-<details>
 <summary><strong>Multiple Unity Instances</strong></summary>
 
-MCP for Unity supports multiple Unity Editor instances. To target a specific one:
+Unity MCP supports multiple Unity Editor instances. To target a specific one with the CLI:
 
-1. Ask your LLM to check the `unity_instances` resource
-2. Use `set_active_instance` with the `Name@hash` (e.g., `MyProject@abc123`)
-3. All subsequent tools route to that instance
+1. Run `unity-mcp instance list`
+2. Pass `--instance Name@hash` (or set `UNITY_MCP_INSTANCE`)
 </details>
 
 <details>
@@ -178,11 +129,9 @@ For **Strict** validation that catches undefined namespaces, types, and methods:
 
 * **Unity Bridge Not Connecting:** Check `Window > MCP for Unity` status, restart Unity
 * **Server Not Starting:** Verify `uv --version` works, check the terminal for errors
-* **Client Not Connecting:** Ensure the HTTP server is running and the URL matches your config
+* **CLI Not Connecting:** Ensure the HTTP server is running and the URL matches your CLI config
 
 **Detailed setup guides:**
-* [Fix Unity MCP and Cursor, VSCode & Windsurf](https://github.com/CoplayDev/unity-mcp/wiki/1.-Fix-Unity-MCP-and-Cursor,-VSCode-&-Windsurf) — uv/Python installation, PATH issues
-* [Fix Unity MCP and Claude Code](https://github.com/CoplayDev/unity-mcp/wiki/2.-Fix-Unity-MCP-and-Claude-Code) — Claude CLI installation
 * [Common Setup Problems](https://github.com/CoplayDev/unity-mcp/wiki/3.-Common-Setup-Problems) — macOS dyld errors, FAQ
 
 Still stuck? [Open an Issue](https://github.com/CoplayDev/unity-mcp/issues) or [Join Discord](https://discord.gg/y4p8KfzrN4)
@@ -199,7 +148,7 @@ See [README-DEV.md](docs/development/README-DEV.md) for development setup. For c
 <details>
 <summary><strong>Telemetry & Privacy</strong></summary>
 
-Anonymous, privacy-focused telemetry (no code, no project names, no personal data). Opt out with `DISABLE_TELEMETRY=true`. See [TELEMETRY.md](docs/reference/TELEMETRY.md).
+Telemetry is disabled in the CLI-only server. Legacy notes are in [TELEMETRY.md](Server/legacy_mcp/docs/TELEMETRY.md).
 </details>
 
 ---

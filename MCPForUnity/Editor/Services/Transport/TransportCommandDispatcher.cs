@@ -13,7 +13,7 @@ namespace MCPForUnity.Editor.Services.Transport
 {
     /// <summary>
     /// Centralised command execution pipeline shared by all transport implementations.
-    /// Guarantees that MCP commands are executed on the Unity main thread while preserving
+    /// Guarantees that CLI commands are executed on the Unity main thread while preserving
     /// the legacy response format expected by the server.
     /// </summary>
     [InitializeOnLoad]

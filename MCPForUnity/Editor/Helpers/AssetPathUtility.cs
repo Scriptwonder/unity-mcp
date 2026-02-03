@@ -198,7 +198,7 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
-        /// Gets the package source for the MCP server (used with uvx --from).
+        /// Gets the package source for the CLI bridge server (used with uvx --from).
         /// Checks for EditorPrefs override first (supports git URLs, file:// paths, etc.),
         /// then falls back to PyPI package reference.
         /// </summary>
@@ -209,7 +209,12 @@ namespace MCPForUnity.Editor.Helpers
             string sourceOverride = EditorPrefs.GetString(EditorPrefKeys.GitUrlOverride, "");
             if (!string.IsNullOrEmpty(sourceOverride))
             {
-                return sourceOverride;
+                string normalized = NormalizeServerSourceOverride(sourceOverride, out bool updatedPref);
+                if (updatedPref)
+                {
+                    EditorPrefs.SetString(EditorPrefKeys.GitUrlOverride, normalized);
+                }
+                return normalized;
             }
 
             // Default to PyPI package (avoids Windows long path issues with git clone)
@@ -221,6 +226,111 @@ namespace MCPForUnity.Editor.Helpers
             }
 
             return $"mcpforunityserver=={version}";
+        }
+
+        private static string NormalizeServerSourceOverride(string sourceOverride, out bool updatedPref)
+        {
+            updatedPref = false;
+            if (string.IsNullOrWhiteSpace(sourceOverride))
+                return sourceOverride;
+
+            if (!TryGetLocalPathFromOverride(sourceOverride, out string localPath, out bool hadFileScheme))
+            {
+                return sourceOverride;
+            }
+
+            string fullPath = localPath;
+            try
+            {
+                fullPath = Path.GetFullPath(localPath);
+            }
+            catch
+            {
+                return sourceOverride;
+            }
+
+            if (Directory.Exists(fullPath) && !HasPythonProject(fullPath))
+            {
+                string parent = Directory.GetParent(fullPath)?.FullName;
+                if (!string.IsNullOrEmpty(parent) && HasPythonProject(parent))
+                {
+                    McpLog.Warn(
+                        $"Server source override '{fullPath}' does not contain pyproject.toml; using parent '{parent}'.");
+                    fullPath = parent;
+                    updatedPref = true;
+                }
+                else
+                {
+                    McpLog.Warn(
+                        $"Server source override '{fullPath}' does not contain pyproject.toml or setup.py.");
+                }
+            }
+
+            if (!updatedPref)
+            {
+                return sourceOverride;
+            }
+
+            if (hadFileScheme)
+            {
+                try
+                {
+                    return new Uri(fullPath).AbsoluteUri;
+                }
+                catch
+                {
+                    return "file://" + fullPath;
+                }
+            }
+
+            return fullPath;
+        }
+
+        private static bool TryGetLocalPathFromOverride(string sourceOverride, out string localPath, out bool hadFileScheme)
+        {
+            localPath = null;
+            hadFileScheme = false;
+
+            if (string.IsNullOrWhiteSpace(sourceOverride))
+                return false;
+
+            if (sourceOverride.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+            {
+                hadFileScheme = true;
+                try
+                {
+                    if (Uri.TryCreate(sourceOverride, UriKind.Absolute, out var uri) && uri.IsFile)
+                    {
+                        localPath = uri.LocalPath;
+                        return true;
+                    }
+                }
+                catch
+                {
+                    // Fall back to best-effort string slicing below.
+                }
+
+                localPath = sourceOverride.Substring("file://".Length);
+                return !string.IsNullOrEmpty(localPath);
+            }
+
+            if (Path.IsPathRooted(sourceOverride))
+            {
+                localPath = sourceOverride;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool HasPythonProject(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return false;
+
+            return File.Exists(Path.Combine(path, "pyproject.toml")) ||
+                   File.Exists(Path.Combine(path, "setup.py")) ||
+                   File.Exists(Path.Combine(path, "setup.cfg"));
         }
 
         /// <summary>

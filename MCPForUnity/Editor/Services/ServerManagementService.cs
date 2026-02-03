@@ -14,7 +14,7 @@ using UnityEngine;
 namespace MCPForUnity.Editor.Services
 {
     /// <summary>
-    /// Service for managing MCP server lifecycle
+    /// Service for managing the Unity CLI bridge server lifecycle
     /// </summary>
     public class ServerManagementService : IServerManagementService
     {
@@ -262,7 +262,7 @@ namespace MCPForUnity.Editor.Services
         }
 
         /// <summary>
-        /// Clear the local uvx cache for the MCP server package
+        /// Clear the local uvx cache for the CLI bridge server package
         /// </summary>
         /// <returns>True if successful, false otherwise</returns>
         public bool ClearUvxCache()
@@ -460,7 +460,7 @@ namespace MCPForUnity.Editor.Services
 
             if (EditorUtility.DisplayDialog(
                 "Start Local HTTP Server",
-                $"This will start the MCP server in HTTP mode in a new terminal window:\n\n{launchCommand}\n\n" +
+                $"This will start the CLI bridge server in HTTP mode in a new terminal window:\n\n{launchCommand}\n\n" +
                 "Continue?",
                 "Start Server",
                 "Cancel"))
@@ -706,7 +706,7 @@ namespace MCPForUnity.Editor.Services
 
                 // Guardrails:
                 // - Never terminate the Unity Editor process.
-                // - Only terminate processes that look like the MCP server (uv/uvx/python running mcp-for-unity).
+                // - Only terminate processes that look like the CLI bridge server (uv/uvx/python running mcp-for-unity).
                 // This prevents accidental termination of unrelated services (including Unity itself).
                 int unityPid = GetCurrentProcessIdSafe();
                 bool stoppedAny = false;
@@ -1288,13 +1288,6 @@ namespace MCPForUnity.Editor.Services
             displayCommand = null;
             error = null;
 
-            bool useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
-            if (!useHttpTransport)
-            {
-                error = "HTTP transport is disabled. Enable it in the MCP For Unity window first.";
-                return false;
-            }
-
             string httpUrl = HttpEndpointUtility.GetBaseUrl();
             if (!IsLocalUrl())
             {
@@ -1360,8 +1353,7 @@ namespace MCPForUnity.Editor.Services
         /// </summary>
         public bool CanStartLocalServer()
         {
-            bool useHttpTransport = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
-            return useHttpTransport && IsLocalUrl();
+            return IsLocalUrl();
         }
 
         /// <summary>

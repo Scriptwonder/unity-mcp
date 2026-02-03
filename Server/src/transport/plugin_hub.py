@@ -26,6 +26,7 @@ from transport.models import (
     SessionList,
     SessionDetails,
 )
+from utils.console import log_event
 
 logger = logging.getLogger("mcp-for-unity-server")
 
@@ -78,6 +79,15 @@ class PluginHub(WebSocketEndpoint):
 
     async def on_connect(self, websocket: WebSocket) -> None:
         await websocket.accept()
+        client = websocket.client
+        log_event(
+            logger,
+            logging.INFO,
+            "UNITY",
+            "Socket connected",
+            host=client.host if client else None,
+            port=client.port if client else None,
+        )
         msg = WelcomeMessage(
             serverTimeout=self.SERVER_TIMEOUT,
             keepAliveInterval=self.KEEP_ALIVE_INTERVAL,
@@ -86,7 +96,13 @@ class PluginHub(WebSocketEndpoint):
 
     async def on_receive(self, websocket: WebSocket, data: Any) -> None:
         if not isinstance(data, dict):
-            logger.warning(f"Received non-object payload from plugin: {data}")
+            log_event(
+                logger,
+                logging.WARNING,
+                "UNITY",
+                "Invalid payload",
+                kind=type(data).__name__,
+            )
             return
 
         message_type = data.get("type")
@@ -100,9 +116,16 @@ class PluginHub(WebSocketEndpoint):
             elif message_type == "command_result":
                 await self._handle_command_result(CommandResultMessage(**data))
             else:
-                logger.debug(f"Ignoring plugin message: {data}")
+                logger.debug("Ignoring plugin message type: %s", message_type)
         except Exception as e:
-            logger.error(f"Error handling message type {message_type}: {e}")
+            log_event(
+                logger,
+                logging.ERROR,
+                "UNITY",
+                "Message handling error",
+                type=message_type,
+                error=str(e),
+            )
 
     async def on_disconnect(self, websocket: WebSocket, close_code: int) -> None:
         cls = type(self)
@@ -113,6 +136,9 @@ class PluginHub(WebSocketEndpoint):
             session_id = next(
                 (sid for sid, ws in cls._connections.items() if ws is websocket), None)
             if session_id:
+                session_details = None
+                if cls._registry:
+                    session_details = await cls._registry.get_session(session_id)
                 cls._connections.pop(session_id, None)
                 # Fail-fast any in-flight commands for this session to avoid waiting for COMMAND_TIMEOUT.
                 pending_ids = [
@@ -132,8 +158,17 @@ class PluginHub(WebSocketEndpoint):
                         )
                 if cls._registry:
                     await cls._registry.unregister(session_id)
-                logger.info(
-                    f"Plugin session {session_id} disconnected ({close_code})")
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "UNITY",
+                    "Disconnected",
+                    session=session_id,
+                    project=session_details.project_name if session_details else None,
+                    hash=session_details.project_hash if session_details else None,
+                    unity=session_details.unity_version if session_details else None,
+                    code=close_code,
+                )
 
     # ------------------------------------------------------------------
     # Public API
@@ -293,7 +328,16 @@ class PluginHub(WebSocketEndpoint):
         session = await registry.register(session_id, project_name, project_hash, unity_version)
         async with lock:
             cls._connections[session.session_id] = websocket
-        logger.info(f"Plugin registered: {project_name} ({project_hash})")
+        log_event(
+            logger,
+            logging.INFO,
+            "UNITY",
+            "Registered",
+            session=session_id,
+            project=project_name,
+            hash=project_hash,
+            unity=unity_version,
+        )
 
     async def _handle_register_tools(self, websocket: WebSocket, payload: RegisterToolsMessage) -> None:
         cls = type(self)
@@ -308,29 +352,21 @@ class PluginHub(WebSocketEndpoint):
                 (sid for sid, ws in cls._connections.items() if ws is websocket), None)
 
         if not session_id:
-            logger.warning("Received register_tools from unknown connection")
+            log_event(logger, logging.WARNING, "UNITY", "register_tools from unknown connection")
             return
 
         await registry.register_tools_for_session(session_id, payload.tools)
-        logger.info(
-            f"Registered {len(payload.tools)} tools for session {session_id}")
-
-        try:
-            from services.custom_tool_service import CustomToolService
-
-            service = CustomToolService.get_instance()
-            service.register_global_tools(payload.tools)
-        except RuntimeError as exc:
-            logger.debug(
-                "Skipping global custom tool registration: CustomToolService not initialized yet (%s)",
-                exc,
-            )
-        except Exception as exc:
-            logger.warning(
-                "Unexpected error during global custom tool registration; "
-                "custom tools may not be available globally",
-                exc_info=exc,
-            )
+        session = await registry.get_session(session_id)
+        log_event(
+            logger,
+            logging.INFO,
+            "UNITY",
+            "Tools registered",
+            session=session_id,
+            project=session.project_name if session else None,
+            hash=session.project_hash if session else None,
+            count=len(payload.tools),
+        )
 
     async def _handle_command_result(self, payload: CommandResultMessage) -> None:
         cls = type(self)
@@ -341,7 +377,7 @@ class PluginHub(WebSocketEndpoint):
         result = payload.result
 
         if not command_id:
-            logger.warning(f"Command result missing id: {payload}")
+            log_event(logger, logging.WARNING, "UNITY", "Command result missing id")
             return
 
         async with lock:
@@ -437,7 +473,7 @@ class PluginHub(WebSocketEndpoint):
             if not target_hash and session_count > 1:
                 raise RuntimeError(
                     "Multiple Unity instances are connected. "
-                    "Call set_active_instance with Name@hash from mcpforunity://instances."
+                    "Pass unity_instance as Name@hash to target a specific editor."
                 )
             if wait_started is None:
                 wait_started = time.monotonic()
@@ -458,7 +494,7 @@ class PluginHub(WebSocketEndpoint):
         if session_id is None and not target_hash and session_count > 1:
             raise RuntimeError(
                 "Multiple Unity instances are connected. "
-                "Call set_active_instance with Name@hash from mcpforunity://instances."
+                "Pass unity_instance as Name@hash to target a specific editor."
             )
 
         if session_id is None:

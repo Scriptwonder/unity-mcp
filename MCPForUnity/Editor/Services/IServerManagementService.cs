@@ -6,7 +6,7 @@ namespace MCPForUnity.Editor.Services
     public interface IServerManagementService
     {
         /// <summary>
-        /// Clear the local uvx cache for the MCP server package
+        /// Clear the local uvx cache for the CLI bridge server package
         /// </summary>
         /// <returns>True if successful, false otherwise</returns>
         bool ClearUvxCache();

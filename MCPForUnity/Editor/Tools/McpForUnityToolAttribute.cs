@@ -24,7 +24,7 @@ namespace MCPForUnity.Editor.Tools
         public bool StructuredOutput { get; set; } = true;
 
         /// <summary>
-        /// Controls whether this tool is automatically registered with FastMCP.
+        /// Controls whether this tool is automatically registered with the CLI bridge.
         /// Defaults to true so most tools opt-in automatically. Set to false
         /// for legacy/built-in tools that already exist server-side.
         /// </summary>

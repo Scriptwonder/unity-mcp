@@ -5,6 +5,8 @@
 
 欢迎来到 MCP for Unity 开发环境！此目录包含简化 MCP for Unity 核心开发的工具和实用程序。
 
+> **说明**：当前仓库为 CLI 轻量服务器。MCP 客户端配置器与 stdio 相关文档已移至 `Server/legacy_mcp`。
+
 ## 🛠️ 开发环境搭建
 
 ### 安装开发依赖
@@ -12,31 +14,20 @@
 如果你想贡献代码或运行测试，需要使用 `uv` 安装开发依赖：
 
 ```bash
-# 进入 server 源码目录
-cd Server
-
-# 以 editable 模式安装，并包含 dev 依赖
+# 在仓库根目录
 uv pip install -e ".[dev]"
 ```
 
 这会安装：
 
-- **运行时依赖**：`httpx`, `fastmcp`, `mcp`, `pydantic`, `tomli`
-- **开发依赖**：`pytest`, `pytest-asyncio`
+- **运行时依赖**：`httpx`, `pydantic`, `fastapi`, `uvicorn`, `click`
+- **开发依赖**：`pytest`, `pytest-asyncio`, `pytest-cov`
 
 ### 运行测试
 
 ```bash
-# 在 server 目录下
-cd Server
-uv run pytest tests/ -v
-```
-
-或者从仓库根目录执行：
-
-```bash
-# 使用 server 目录中的 uv
-cd Server && uv run pytest tests/ -v
+# CLI 轻量服务器目前没有独立测试套件。
+# 旧版 MCP 服务器测试位于 Server/legacy_mcp/tests。
 ```
 
 只运行集成测试：

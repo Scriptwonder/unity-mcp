@@ -1,18 +1,18 @@
 ## Unity MCP (CLI Mode)
 
-We use Unity MCP via **CLI commands** instead of MCP server connection. This avoids the reconnection issues that occur when Unity restarts.
+We use Unity MCP via **CLI commands** instead of MCP client connections. This avoids the reconnection issues that occur when Unity restarts.
 
 ### Why CLI Instead of MCP Connection?
 
 - MCP connection breaks when Unity restarts
 - `/mcp reconnect` requires human intervention
-- CLI works directly via HTTP to the MCP server - no persistent connection needed
+- CLI works directly via HTTP to the CLI bridge server - no persistent connection needed
 - Claude can call CLI commands autonomously without reconnection issues
 
 ### Installation
 
 ```bash
-cd Server  # In unity-mcp repo
+cd /path/to/unity-mcp
 pip install -e .
 # Or with uv:
 uv pip install -e .
@@ -22,8 +22,8 @@ uv pip install -e .
 
 | Option | Description | Default | Env Variable |
 |--------|-------------|---------|--------------|
-| `-h, --host` | Server host | 127.0.0.1 | `UNITY_MCP_HOST` |
-| `-p, --port` | Server port | 8080 | `UNITY_MCP_HTTP_PORT` |
+| `-h, --host` | CLI bridge host | 127.0.0.1 | `UNITY_MCP_HOST` |
+| `-p, --port` | CLI bridge port | 8080 | `UNITY_MCP_HTTP_PORT` |
 | `-t, --timeout` | Timeout seconds | 30 | `UNITY_MCP_TIMEOUT` |
 | `-f, --format` | Output: text, json, table | text | `UNITY_MCP_FORMAT` |
 | `-i, --instance` | Target Unity instance | - | `UNITY_MCP_INSTANCE` |
@@ -32,7 +32,7 @@ uv pip install -e .
 
 **Status & Connection**
 ```bash
-unity-mcp status                           # Check server + Unity connection
+unity-mcp status                           # Check CLI bridge + Unity connection
 ```
 
 **Instance Management**
@@ -158,9 +158,9 @@ unity-mcp raw tool_name 'JSON_params'
 unity-mcp raw manage_scene '{"action":"get_active"}'
 ```
 
-### Note on MCP Server
+### Note on CLI Bridge Server
 
-The MCP HTTP server still needs to be running for CLI to work. Here is an example to run the server manually on Mac:
+The CLI bridge server needs to be running for the CLI to work. Here is an example to run the server manually on macOS:
 ```bash
-/opt/homebrew/bin/uvx --no-cache --refresh --from /XXX/unity-mcp/Server mcp-for-unity --transport http --http-url http://localhost:8080
+/opt/homebrew/bin/uvx --no-cache --refresh --from /XXX/unity-mcp mcp-for-unity --http-url http://localhost:8080
 ```

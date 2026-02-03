@@ -21,14 +21,12 @@
 
 - **Python 3.10+** installed
 - **Unity Editor** running with the MCP plugin enabled
-- **MCP Server** running (HTTP transport on port 8080)
+- **CLI bridge server** running (HTTP transport on port 8080)
 
 ### Install via pip (from source)
 
 ```bash
-# Navigate to the Server directory
-cd /path/to/unity-mcp/Server
-
+# From the repo root
 # Install in development mode
 pip install -e .
 
@@ -40,10 +38,10 @@ uv pip install -e .
 
 ```bash
 # Run directly without installing
-uvx --from /path/to/unity-mcp/Server unity-mcp --help
+uvx --from /path/to/unity-mcp unity-mcp --help
 
 # Or install as a tool
-uv tool install /path/to/unity-mcp/Server
+uv tool install /path/to/unity-mcp
 ```
 
 ### Verify Installation
@@ -63,14 +61,13 @@ unity-mcp status
 
 ## Quick Start
 
-### 1. Start the MCP Server
+### 1. Start the CLI Bridge Server
 
-Make sure the Unity MCP server is running with HTTP transport:
+Make sure the Unity CLI bridge server is running with HTTP transport:
 
 ```bash
-# The server is typically started via the Unity-MCP window, select HTTP local, and start server, or try this manually:
-cd /path/to/unity-mcp/Server
-uv run mcp-for-unity --transport http --http-url http://localhost:8080
+# The server can be started via the Unity window (Connect tab), or manually:
+uv run mcp-for-unity --http-url http://localhost:8080
 ```
 
 ### 2. Verify Connection
@@ -82,7 +79,7 @@ unity-mcp status
 Expected output:
 ```
 Checking connection to 127.0.0.1:8080...
-✅ Connected to Unity MCP server at 127.0.0.1:8080
+✅ Connected to Unity CLI bridge at 127.0.0.1:8080
 
 Connected Unity instances:
   • MyProject (Unity 6000.2.10f1) [09abcc51]
@@ -145,8 +142,8 @@ Global options come **BEFORE** the command group:
 
 | Option | Short | Description | Default |
 |--------|-------|-------------|---------|
-| `--host` | `-h` | MCP server host | `127.0.0.1` |
-| `--port` | `-p` | MCP server port | `8080` |
+| `--host` | `-h` | Bridge server host | `127.0.0.1` |
+| `--port` | `-p` | Bridge server port | `8080` |
 | `--format` | `-f` | Output format: `text`, `json`, `table` | `text` |
 | `--timeout` | `-t` | Command timeout in seconds | `30` |
 | `--instance` | `-i` | Target Unity instance (hash or Name@hash) | auto |

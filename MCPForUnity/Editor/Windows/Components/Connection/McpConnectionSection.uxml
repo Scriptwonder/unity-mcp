@@ -4,11 +4,8 @@
         <ui:Label text="Server" class="section-title" />
         <ui:VisualElement class="section-content">
             <ui:VisualElement class="setting-row">
-                <ui:Label text="Transport:" class="setting-label" />
+                <ui:Label text="Server Scope:" class="setting-label" />
                 <uie:EnumField name="transport-dropdown" class="setting-dropdown-inline" />
-            </ui:VisualElement>
-            <ui:VisualElement name="transport-mismatch-warning" class="warning-banner">
-                <ui:Label name="transport-mismatch-text" class="warning-banner-text" />
             </ui:VisualElement>
             <ui:VisualElement class="setting-row" name="http-url-row">
                 <ui:Label text="HTTP URL:" class="setting-label" />
@@ -17,10 +14,6 @@
             <ui:VisualElement class="setting-row" name="http-server-control-row">
                 <ui:Label text="Local Server:" class="setting-label" />
                 <ui:Button name="start-http-server-button" text="Start Server" class="action-button start-server-button" />
-            </ui:VisualElement>
-            <ui:VisualElement class="setting-row" name="unity-socket-port-row">
-                <ui:Label text="Unity Socket Port:" class="setting-label" />
-                <ui:TextField name="unity-port" class="port-field" />
             </ui:VisualElement>
             <ui:VisualElement class="setting-row">
                 <ui:VisualElement class="status-container">
@@ -31,7 +24,7 @@
             </ui:VisualElement>
             <ui:Foldout name="manual-command-foldout" text="Manual Server Launch" value="false" class="manual-config-foldout">
                 <ui:VisualElement name="http-server-command-section" class="manual-config-content">
-                    <ui:Label text="Use this command to launch the server manually:" class="config-label" />
+                    <ui:Label text="Use this command to launch the CLI bridge server manually:" class="config-label" />
                     <ui:VisualElement class="config-json-row">
                         <ui:TextField name="http-server-command" readonly="true" multiline="true" class="config-json-field" />
                         <ui:Button name="copy-http-server-command-button" text="Copy" class="icon-button-vertical" />

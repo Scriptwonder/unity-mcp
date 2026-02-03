@@ -269,7 +269,7 @@ namespace MCPForUnity.Editor.Windows.Components.Tools
             }
 
             int enabledCount = allTools.Count(tool => MCPServiceLocator.ToolDiscovery.IsToolEnabled(tool.Name));
-            summaryLabel.text = $"{enabledCount} of {allTools.Count} tools will register with connected clients.";
+            summaryLabel.text = $"{enabledCount} of {allTools.Count} tools will register with the CLI bridge.";
         }
 
         private void AddInfoLabel(string message)

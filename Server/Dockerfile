@@ -19,9 +19,6 @@ WORKDIR /app
 RUN pip install uv
 
 COPY . /app
-
-WORKDIR /app/Server
-
 RUN uv sync --frozen --no-dev
 
 EXPOSE 8080

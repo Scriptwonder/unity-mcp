@@ -10,7 +10,7 @@ namespace MCPForUnity.Editor.Resources.Tests
 {
     /// <summary>
     /// Provides access to Unity tests from the Test Framework.
-    /// This is a read-only resource that can be queried by MCP clients.
+    /// Read-only resource that can be queried via the CLI bridge.
     /// </summary>
     [McpForUnityResource("get_tests")]
     public static class GetTests
@@ -38,7 +38,7 @@ namespace MCPForUnity.Editor.Resources.Tests
 
     /// <summary>
     /// Provides access to Unity tests for a specific mode (EditMode or PlayMode).
-    /// This is a read-only resource that can be queried by MCP clients.
+    /// Read-only resource that can be queried via the CLI bridge.
     /// </summary>
     [McpForUnityResource("get_tests_for_mode")]
     public static class GetTestsForMode

@@ -5,7 +5,7 @@ using UnityEditor;
 namespace MCPForUnity.Editor.Helpers
 {
     /// <summary>
-    /// Helper methods for managing HTTP endpoint URLs used by the MCP bridge.
+    /// Helper methods for managing HTTP endpoint URLs used by the CLI bridge.
     /// Ensures the stored value is always the base URL (without trailing path),
     /// and provides convenience accessors for specific endpoints.
     /// </summary>
@@ -33,7 +33,7 @@ namespace MCPForUnity.Editor.Helpers
         }
 
         /// <summary>
-        /// Builds the JSON-RPC endpoint used by FastMCP clients (base + /mcp).
+        /// Legacy JSON-RPC endpoint (base + /mcp). Not used by the CLI bridge.
         /// </summary>
         public static string GetMcpRpcUrl()
         {

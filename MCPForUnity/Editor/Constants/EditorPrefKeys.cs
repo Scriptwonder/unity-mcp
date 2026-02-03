@@ -6,7 +6,6 @@ namespace MCPForUnity.Editor.Constants
     /// </summary>
     internal static class EditorPrefKeys
     {
-        internal const string UseHttpTransport = "MCPForUnity.UseHttpTransport";
         internal const string HttpTransportScope = "MCPForUnity.HttpTransportScope"; // "local" | "remote"
         internal const string LastLocalHttpServerPid = "MCPForUnity.LocalHttpServer.LastPid";
         internal const string LastLocalHttpServerPort = "MCPForUnity.LocalHttpServer.LastPort";
@@ -16,9 +15,8 @@ namespace MCPForUnity.Editor.Constants
         internal const string LastLocalHttpServerInstanceToken = "MCPForUnity.LocalHttpServer.LastInstanceToken";
         internal const string DebugLogs = "MCPForUnity.DebugLogs";
         internal const string ValidationLevel = "MCPForUnity.ValidationLevel";
-        internal const string UnitySocketPort = "MCPForUnity.UnitySocketPort";
         internal const string ResumeHttpAfterReload = "MCPForUnity.ResumeHttpAfterReload";
-        internal const string ResumeStdioAfterReload = "MCPForUnity.ResumeStdioAfterReload";
+        internal const string AutoConnectHttp = "MCPForUnity.AutoConnectHttp";
 
         internal const string UvxPathOverride = "MCPForUnity.UvxPath";
         internal const string ClaudeCliPathOverride = "MCPForUnity.ClaudeCliPath";
@@ -35,10 +33,6 @@ namespace MCPForUnity.Editor.Constants
         internal const string PackageDeployLastTargetPath = "MCPForUnity.PackageDeploy.LastTargetPath";
         internal const string PackageDeployLastSourcePath = "MCPForUnity.PackageDeploy.LastSourcePath";
 
-        internal const string ServerSrc = "MCPForUnity.ServerSrc";
-        internal const string UseEmbeddedServer = "MCPForUnity.UseEmbeddedServer";
-        internal const string LockCursorConfig = "MCPForUnity.LockCursorConfig";
-        internal const string AutoRegisterEnabled = "MCPForUnity.AutoRegisterEnabled";
         internal const string ToolEnabledPrefix = "MCPForUnity.ToolEnabled.";
         internal const string ToolFoldoutStatePrefix = "MCPForUnity.ToolFoldout.";
         internal const string EditorWindowActivePanel = "MCPForUnity.EditorWindow.ActivePanel";
@@ -50,8 +44,6 @@ namespace MCPForUnity.Editor.Constants
 
         internal const string LastUpdateCheck = "MCPForUnity.LastUpdateCheck";
         internal const string LatestKnownVersion = "MCPForUnity.LatestKnownVersion";
-        internal const string LastStdIoUpgradeVersion = "MCPForUnity.LastStdIoUpgradeVersion";
-
         internal const string TelemetryDisabled = "MCPForUnity.TelemetryDisabled";
         internal const string CustomerUuid = "MCPForUnity.CustomerUUID";
     }

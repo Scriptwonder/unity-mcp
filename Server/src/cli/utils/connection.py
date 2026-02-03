@@ -1,4 +1,4 @@
-"""Connection utilities for CLI to communicate with Unity via MCP server."""
+"""Connection utilities for CLI to communicate with Unity via the CLI bridge."""
 
 import asyncio
 import json
@@ -30,7 +30,7 @@ def warn_if_remote_host(config: CLIConfig) -> None:
     if config.host.lower() not in local_hosts:
         click.echo(
             "⚠️  Security Warning: Connecting to non-localhost server.\n"
-            "   The MCP CLI has no authentication. Anyone on the network could\n"
+            "   The Unity CLI has no authentication. Anyone on the network could\n"
             "   intercept commands or send unauthorized commands to Unity.\n"
             "   Only proceed if you trust this network.\n",
             err=True
@@ -43,7 +43,7 @@ async def send_command(
     config: Optional[CLIConfig] = None,
     timeout: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Send a command to Unity via the MCP HTTP server.
+    """Send a command to Unity via the CLI bridge HTTP server.
 
     Args:
         command_type: The command type (e.g., 'manage_gameobject', 'manage_scene')
@@ -79,7 +79,7 @@ async def send_command(
             return response.json()
     except httpx.ConnectError as e:
         raise UnityConnectionError(
-            f"Cannot connect to Unity MCP server at {cfg.host}:{cfg.port}. "
+            f"Cannot connect to Unity CLI bridge at {cfg.host}:{cfg.port}. "
             f"Make sure the server is running and Unity is connected.\n"
             f"Error: {e}"
         )
@@ -117,7 +117,7 @@ def run_command(
 
 
 async def check_connection(config: Optional[CLIConfig] = None) -> bool:
-    """Check if we can connect to the Unity MCP server.
+    """Check if we can connect to the Unity CLI bridge.
 
     Args:
         config: Optional CLI configuration
@@ -206,7 +206,7 @@ async def list_custom_tools(config: Optional[CLIConfig] = None) -> Dict[str, Any
             return response.json()
     except httpx.ConnectError as e:
         raise UnityConnectionError(
-            f"Cannot connect to Unity MCP server at {cfg.host}:{cfg.port}. "
+            f"Cannot connect to Unity CLI bridge at {cfg.host}:{cfg.port}. "
             f"Make sure the server is running and Unity is connected.\n"
             f"Error: {e}"
         )

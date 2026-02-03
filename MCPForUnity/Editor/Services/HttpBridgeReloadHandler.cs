@@ -9,7 +9,7 @@ using UnityEditor;
 namespace MCPForUnity.Editor.Services
 {
     /// <summary>
-    /// Ensures HTTP transports resume after domain reloads similar to the legacy stdio bridge.
+    /// Ensures HTTP transports resume after domain reloads.
     /// </summary>
     [InitializeOnLoad]
     internal static class HttpBridgeReloadHandler
@@ -43,7 +43,7 @@ namespace MCPForUnity.Editor.Services
                     {
                         if (t.IsFaulted && t.Exception != null)
                         {
-                            McpLog.Warn($"Error stopping MCP bridge before reload: {t.Exception.GetBaseException().Message}");
+                            McpLog.Warn($"Error stopping CLI bridge before reload: {t.Exception.GetBaseException().Message}");
                         }
                     }, TaskScheduler.Default);
                 }
@@ -59,9 +59,7 @@ namespace MCPForUnity.Editor.Services
             bool resume = false;
             try
             {
-                // Only resume HTTP if it is still the selected transport.
-                bool useHttp = EditorPrefs.GetBool(EditorPrefKeys.UseHttpTransport, true);
-                resume = useHttp && EditorPrefs.GetBool(EditorPrefKeys.ResumeHttpAfterReload, false);
+                resume = EditorPrefs.GetBool(EditorPrefKeys.ResumeHttpAfterReload, false);
                 if (resume)
                 {
                     EditorPrefs.DeleteKey(EditorPrefKeys.ResumeHttpAfterReload);
@@ -98,13 +96,13 @@ namespace MCPForUnity.Editor.Services
                         if (t.IsFaulted)
                         {
                             var baseEx = t.Exception?.GetBaseException();
-                            McpLog.Warn($"Failed to resume HTTP MCP bridge after domain reload: {baseEx?.Message}");
+                            McpLog.Warn($"Failed to resume HTTP CLI bridge after domain reload: {baseEx?.Message}");
                             return;
                         }
                         bool started = t.Result;
                         if (!started)
                         {
-                            McpLog.Warn("Failed to resume HTTP MCP bridge after domain reload");
+                            McpLog.Warn("Failed to resume HTTP CLI bridge after domain reload");
                         }
                         else
                         {
@@ -115,7 +113,7 @@ namespace MCPForUnity.Editor.Services
                 }
                 catch (Exception ex)
                 {
-                    McpLog.Error($"Error resuming HTTP MCP bridge: {ex.Message}");
+                    McpLog.Error($"Error resuming HTTP CLI bridge: {ex.Message}");
                     return;
                 }
             }
@@ -128,7 +126,7 @@ namespace MCPForUnity.Editor.Services
                     bool started = await MCPServiceLocator.TransportManager.StartAsync(TransportMode.Http);
                     if (!started)
                     {
-                        McpLog.Warn("Failed to resume HTTP MCP bridge after domain reload");
+                        McpLog.Warn("Failed to resume HTTP CLI bridge after domain reload");
                     }
                     else
                     {
@@ -137,7 +135,7 @@ namespace MCPForUnity.Editor.Services
                 }
                 catch (Exception ex)
                 {
-                    McpLog.Error($"Error resuming HTTP MCP bridge: {ex.Message}");
+                    McpLog.Error($"Error resuming HTTP CLI bridge: {ex.Message}");
                 }
             };
         }

@@ -29,12 +29,8 @@ namespace MCPForUnity.Editor.Windows
         {
             // Boolean prefs
             { EditorPrefKeys.DebugLogs, EditorPrefType.Bool },
-            { EditorPrefKeys.UseHttpTransport, EditorPrefType.Bool },
             { EditorPrefKeys.ResumeHttpAfterReload, EditorPrefType.Bool },
-            { EditorPrefKeys.ResumeStdioAfterReload, EditorPrefType.Bool },
-            { EditorPrefKeys.UseEmbeddedServer, EditorPrefType.Bool },
-            { EditorPrefKeys.LockCursorConfig, EditorPrefType.Bool },
-            { EditorPrefKeys.AutoRegisterEnabled, EditorPrefType.Bool },
+            { EditorPrefKeys.AutoConnectHttp, EditorPrefType.Bool },
             { EditorPrefKeys.SetupCompleted, EditorPrefType.Bool },
             { EditorPrefKeys.SetupDismissed, EditorPrefType.Bool },
             { EditorPrefKeys.CustomToolRegistrationEnabled, EditorPrefType.Bool },
@@ -43,10 +39,8 @@ namespace MCPForUnity.Editor.Windows
             { EditorPrefKeys.ProjectScopedToolsLocalHttp, EditorPrefType.Bool },
             
             // Integer prefs
-            { EditorPrefKeys.UnitySocketPort, EditorPrefType.Int },
             { EditorPrefKeys.ValidationLevel, EditorPrefType.Int },
             { EditorPrefKeys.LastUpdateCheck, EditorPrefType.Int },
-            { EditorPrefKeys.LastStdIoUpgradeVersion, EditorPrefType.Int },
             
             // String prefs
             { EditorPrefKeys.EditorWindowActivePanel, EditorPrefType.String },
@@ -61,7 +55,6 @@ namespace MCPForUnity.Editor.Windows
             { EditorPrefKeys.PackageDeployLastBackupPath, EditorPrefType.String },
             { EditorPrefKeys.PackageDeployLastTargetPath, EditorPrefType.String },
             { EditorPrefKeys.PackageDeployLastSourcePath, EditorPrefType.String },
-            { EditorPrefKeys.ServerSrc, EditorPrefType.String },
             { EditorPrefKeys.LatestKnownVersion, EditorPrefType.String },
         };
         

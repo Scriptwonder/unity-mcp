@@ -1,21 +1,29 @@
 using System;
 using MCPForUnity.Editor.Constants;
-using MCPForUnity.Editor.Services.Transport.Transports;
+using MCPForUnity.Editor.Services;
+using MCPForUnity.Editor.Services.Transport;
 using UnityEditor;
 
 namespace MCPForUnity.Editor
 {
     public static class McpCiBoot
     {
-        public static void StartStdioForCi()
+        public static void StartHttpForCi()
         {
-            try 
-            { 
-                EditorPrefs.SetBool(EditorPrefKeys.UseHttpTransport, false); 
+            try
+            {
+                EditorPrefs.SetString(EditorPrefKeys.HttpTransportScope, "local");
+                EditorPrefs.SetBool(EditorPrefKeys.AutoConnectHttp, true);
             }
             catch { /* ignore */ }
 
-            StdioBridgeHost.StartAutoConnect();
+            _ = MCPServiceLocator.TransportManager.StartAsync(TransportMode.Http);
+        }
+
+        [Obsolete("Legacy name; starts HTTP CLI bridge for CI.")]
+        public static void StartStdioForCi()
+        {
+            StartHttpForCi();
         }
     }
 }

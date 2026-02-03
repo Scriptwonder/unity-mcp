@@ -17,6 +17,9 @@
 
 <img alt="MCP for Unity building a scene" src="../images/building_scene.gif">
 
+> [!NOTE]
+> 当前仓库提供 **CLI 轻量服务器**（不再暴露 MCP 客户端端点）。旧版 MCP 服务器代码保留在 `Server/legacy_mcp`。
+
 ---
 
 ## 快速开始
@@ -25,7 +28,7 @@
 
 * **Unity 2021.3 LTS+** — [下载 Unity](https://unity.com/download)
 * **Python 3.10+** 和 **uv** — [安装 uv](https://docs.astral.sh/uv/getting-started/installation/)
-* **一个 MCP 客户端** — [Claude Desktop](https://claude.ai/download) | [Cursor](https://www.cursor.com/en/downloads) | [VS Code Copilot](https://code.visualstudio.com/docs/copilot/overview) | [Windsurf](https://windsurf.com)
+* **一个终端** — 用于运行本地 CLI
 
 ### 1. 安装 Unity 包
 
@@ -58,11 +61,20 @@ openupm add com.coplaydev.unity-mcp
 
 1. 在 Unity 中：`Window > MCP for Unity`
 2. 点击 **Start Server**（会在 `localhost:8080` 启动 HTTP 服务器）
-3. 从下拉菜单选择你的 MCP Client，然后点击 **Configure**
-4. 查找 🟢 "Connected ✓"
-5. **连接你的客户端：** 一些客户端（Cursor、Windsurf、Antigravity）需要在设置里启用 MCP 开关；另一些（Claude Desktop、Claude Code）在配置后会自动连接。
+3. Unity 会自动连接本地服务器（无需 MCP 客户端）
+4. 在终端使用 CLI
 
-**就这些！** 试试这样的提示词：*"Create a red, blue and yellow cube"* 或 *"Build a simple player controller"*
+> [!TIP]
+> **CLI 用法：**
+> ```bash
+> # 启动服务器（HTTP）
+> mcp-for-unity --http-url http://localhost:8080
+>
+> # 使用 CLI
+> unity-mcp status
+> unity-mcp scene hierarchy
+> ```
+> 启用 HTTP 传输后，Unity 会自动连接本地服务器，无需打开 MCP for Unity 窗口。
 
 ---
 
@@ -70,85 +82,24 @@ openupm add com.coplaydev.unity-mcp
 <summary><strong>功能与工具</strong></summary>
 
 ### 关键功能
-* **自然语言控制** — 指示你的大语言模型执行 Unity 任务
+* **CLI 优先控制** — 在终端驱动 Unity Editor 任务
 * **强大工具** — 管理资源、场景、材质、脚本和编辑器功能
 * **自动化** — 自动化重复的 Unity 工作流程
-* **可扩展** — 可与多种 MCP Client 配合使用
+* **可扩展** — Unity 项目可注册自定义工具
 
 ### 可用工具
 `manage_asset` • `manage_editor` • `manage_gameobject` • `manage_components` • `manage_material` • `manage_prefabs` • `manage_scene` • `manage_script` • `manage_scriptable_object` • `manage_shader` • `manage_vfx` • `batch_execute` • `find_gameobjects` • `find_in_file` • `read_console` • `refresh_unity` • `run_tests` • `get_test_job` • `execute_menu_item` • `apply_text_edits` • `script_apply_edits` • `validate_script` • `create_script` • `delete_script` • `get_sha`
-
-### 可用资源
-`custom_tools` • `unity_instances` • `menu_items` • `get_tests` • `gameobject` • `gameobject_components` • `editor_state` • `editor_selection` • `editor_prefab_stage` • `project_info` • `project_tags` • `project_layers`
 
 **性能提示：** 多个操作请使用 `batch_execute` — 比逐个调用快 10-100 倍！
 </details>
 
 <details>
-<summary><strong>手动配置</strong></summary>
-
-如果自动设置不生效，请把下面内容添加到你的 MCP Client 配置文件中：
-
-**HTTP（默认 — 适用于 Claude Desktop、Cursor、Windsurf）：**
-```json
-{
-  "mcpServers": {
-    "unityMCP": {
-      "url": "http://localhost:8080/mcp"
-    }
-  }
-}
-```
-
-**VS Code：**
-```json
-{
-  "servers": {
-    "unityMCP": {
-      "type": "http",
-      "url": "http://localhost:8080/mcp"
-    }
-  }
-}
-```
-
-<details>
-<summary>Stdio 配置（uvx）</summary>
-
-**macOS/Linux：**
-```json
-{
-  "mcpServers": {
-    "unityMCP": {
-      "command": "uvx",
-      "args": ["--from", "mcpforunityserver", "mcp-for-unity", "--transport", "stdio"]
-    }
-  }
-}
-```
-
-**Windows：**
-```json
-{
-  "mcpServers": {
-    "unityMCP": {
-      "command": "C:/Users/YOUR_USERNAME/AppData/Local/Microsoft/WinGet/Links/uvx.exe",
-      "args": ["--from", "mcpforunityserver", "mcp-for-unity", "--transport", "stdio"]
-    }
-  }
-}
-```
-</details>
-</details>
-
-<details>
 <summary><strong>多个 Unity 实例</strong></summary>
 
-MCP for Unity 支持多个 Unity Editor 实例。要将操作定向到某个特定实例：
+Unity MCP 支持多个 Unity Editor 实例。使用 CLI 定向到某个特定实例：
 
-1. 让你的大语言模型检查 `unity_instances` 资源
-2. 使用 `set_active_instance` 并传入 `Name@hash`（例如 `MyProject@abc123`）
-3. 后续所有工具都会路由到该实例
+1. 运行 `unity-mcp instance list`
+2. 传入 `--instance Name@hash`（或设置 `UNITY_MCP_INSTANCE`）
 </details>
 
 <details>
@@ -178,11 +129,9 @@ MCP for Unity 支持多个 Unity Editor 实例。要将操作定向到某个特�
 
 * **Unity Bridge 无法连接：** 检查 `Window > MCP for Unity` 状态，重启 Unity
 * **Server 无法启动：** 确认 `uv --version` 可用，并检查终端错误
-* **Client 无法连接：** 确认 HTTP server 正在运行，并且 URL 与你的配置一致
+* **CLI 无法连接：** 确认 HTTP server 正在运行，并且 URL 与你的配置一致
 
 **详细的设置指南：**
-* [Fix Unity MCP and Cursor, VSCode & Windsurf](https://github.com/CoplayDev/unity-mcp/wiki/1.-Fix-Unity-MCP-and-Cursor,-VSCode-&-Windsurf) — uv/Python 安装、PATH 问题
-* [Fix Unity MCP and Claude Code](https://github.com/CoplayDev/unity-mcp/wiki/2.-Fix-Unity-MCP-and-Claude-Code) — Claude CLI 安装
 * [Common Setup Problems](https://github.com/CoplayDev/unity-mcp/wiki/3.-Common-Setup-Problems) — macOS dyld 错误、FAQ
 
 还是卡住？[开一个 Issue](https://github.com/CoplayDev/unity-mcp/issues) 或 [加入 Discord](https://discord.gg/y4p8KfzrN4)
@@ -199,7 +148,7 @@ MCP for Unity 支持多个 Unity Editor 实例。要将操作定向到某个特�
 <details>
 <summary><strong>遥测与隐私</strong></summary>
 
-匿名、注重隐私的遥测（不包含代码、项目名或个人数据）。可通过 `DISABLE_TELEMETRY=true` 关闭。详见 [TELEMETRY.md](../reference/TELEMETRY.md)。
+CLI 轻量服务器默认不启用遥测。历史说明见 [TELEMETRY.md](../../Server/legacy_mcp/docs/TELEMETRY.md)。
 </details>
 
 ---
