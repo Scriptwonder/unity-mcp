@@ -312,6 +312,7 @@ class PluginHub(WebSocketEndpoint):
                     hash=session.project_hash,
                     unity_version=session.unity_version,
                     connected_at=session.connected_at.isoformat(),
+                    session_type=session.session_type,
                 )
                 for session_id, session in sessions.items()
             }
@@ -364,6 +365,7 @@ class PluginHub(WebSocketEndpoint):
         project_hash = payload.project_hash
         unity_version = payload.unity_version
         project_path = payload.project_path
+        session_type = payload.session_type
 
         if not project_hash:
             await websocket.close(code=4400)
@@ -378,7 +380,7 @@ class PluginHub(WebSocketEndpoint):
         response = RegisteredMessage(session_id=session_id)
         await websocket.send_json(response.model_dump())
 
-        session = await registry.register(session_id, project_name, project_hash, unity_version, project_path, user_id=user_id)
+        session = await registry.register(session_id, project_name, project_hash, unity_version, project_path, user_id=user_id, session_type=session_type)
         async with lock:
             cls._connections[session.session_id] = websocket
             # Initialize last pong time and start ping loop for this session
@@ -391,10 +393,11 @@ class PluginHub(WebSocketEndpoint):
             ping_task = asyncio.create_task(cls._ping_loop(session_id, websocket))
             cls._ping_tasks[session_id] = ping_task
 
+        type_label = f" [{session_type}]" if session_type != "editor" else ""
         if user_id:
-            logger.info(f"Plugin registered: {project_name} ({project_hash}) for user {user_id}")
+            logger.info(f"Plugin registered: {project_name} ({project_hash}){type_label} for user {user_id}")
         else:
-            logger.info(f"Plugin registered: {project_name} ({project_hash})")
+            logger.info(f"Plugin registered: {project_name} ({project_hash}){type_label}")
 
     async def _handle_register_tools(self, websocket: WebSocket, payload: RegisterToolsMessage) -> None:
         cls = type(self)

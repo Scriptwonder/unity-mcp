@@ -37,6 +37,7 @@ class RegisterMessage(BaseModel):
     project_hash: str
     unity_version: str = "Unknown"
     project_path: str | None = None  # Full path to project root (for focus nudging)
+    session_type: str = "editor"  # "editor" or "runtime" (VR/MR runtime bridge)
 
 
 class RegisterToolsMessage(BaseModel):
@@ -62,6 +63,7 @@ class SessionDetails(BaseModel):
     hash: str
     unity_version: str
     connected_at: str
+    session_type: str = "editor"  # "editor" or "runtime"
 
 
 class SessionList(BaseModel):
