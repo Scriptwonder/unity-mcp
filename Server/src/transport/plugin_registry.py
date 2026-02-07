@@ -155,6 +155,12 @@ class PluginRegistry:
             async with self._lock:
                 return self._hash_to_session.get(project_hash)
 
+    async def get_session_type(self, session_id: str) -> str | None:
+        """Return the session_type ('editor' or 'runtime') for a given session, or None if not found."""
+        async with self._lock:
+            session = self._sessions.get(session_id)
+            return session.session_type if session else None
+
     async def list_sessions(self, user_id: str | None = None) -> dict[str, PluginSession]:
         """Return a shallow copy of sessions.
 

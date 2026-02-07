@@ -10,7 +10,7 @@ namespace MCPForUnity.Runtime.Tools.Implementations
     /// <summary>
     /// Runtime tool for GameObject operations: create, modify, delete, duplicate, find.
     /// </summary>
-    [RuntimeMcpTool("runtime_gameobject")]
+    [RuntimeMcpTool("manage_gameobject")]
     public static class RuntimeGameObject
     {
         public static object HandleCommand(JObject @params)

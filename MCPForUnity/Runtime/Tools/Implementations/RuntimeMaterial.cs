@@ -8,7 +8,7 @@ namespace MCPForUnity.Runtime.Tools.Implementations
     /// <summary>
     /// Runtime tool for material operations: set color, shader properties, create materials.
     /// </summary>
-    [RuntimeMcpTool("runtime_material")]
+    [RuntimeMcpTool("manage_material")]
     public static class RuntimeMaterial
     {
         public static object HandleCommand(JObject @params)

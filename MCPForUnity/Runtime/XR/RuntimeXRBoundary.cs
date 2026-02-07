@@ -14,7 +14,7 @@ namespace MCPForUnity.Runtime.XR
     /// Runtime tool for XR boundary/guardian queries.
     /// Provides play area size, boundary configuration status, and boundary visualization.
     /// </summary>
-    [RuntimeMcpTool("runtime_xr_boundary")]
+    [RuntimeMcpTool("manage_xr_boundary")]
     public static class RuntimeXRBoundary
     {
         public static object HandleCommand(JObject @params)

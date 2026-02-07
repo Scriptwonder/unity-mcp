@@ -14,7 +14,7 @@ namespace MCPForUnity.Runtime.XR
     /// Runtime tool for XR hand tracking operations.
     /// Requires XR Hands package (com.unity.xr.hands).
     /// </summary>
-    [RuntimeMcpTool("runtime_xr_hand_tracking")]
+    [RuntimeMcpTool("manage_xr_hand_tracking")]
     public static class RuntimeXRHandTracking
     {
         public static object HandleCommand(JObject @params)

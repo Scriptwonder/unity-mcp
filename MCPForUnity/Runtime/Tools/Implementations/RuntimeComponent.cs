@@ -12,7 +12,7 @@ namespace MCPForUnity.Runtime.Tools.Implementations
     /// <summary>
     /// Runtime tool for component operations: add, remove, get, set properties.
     /// </summary>
-    [RuntimeMcpTool("runtime_component")]
+    [RuntimeMcpTool("manage_components")]
     public static class RuntimeComponent
     {
         public static object HandleCommand(JObject @params)

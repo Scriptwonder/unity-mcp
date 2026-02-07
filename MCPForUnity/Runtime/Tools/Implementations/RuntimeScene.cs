@@ -10,7 +10,7 @@ namespace MCPForUnity.Runtime.Tools.Implementations
     /// <summary>
     /// Runtime tool for scene queries: hierarchy, find objects, scene info.
     /// </summary>
-    [RuntimeMcpTool("runtime_scene")]
+    [RuntimeMcpTool("manage_scene")]
     public static class RuntimeScene
     {
         public static object HandleCommand(JObject @params)
@@ -20,12 +20,13 @@ namespace MCPForUnity.Runtime.Tools.Implementations
 
             return action switch
             {
-                "get_info" => GetSceneInfo(),
+                "get_info" or "get_active" => GetSceneInfo(),
                 "get_hierarchy" => GetHierarchy(p),
                 "find_by_name" => FindByName(p),
                 "find_by_tag" => FindByTag(p),
                 "find_by_component" => FindByComponent(p),
                 "get_root_objects" => GetRootObjects(p),
+                "load" => LoadScene(p),
                 _ => new RuntimeErrorResponse($"Unknown action: {action}")
             };
         }
@@ -262,6 +263,44 @@ namespace MCPForUnity.Runtime.Tools.Implementations
                 count = results.Count,
                 rootObjects = results
             });
+        }
+
+        private static object LoadScene(RuntimeToolParams p)
+        {
+            string name = p.Get("name");
+            int? buildIndex = p.GetInt("build_index");
+            string mode = p.Get("mode", "single");
+
+            LoadSceneMode loadMode = mode.ToLower() switch
+            {
+                "additive" => LoadSceneMode.Additive,
+                _ => LoadSceneMode.Single
+            };
+
+            if (!string.IsNullOrEmpty(name))
+            {
+                SceneManager.LoadScene(name, loadMode);
+                return new RuntimeSuccessResponse($"Loading scene '{name}'", new
+                {
+                    sceneName = name,
+                    loadMode = loadMode.ToString()
+                });
+            }
+
+            if (buildIndex.HasValue)
+            {
+                if (buildIndex.Value < 0 || buildIndex.Value >= SceneManager.sceneCountInBuildSettings)
+                    return new RuntimeErrorResponse($"Build index {buildIndex.Value} out of range (0-{SceneManager.sceneCountInBuildSettings - 1})");
+
+                SceneManager.LoadScene(buildIndex.Value, loadMode);
+                return new RuntimeSuccessResponse($"Loading scene at build index {buildIndex.Value}", new
+                {
+                    buildIndex = buildIndex.Value,
+                    loadMode = loadMode.ToString()
+                });
+            }
+
+            return new RuntimeErrorResponse("'name' or 'build_index' parameter is required");
         }
     }
 }

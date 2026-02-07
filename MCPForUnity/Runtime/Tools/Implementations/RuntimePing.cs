@@ -6,7 +6,7 @@ namespace MCPForUnity.Runtime.Tools.Implementations
     /// <summary>
     /// Simple ping tool to verify the runtime MCP bridge is working.
     /// </summary>
-    [RuntimeMcpTool("runtime_ping")]
+    [RuntimeMcpTool("ping")]
     public static class RuntimePing
     {
         public static object HandleCommand(JObject @params)

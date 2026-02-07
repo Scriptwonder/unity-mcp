@@ -20,7 +20,7 @@ namespace MCPForUnity.Runtime.XR
     /// <summary>
     /// Runtime tool for XR rig/origin operations: create, configure, query.
     /// </summary>
-    [RuntimeMcpTool("runtime_xr_rig")]
+    [RuntimeMcpTool("manage_xr_rig")]
     public static class RuntimeXRRig
     {
         public static object HandleCommand(JObject @params)

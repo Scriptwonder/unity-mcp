@@ -11,7 +11,7 @@ namespace MCPForUnity.Runtime.XR
     /// Runtime tool for XR spatial anchors for MR placement.
     /// Provides a generic anchor system with platform-specific extensions.
     /// </summary>
-    [RuntimeMcpTool("runtime_xr_anchor")]
+    [RuntimeMcpTool("manage_xr_anchor")]
     public static class RuntimeXRAnchor
     {
         // Simple runtime anchor tracking (for generic use)

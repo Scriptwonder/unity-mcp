@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using MCPForUnity.Runtime.Helpers;
 using UnityEngine;
 
@@ -53,6 +54,12 @@ namespace MCPForUnity.Runtime.Transport
             set => _serverUrl = value;
         }
 
+        /// <summary>
+        /// Well-known file name the editor writes before entering Play Mode
+        /// so the runtime bridge can discover the active server URL.
+        /// </summary>
+        private const string SharedConfigFileName = "mcp_server_url.txt";
+
         void Awake()
         {
             if (_instance != null && _instance != this)
@@ -66,6 +73,9 @@ namespace MCPForUnity.Runtime.Transport
             DontDestroyOnLoad(gameObject);
 
             RuntimeLog.DebugEnabled = _debugLogging;
+
+            // If the inspector URL is the default, try to read from shared config
+            TryReadSharedServerUrl();
         }
 
         async void Start()
@@ -147,5 +157,52 @@ namespace MCPForUnity.Runtime.Transport
                 RuntimeLog.Info("Disconnected from MCP server.");
             }
         }
+
+        private void TryReadSharedServerUrl()
+        {
+            try
+            {
+                string configPath = GetSharedConfigPath();
+                if (File.Exists(configPath))
+                {
+                    string url = File.ReadAllText(configPath).Trim();
+                    if (!string.IsNullOrEmpty(url) && Uri.TryCreate(url, UriKind.Absolute, out _))
+                    {
+                        _serverUrl = url;
+                        RuntimeLog.Info($"[RuntimeBridge] Using server URL from shared config: {url}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                RuntimeLog.Warn($"[RuntimeBridge] Failed to read shared server URL: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Write the server URL to a shared config file so the RuntimeBridge can read it.
+        /// Call this from editor code before entering Play Mode.
+        /// </summary>
+        public static void WriteSharedServerUrl(string url)
+        {
+            try
+            {
+                string configPath = GetSharedConfigPath();
+                string dir = Path.GetDirectoryName(configPath);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
+                File.WriteAllText(configPath, url);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[RuntimeBridge] Failed to write shared server URL: {ex.Message}");
+            }
+        }
+
+        private static string GetSharedConfigPath()
+        {
+            return Path.Combine(Application.persistentDataPath, SharedConfigFileName);
+        }
     }
 }
+

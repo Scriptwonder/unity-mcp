@@ -7,7 +7,7 @@ namespace MCPForUnity.Runtime.Tools.Implementations
     /// <summary>
     /// Runtime tool for transform operations: position, rotation, scale, parent, move_relative.
     /// </summary>
-    [RuntimeMcpTool("runtime_transform")]
+    [RuntimeMcpTool("manage_transform")]
     public static class RuntimeTransform
     {
         public static object HandleCommand(JObject @params)

@@ -22,7 +22,7 @@ namespace MCPForUnity.Runtime.Tools
         {
             var value = GetString(key);
             if (string.IsNullOrEmpty(value))
-                return null;
+                throw new System.ArgumentException(errorMessage ?? $"Required parameter '{key}' is missing or empty");
             return value;
         }
 
@@ -72,6 +72,32 @@ namespace MCPForUnity.Runtime.Tools
         public JToken GetRaw(string key)
         {
             return GetToken(key);
+        }
+
+        public string[] GetStringArray(string key)
+        {
+            var token = GetToken(key);
+            if (token == null || token.Type == JTokenType.Null) return null;
+
+            if (token is JArray arr)
+            {
+                var result = new string[arr.Count];
+                for (int i = 0; i < arr.Count; i++)
+                    result[i] = arr[i]?.ToString();
+                return result;
+            }
+
+            // Single string -> array of one
+            if (token.Type == JTokenType.String)
+                return new[] { token.Value<string>() };
+
+            return null;
+        }
+
+        public JObject GetJObject(string key)
+        {
+            var token = GetToken(key);
+            return token as JObject;
         }
 
         public JObject Raw => _params;

@@ -250,6 +250,14 @@ class UnityInstanceMiddleware(Middleware):
             ctx.set_state("unity_instance", active_instance)
             if session_id is not None:
                 ctx.set_state("unity_session_id", session_id)
+                # Inject session_type so tools know if they're talking to editor or runtime
+                if PluginHub._registry is not None:
+                    try:
+                        session_type = await PluginHub._registry.get_session_type(session_id)
+                        if session_type:
+                            ctx.set_state("unity_session_type", session_type)
+                    except Exception:
+                        pass
 
     async def on_call_tool(self, context: MiddlewareContext, call_next):
         """Inject active Unity instance into tool context if available."""

@@ -9,7 +9,7 @@ namespace MCPForUnity.Runtime.XR
     /// Runtime tool for XR passthrough (MR) operations, primarily for Quest.
     /// Supports both Meta XR SDK and OpenXR passthrough approaches.
     /// </summary>
-    [RuntimeMcpTool("runtime_xr_passthrough")]
+    [RuntimeMcpTool("manage_xr_passthrough")]
     public static class RuntimeXRPassthrough
     {
         public static object HandleCommand(JObject @params)

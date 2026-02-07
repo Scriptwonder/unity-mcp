@@ -62,6 +62,7 @@ async def unity_instances(ctx: Context) -> dict[str, Any]:
                     "unity_version": session_info.unity_version,
                     "connected_at": session_info.connected_at,
                     "session_id": session_id,
+                    "session_type": getattr(session_info, "session_type", "editor"),
                 })
 
             # Check for duplicate project names

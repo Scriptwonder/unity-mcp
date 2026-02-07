@@ -42,6 +42,14 @@ async def preflight(
     if _in_pytest():
         return None
 
+    # Runtime sessions don't have editor-only concepts like compilation or asset refresh.
+    try:
+        session_type = ctx.get_state("unity_session_type") if hasattr(ctx, "get_state") else None
+    except Exception:
+        session_type = None
+    if session_type == "runtime":
+        return None
+
     # Load canonical editor state (server enriches advice + staleness).
     try:
         from services.resources.editor_state import get_editor_state

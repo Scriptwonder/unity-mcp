@@ -44,6 +44,7 @@ namespace MCPForUnity.Runtime.Tools
     public static class RuntimeToolRegistry
     {
         private static readonly Dictionary<string, RuntimeHandlerInfo> _handlers = new();
+        private static readonly Dictionary<string, RuntimeToolMetadata> _metadataCache = new();
         private static bool _initialized;
 
         public static void Initialize()
@@ -56,6 +57,7 @@ namespace MCPForUnity.Runtime.Tools
         public static void Reset()
         {
             _handlers.Clear();
+            _metadataCache.Clear();
             _initialized = false;
         }
 
@@ -136,6 +138,15 @@ namespace MCPForUnity.Runtime.Tools
                 }
 
                 _handlers[commandName] = handlerInfo;
+
+                // Cache metadata during discovery to avoid rescanning assemblies later
+                _metadataCache[commandName] = new RuntimeToolMetadata
+                {
+                    Name = commandName,
+                    Description = attr.Description ?? "",
+                    StructuredOutput = attr.StructuredOutput
+                };
+
                 return true;
             }
             catch (Exception ex)
@@ -172,43 +183,26 @@ namespace MCPForUnity.Runtime.Tools
 
         /// <summary>
         /// Get metadata for all registered tools (for server registration).
+        /// Uses cached metadata from discovery to avoid rescanning assemblies.
         /// </summary>
         public static List<RuntimeToolMetadata> GetRegisteredTools()
         {
             var tools = new List<RuntimeToolMetadata>();
             foreach (var kvp in _handlers)
             {
-                // Look up the attribute to get description
-                var allTypes = AppDomain.CurrentDomain.GetAssemblies()
-                    .Where(a => !a.IsDynamic)
-                    .SelectMany(a =>
-                    {
-                        try { return a.GetTypes(); }
-                        catch { return new Type[0]; }
-                    });
-
-                string description = "";
-                bool structuredOutput = true;
-
-                foreach (var type in allTypes)
+                if (_metadataCache.TryGetValue(kvp.Key, out var metadata))
                 {
-                    var attr = type.GetCustomAttribute<RuntimeMcpToolAttribute>();
-                    if (attr == null) continue;
-                    string name = attr.Name ?? RuntimeStringCaseUtility.ToSnakeCase(type.Name);
-                    if (name == kvp.Key)
-                    {
-                        description = attr.Description ?? "";
-                        structuredOutput = attr.StructuredOutput;
-                        break;
-                    }
+                    tools.Add(metadata);
                 }
-
-                tools.Add(new RuntimeToolMetadata
+                else
                 {
-                    Name = kvp.Key,
-                    Description = description,
-                    StructuredOutput = structuredOutput
-                });
+                    tools.Add(new RuntimeToolMetadata
+                    {
+                        Name = kvp.Key,
+                        Description = "",
+                        StructuredOutput = true
+                    });
+                }
             }
             return tools;
         }

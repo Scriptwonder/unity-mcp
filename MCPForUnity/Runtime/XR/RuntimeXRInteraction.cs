@@ -15,7 +15,7 @@ namespace MCPForUnity.Runtime.XR
     /// Runtime tool for XR interaction setup: ray, grab, poke interactors.
     /// Requires XR Interaction Toolkit package.
     /// </summary>
-    [RuntimeMcpTool("runtime_xr_interaction")]
+    [RuntimeMcpTool("manage_xr_interaction")]
     public static class RuntimeXRInteraction
     {
         public static object HandleCommand(JObject @params)
