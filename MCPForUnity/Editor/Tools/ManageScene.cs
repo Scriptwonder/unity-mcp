@@ -31,10 +31,16 @@ namespace MCPForUnity.Editor.Tools
             public string camera { get; set; }
             public bool? includeImage { get; set; }
             public int? maxResolution { get; set; }
-            public string batch { get; set; }           // "surround" for multi-angle batch capture
+            public string batch { get; set; }           // "surround" or "orbit" for multi-angle batch capture
             public JToken lookAt { get; set; }          // GO reference or [x,y,z] to aim at before capture
             public Vector3? viewPosition { get; set; }  // camera position for view-based capture
             public Vector3? viewRotation { get; set; }  // euler rotation for view-based capture
+
+            // orbit batch params
+            public int? orbitAngles { get; set; }       // number of azimuth samples (default 8)
+            public float[] orbitElevations { get; set; } // elevation angles in degrees (default [0, 30, -15])
+            public float? orbitDistance { get; set; }    // camera distance from target (default auto from bounds)
+            public float? orbitFov { get; set; }         // camera FOV in degrees (default 60)
 
             // scene_view_frame
             public JToken sceneViewTarget { get; set; }
@@ -47,6 +53,22 @@ namespace MCPForUnity.Editor.Tools
             public int? maxDepth { get; set; }
             public int? maxChildrenPerNode { get; set; }
             public bool? includeTransform { get; set; }
+        }
+
+        private static float[] ParseFloatArray(JToken token)
+        {
+            if (token == null || token.Type == JTokenType.Null) return null;
+            if (token.Type == JTokenType.Array)
+            {
+                var arr = (JArray)token;
+                var result = new float[arr.Count];
+                for (int i = 0; i < arr.Count; i++)
+                    result[i] = arr[i].ToObject<float>();
+                return result;
+            }
+            // Single value → array of one
+            var single = ParamCoercion.CoerceFloatNullable(token);
+            return single.HasValue ? new[] { single.Value } : null;
         }
 
         private static SceneCommand ToSceneCommand(JObject p)
@@ -69,6 +91,12 @@ namespace MCPForUnity.Editor.Tools
                 lookAt = p["lookAt"] ?? p["look_at"],
                 viewPosition = VectorParsing.ParseVector3(p["viewPosition"] ?? p["view_position"]),
                 viewRotation = VectorParsing.ParseVector3(p["viewRotation"] ?? p["view_rotation"]),
+
+                // orbit batch params
+                orbitAngles = ParamCoercion.CoerceIntNullable(p["orbitAngles"] ?? p["orbit_angles"]),
+                orbitElevations = ParseFloatArray(p["orbitElevations"] ?? p["orbit_elevations"]),
+                orbitDistance = ParamCoercion.CoerceFloatNullable(p["orbitDistance"] ?? p["orbit_distance"]),
+                orbitFov = ParamCoercion.CoerceFloatNullable(p["orbitFov"] ?? p["orbit_fov"]),
 
                 // scene_view_frame
                 sceneViewTarget = p["sceneViewTarget"] ?? p["scene_view_target"],
@@ -390,7 +418,9 @@ namespace MCPForUnity.Editor.Tools
                 {
                     if (cmd.batch.Equals("surround", StringComparison.OrdinalIgnoreCase))
                         return CaptureSurroundBatch(cmd);
-                    return new ErrorResponse($"Unknown batch mode: '{cmd.batch}'. Valid modes: 'surround'.");
+                    if (cmd.batch.Equals("orbit", StringComparison.OrdinalIgnoreCase))
+                        return CaptureOrbitBatch(cmd);
+                    return new ErrorResponse($"Unknown batch mode: '{cmd.batch}'. Valid modes: 'surround', 'orbit'.");
                 }
 
                 // Positioned view-based capture (creates temp camera at view_position, aimed at look_at)
@@ -642,6 +672,135 @@ namespace MCPForUnity.Editor.Tools
             catch (Exception e)
             {
                 return new ErrorResponse($"Error capturing batch screenshots: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Captures screenshots from a configurable orbit around a target for visual QA.
+        /// Supports custom azimuth count, elevation angles, distance, and FOV.
+        /// Returns all images as inline base64 PNGs (no files saved to disk).
+        /// </summary>
+        private static object CaptureOrbitBatch(SceneCommand cmd)
+        {
+            try
+            {
+                int maxRes = cmd.maxResolution ?? 480;
+                int azimuthCount = Mathf.Clamp(cmd.orbitAngles ?? 8, 1, 36);
+                float[] elevations = cmd.orbitElevations ?? new[] { 0f, 30f, -15f };
+                float fov = Mathf.Clamp(cmd.orbitFov ?? 60f, 10f, 120f);
+
+                Vector3 center;
+                float radius;
+
+                // Resolve center and radius from look_at target or scene bounds
+                if (cmd.lookAt != null && cmd.lookAt.Type != JTokenType.Null)
+                {
+                    var lookAtPos = VectorParsing.ParseVector3(cmd.lookAt);
+                    if (lookAtPos.HasValue)
+                    {
+                        center = lookAtPos.Value;
+                        radius = cmd.orbitDistance ?? 5f;
+                    }
+                    else
+                    {
+                        Scene lookAtScene = EditorSceneManager.GetActiveScene();
+                        var lookAtGo = ResolveGameObject(cmd.lookAt, lookAtScene);
+                        if (lookAtGo == null)
+                            return new ErrorResponse($"look_at target '{cmd.lookAt}' not found for orbit capture.");
+
+                        Bounds targetBounds = new Bounds(lookAtGo.transform.position, Vector3.zero);
+                        foreach (var r in lookAtGo.GetComponentsInChildren<Renderer>())
+                        {
+                            if (r != null && r.gameObject.activeInHierarchy) targetBounds.Encapsulate(r.bounds);
+                        }
+                        center = targetBounds.center;
+                        radius = cmd.orbitDistance ?? Mathf.Max(targetBounds.extents.magnitude * 2.0f, 3f);
+                    }
+                }
+                else
+                {
+                    // Default: calculate combined bounds of all renderers in the scene
+                    Bounds bounds = new Bounds(Vector3.zero, Vector3.zero);
+                    bool hasBounds = false;
+                    var renderers = UnityEngine.Object.FindObjectsOfType<Renderer>();
+                    foreach (var r in renderers)
+                    {
+                        if (r == null || !r.gameObject.activeInHierarchy) continue;
+                        if (!hasBounds) { bounds = r.bounds; hasBounds = true; }
+                        else bounds.Encapsulate(r.bounds);
+                    }
+
+                    if (!hasBounds)
+                        return new ErrorResponse("No renderers found in the scene. Cannot determine scene bounds for orbit capture.");
+
+                    center = bounds.center;
+                    radius = cmd.orbitDistance ?? Mathf.Max(bounds.extents.magnitude * 2.0f, 3f);
+                }
+
+                // Create a temporary camera
+                var tempGo = new GameObject("__MCP_OrbitCapture_Temp_Camera__");
+                Camera tempCam = tempGo.AddComponent<Camera>();
+                tempCam.fieldOfView = fov;
+                tempCam.nearClipPlane = 0.1f;
+                tempCam.farClipPlane = radius * 4f;
+                tempCam.clearFlags = CameraClearFlags.Skybox;
+
+                var screenshots = new List<object>();
+                try
+                {
+                    foreach (float elevDeg in elevations)
+                    {
+                        float elevRad = elevDeg * Mathf.Deg2Rad;
+                        float y = Mathf.Sin(elevRad) * radius;
+                        float horizontalRadius = Mathf.Cos(elevRad) * radius;
+
+                        for (int i = 0; i < azimuthCount; i++)
+                        {
+                            float azimuthDeg = i * (360f / azimuthCount);
+                            float azimuthRad = azimuthDeg * Mathf.Deg2Rad;
+
+                            float x = Mathf.Sin(azimuthRad) * horizontalRadius;
+                            float z = Mathf.Cos(azimuthRad) * horizontalRadius;
+
+                            Vector3 pos = center + new Vector3(x, y, z);
+                            tempCam.transform.position = pos;
+                            tempCam.transform.LookAt(center);
+
+                            var (b64, w, h) = ScreenshotUtility.RenderCameraToBase64(tempCam, maxRes);
+                            screenshots.Add(new Dictionary<string, object>
+                            {
+                                { "angle", $"az{azimuthDeg:F0}_el{elevDeg:F0}" },
+                                { "azimuth", azimuthDeg },
+                                { "elevation", elevDeg },
+                                { "position", new[] { pos.x, pos.y, pos.z } },
+                                { "imageBase64", b64 },
+                                { "imageWidth", w },
+                                { "imageHeight", h },
+                            });
+                        }
+                    }
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(tempGo);
+                }
+
+                return new SuccessResponse(
+                    $"Captured {screenshots.Count} orbit screenshots ({azimuthCount} azimuths x {elevations.Length} elevations, max {maxRes}px). Center: ({center.x:F1}, {center.y:F1}, {center.z:F1}), radius: {radius:F1}.",
+                    new
+                    {
+                        sceneCenter = new[] { center.x, center.y, center.z },
+                        orbitRadius = radius,
+                        orbitAngles = azimuthCount,
+                        orbitElevations = elevations,
+                        orbitFov = fov,
+                        screenshots = screenshots,
+                    }
+                );
+            }
+            catch (Exception e)
+            {
+                return new ErrorResponse($"Error capturing orbit screenshots: {e.Message}");
             }
         }
 
