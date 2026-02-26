@@ -291,6 +291,38 @@ html, body, [data-testid="stAppViewContainer"] {{
 [data-testid="stCaptionContainer"] {{
   font-size: 0.95rem;
 }}
+/* Card-like expanders */
+[data-testid="stExpander"] {{
+  border-radius: 12px;
+  border: 1px solid #e0e0e0;
+  margin-bottom: 0.5rem;
+}}
+/* Metric cards */
+[data-testid="stMetric"] {{
+  background: #f8f9fa;
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}}
+/* Section headers */
+[data-testid="stAppViewContainer"] h3 {{
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 0.5rem;
+  margin-top: 1.5rem;
+}}
+/* Tab content spacing */
+.stTabs [data-baseweb="tab-panel"] {{
+  padding-top: 1rem;
+}}
+/* Better data editor */
+[data-testid="stDataFrame"] {{
+  border-radius: 8px;
+  overflow: hidden;
+}}
+/* Info/success/warning alert boxes */
+[data-testid="stAlert"] {{
+  border-radius: 8px;
+}}
 </style>
         """,
         unsafe_allow_html=True,
@@ -2566,58 +2598,127 @@ def _build_scene_diagram(
 ) -> str:
     """Build a Mermaid flowchart diagram from AI suggestions.
 
-    Returns a Mermaid string ready for st.markdown rendering.
+    Teacher-friendly: no emojis (they garble in SVG), human-readable role labels,
+    grouped subgraphs, and simplified edges.
     """
     lines: list[str] = ["graph TD"]
 
-    # Environment node
+    # --- Friendly label lookup for structural_component ---
+    domain = spec.get("_domain_template", "")
+    role_labels: dict[str, str] = {}
+    try:
+        role_labels = _get_template_labels(domain)
+    except Exception:
+        pass
+
+    def _friendly_role(comp: str) -> str:
+        """Turn a raw component key into a human-readable role label."""
+        if comp in role_labels:
+            return role_labels[comp]
+        return comp.replace("_", " ").title()
+
+    strategy_labels = {
+        "primitive": "3D Shape",
+        "trellis": "AI-Generated Model",
+        "vfx": "Visual Effect",
+        "mechanic": "Game Logic",
+        "ui": "UI Element",
+    }
+
+    # --- Environment node ---
     env_sug = suggestions.get("environment", {})
     setting = env_sug.get("setting", "Scene") if env_sug else "Scene"
-    lines.append(f'    ENV["{_mermaid_escape(setting.title())} Environment"]')
-    lines.append('    style ENV fill:#e8f5e9,stroke:#4caf50,stroke-width:2px')
+    lines.append(f'    ENV["{_mermaid_escape(setting.title())}"]')
+    lines.append('    style ENV fill:#e8f5e9,stroke:#4caf50,stroke-width:3px,color:#1b5e20')
 
-    # Game loop node
+    # --- Game loop node ---
     game_loop = suggestions.get("game_loop_description", "")
     if game_loop:
-        short_loop = game_loop[:80] + "..." if len(game_loop) > 80 else game_loop
-        lines.append(f'    LOOP["{_mermaid_escape(short_loop)}"]')
-        lines.append('    style LOOP fill:#fff3e0,stroke:#ff9800,stroke-width:2px')
-        lines.append('    ENV --> LOOP')
+        first_sentence = game_loop.split(".")[0].strip()
+        short_loop = (first_sentence[:60] + "...") if len(first_sentence) > 60 else first_sentence
+        lines.append(f'    LOOP("{_mermaid_escape(short_loop)}")')
+        lines.append('    style LOOP fill:#fff3e0,stroke:#ff9800,stroke-width:2px,color:#e65100')
+        lines.append('    ENV -.->|"game loop"| LOOP')
 
-    # Mapping nodes with interactions
+    # --- Classify mappings into scene vs system groups ---
     mapping_suggestions = suggestions.get("mapping_suggestions", [])
+    scene_group: list[int] = []      # tangible objects (primitive, trellis, vfx)
+    system_group: list[int] = []     # logic & UI (mechanic, ui)
     node_ids: list[str] = []
+
     for i, m_sug in enumerate(mapping_suggestions):
         if i >= len(mappings):
             break
-        m = mappings[i]
-        name = m.get("analogy_name", f"Mapping_{i + 1}")
-        comp = m.get("structural_component", "")
-        node_id = f"M{i}"
-        node_ids.append(node_id)
-
+        node_ids.append(f"M{i}")
         strategy = m_sug.get("asset_strategy", "primitive")
-        icon = {"primitive": "🔷", "trellis": "🎨", "vfx": "✨", "mechanic": "⚙️", "ui": "📊"}.get(strategy, "📦")
+        if strategy in ("mechanic", "ui"):
+            system_group.append(i)
+        else:
+            scene_group.append(i)
 
-        label = f"{icon} {_mermaid_escape(name)}"
-        if comp:
-            label += f"<br/><i>{_mermaid_escape(comp)}</i>"
+    # --- Scene Objects subgraph ---
+    if scene_group:
+        lines.append('    subgraph SCENE["Scene Objects"]')
+        lines.append('    direction TB')
+        for i in scene_group:
+            m = mappings[i]
+            m_sug = mapping_suggestions[i]
+            name = m.get("analogy_name", f"Object {i + 1}")
+            comp = m.get("structural_component", "")
+            strategy = m_sug.get("asset_strategy", "primitive")
+            strat_label = strategy_labels.get(strategy, strategy)
+            role = _friendly_role(comp) if comp else ""
+            label = _mermaid_escape(name)
+            if role and role.lower() != name.lower():
+                label += f"\\n({_mermaid_escape(role)})"
+            label += f"\\n[{_mermaid_escape(strat_label)}]"
+            lines.append(f'    M{i}["{label}"]')
+        lines.append('    end')
+        lines.append('    style SCENE fill:#f5f5f5,stroke:#bdbdbd,stroke-width:1px')
 
-        lines.append(f'    {node_id}["{label}"]')
-        lines.append(f'    ENV --> {node_id}')
+    # --- System Logic subgraph ---
+    if system_group:
+        lines.append('    subgraph SYSTEM["System Logic"]')
+        lines.append('    direction TB')
+        for i in system_group:
+            m = mappings[i]
+            m_sug = mapping_suggestions[i]
+            name = m.get("analogy_name", f"Mechanic {i + 1}")
+            comp = m.get("structural_component", "")
+            strategy = m_sug.get("asset_strategy", "mechanic")
+            strat_label = strategy_labels.get(strategy, strategy)
+            role = _friendly_role(comp) if comp else ""
+            label = _mermaid_escape(name)
+            if role and role.lower() != name.lower():
+                label += f"\\n({_mermaid_escape(role)})"
+            label += f"\\n[{_mermaid_escape(strat_label)}]"
+            lines.append(f'    M{i}["{label}"]')
+        lines.append('    end')
+        lines.append('    style SYSTEM fill:#fafafa,stroke:#bdbdbd,stroke-width:1px')
 
-        # Color by strategy
-        fill_colors = {
-            "primitive": "#e3f2fd,stroke:#2196f3",
-            "trellis": "#fce4ec,stroke:#e91e63",
-            "vfx": "#f3e5f5,stroke:#9c27b0",
-            "mechanic": "#fff8e1,stroke:#ffc107",
-            "ui": "#e0f7fa,stroke:#00bcd4",
-        }
-        style = fill_colors.get(strategy, "#f5f5f5,stroke:#9e9e9e")
-        lines.append(f'    style {node_id} fill:#{style},stroke-width:1px')
+    # --- Node styles by strategy ---
+    fill_colors = {
+        "primitive": "fill:#e3f2fd,stroke:#1976d2",
+        "trellis": "fill:#fce4ec,stroke:#c62828",
+        "vfx": "fill:#f3e5f5,stroke:#7b1fa2",
+        "mechanic": "fill:#fff8e1,stroke:#f9a825",
+        "ui": "fill:#e0f7fa,stroke:#00838f",
+    }
+    for i in range(len(node_ids)):
+        if i >= len(mapping_suggestions):
+            break
+        strategy = mapping_suggestions[i].get("asset_strategy", "primitive")
+        style = fill_colors.get(strategy, "fill:#f5f5f5,stroke:#9e9e9e")
+        lines.append(f'    style M{i} {style},stroke-width:2px')
 
-    # Interaction edges between nodes
+    # --- Connect ENV to subgroups ---
+    if scene_group:
+        lines.append('    ENV --> SCENE')
+    if system_group:
+        lines.append('    ENV --> SYSTEM')
+
+    # --- Interaction edges (skip self-loops, deduplicate) ---
+    seen_edges: set[tuple[int, int]] = set()
     for i, m_sug in enumerate(mapping_suggestions):
         if i >= len(mappings):
             break
@@ -2630,25 +2731,36 @@ def _build_scene_diagram(
                 target_name = str(target).strip()
                 for j, m2 in enumerate(mappings):
                     if j < len(node_ids) and str(m2.get("analogy_name", "")).strip() == target_name:
-                        effect = ix.get("effect", "interacts")
-                        lines.append(f'    M{i} -->|"{_mermaid_escape(str(effect))}"| M{j}')
+                        if i == j:
+                            continue
+                        if (i, j) in seen_edges:
+                            continue
+                        seen_edges.add((i, j))
+                        effect = str(ix.get("effect", "")).strip()
+                        short_effect = effect.replace("_", " ") if effect else "affects"
+                        if len(short_effect) > 25:
+                            short_effect = short_effect[:22] + "..."
+                        lines.append(f'    M{i} -->|"{_mermaid_escape(short_effect)}"| M{j}')
                         break
 
-    # Causal chain sub-graph
+    # --- Causal chain subgraph ---
     exp_sug = suggestions.get("experience_suggestions", {})
     chain = exp_sug.get("causal_chain", []) if isinstance(exp_sug, dict) else []
     if not chain:
         chain = spec.get("experience", {}).get("causal_chain", [])
     if chain and isinstance(chain, list) and len(chain) > 1:
-        lines.append('    subgraph CHAIN["Causal Chain"]')
+        lines.append('    subgraph CHAIN["Learning Sequence"]')
         lines.append('    direction LR')
         for ci, step in enumerate(chain):
             trigger = step.get("trigger_event", f"Step {ci + 1}")
-            lines.append(f'    C{ci}["{_mermaid_escape(str(trigger)[:50])}"]')
+            short_trigger = str(trigger)[:45]
+            if len(str(trigger)) > 45:
+                short_trigger += "..."
+            lines.append(f'    C{ci}["{_mermaid_escape(short_trigger)}"]')
             if ci > 0:
                 lines.append(f'    C{ci - 1} --> C{ci}')
         lines.append('    end')
-        lines.append('    style CHAIN fill:#f9fbe7,stroke:#cddc39,stroke-width:1px')
+        lines.append('    style CHAIN fill:#f9fbe7,stroke:#afb42b,stroke-width:1px')
 
     return "\n".join(lines)
 
@@ -2656,6 +2768,164 @@ def _build_scene_diagram(
 def _mermaid_escape(text: str) -> str:
     """Escape special characters for Mermaid node labels."""
     return text.replace('"', "'").replace("\n", " ").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _render_mermaid(code: str, height: int = 500) -> None:
+    """Render a Mermaid diagram as a visual graphic using the Mermaid JS library."""
+    import base64 as _b64
+
+    encoded = _b64.b64encode(code.encode("utf-8")).decode("ascii")
+    html = f"""
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <div id="mermaid-container" style="background:white;padding:16px;border-radius:8px;">
+        <div id="mermaid-output" style="text-align:center;"></div>
+    </div>
+    <script>
+        (function() {{
+            mermaid.initialize({{ startOnLoad: false, theme: 'default', securityLevel: 'loose' }});
+            var code = atob("{encoded}");
+            mermaid.render('mermaid-graph', code).then(function(result) {{
+                document.getElementById('mermaid-output').innerHTML = result.svg;
+            }}).catch(function(err) {{
+                document.getElementById('mermaid-output').innerHTML =
+                    '<pre style="color:red;">Mermaid error: ' + err.message + '</pre>';
+            }});
+        }})();
+    </script>
+    """
+    components.html(html, height=height, scrolling=True)
+
+
+def _build_causal_chain_diagram(
+    experience_payload: dict[str, Any],
+    suggestions: dict[str, Any] | None = None,
+) -> str:
+    """Build a Mermaid sequence diagram for the causal chain.
+
+    Teacher-friendly: uses plain-English participant names and
+    truncates long text so the diagram stays readable.
+    """
+    if suggestions and isinstance(suggestions.get("experience_suggestions"), dict):
+        chain = suggestions["experience_suggestions"].get("causal_chain", [])
+    else:
+        chain = experience_payload.get("causal_chain", [])
+    if not chain or not isinstance(chain, list):
+        return ""
+
+    def _trunc(text: str, limit: int = 50) -> str:
+        text = _mermaid_escape(text.strip())
+        return (text[:limit - 3] + "...") if len(text) > limit else text
+
+    lines = ["sequenceDiagram"]
+    lines.append("    participant L as Student Action")
+    lines.append("    participant T as What Happens")
+    lines.append("    participant S as System Response")
+    lines.append("    participant O as What You See")
+    for step in chain:
+        if not isinstance(step, dict):
+            continue
+        trigger = _trunc(str(step.get("trigger_event", "")) or f"Step {step.get('step', '?')}")
+        immediate = _trunc(str(step.get("immediate_feedback", "")) or "feedback")
+        delayed = _trunc(str(step.get("delayed_system_update", "")) or "update")
+        outcome = _trunc(str(step.get("observable_outcome", "")) or "outcome", 70)
+        lines.append(f"    L->>T: {trigger}")
+        lines.append(f"    T->>S: {immediate}")
+        lines.append(f"    S-->>O: {delayed}")
+        lines.append(f"    Note over L,O: {outcome}")
+    return "\n".join(lines)
+
+
+def _build_phase_flow_diagram(experience_payload: dict[str, Any]) -> str:
+    """Build a Mermaid flowchart for the experience phase flow.
+
+    Teacher-friendly: shows the learner journey as a left-to-right
+    sequence with objectives visible in each node.
+    """
+    phases = experience_payload.get("phases", [])
+    if not phases or not isinstance(phases, list):
+        return ""
+    lines = ["graph LR"]
+    phase_colors = {
+        "Intro": "#e3f2fd",
+        "Explore": "#e8f5e9",
+        "Trigger": "#fff3e0",
+        "Observe Feedback Loop": "#fce4ec",
+        "Summary": "#f3e5f5",
+    }
+    phase_strokes = {
+        "Intro": "#1976d2",
+        "Explore": "#388e3c",
+        "Trigger": "#f57c00",
+        "Observe Feedback Loop": "#c62828",
+        "Summary": "#7b1fa2",
+    }
+    for i, phase in enumerate(phases):
+        if not isinstance(phase, dict):
+            continue
+        name = str(phase.get("phase_name", f"Phase {i + 1}")).strip()
+        objective = str(phase.get("objective", "")).strip()
+        node_id = f"P{i}"
+        label = _mermaid_escape(name)
+        if objective:
+            short_obj = objective[:40] + ("..." if len(objective) > 40 else "")
+            label += f"\\n{_mermaid_escape(short_obj)}"
+        lines.append(f'    {node_id}["{label}"]')
+        fill = phase_colors.get(name, "#f5f5f5")
+        stroke = phase_strokes.get(name, "#9e9e9e")
+        lines.append(f'    style {node_id} fill:{fill},stroke:{stroke},stroke-width:2px')
+        if i > 0:
+            action = str(phase.get("player_action", "")).strip()
+            if action:
+                short_action = (action[:30] + "...") if len(action) > 30 else action
+                lines.append(f'    P{i - 1} -->|"{_mermaid_escape(short_action)}"| P{i}')
+            else:
+                lines.append(f'    P{i - 1} --> P{i}')
+    return "\n".join(lines)
+
+
+def _build_interaction_network_diagram(
+    mappings: list[dict[str, Any]],
+    mapping_suggestions: list[dict[str, Any]],
+) -> str:
+    """Build a Mermaid graph showing the interaction network between objects.
+
+    Teacher-friendly: uses readable effect labels and avoids duplicate /
+    self-referencing edges.
+    """
+    if not mappings or not mapping_suggestions:
+        return ""
+    lines = ["graph LR"]
+    has_any_interaction = False
+    seen_edges: set[tuple[int, int]] = set()
+    for i, m in enumerate(mappings):
+        if i >= len(mapping_suggestions):
+            break
+        name = str(m.get("analogy_name", f"Object {i + 1}")).strip()
+        node_id = f"N{i}"
+        lines.append(f'    {node_id}(["{_mermaid_escape(name)}"])')
+    for i, m_sug in enumerate(mapping_suggestions):
+        if i >= len(mappings):
+            break
+        ix = m_sug.get("interaction")
+        if not isinstance(ix, dict):
+            continue
+        effect = str(ix.get("effect", "")).strip().replace("_", " ")
+        targets = ix.get("target_objects", [])
+        if isinstance(targets, list):
+            for target in targets:
+                target_name = str(target).strip()
+                for j, m2 in enumerate(mappings):
+                    if str(m2.get("analogy_name", "")).strip() == target_name:
+                        if i == j or (i, j) in seen_edges:
+                            continue
+                        seen_edges.add((i, j))
+                        edge_label = _mermaid_escape(effect or "interacts")
+                        lines.append(f'    N{i} -->|"{edge_label}"| N{j}')
+                        has_any_interaction = True
+                        break
+    if not has_any_interaction:
+        return ""
+    return "\n".join(lines)
 
 
 def _render_editable_environment(suggestions: dict[str, Any]) -> dict[str, Any]:
@@ -2868,6 +3138,203 @@ def _run_brainstorm_suggest(spec: dict[str, Any], allow_trellis: bool) -> None:
             st.error("Brainstorm succeeded but suggestion generation failed. Try again.")
 
 
+def _render_editable_experience_suggestions(
+    suggestions: dict[str, Any],
+    key_prefix: str = "exp_sug",
+) -> dict[str, Any]:
+    """Render editable experience suggestion fields. Returns the updated experience dict."""
+    import pandas as pd
+
+    raw_exp = suggestions.get("experience_suggestions", {})
+    exp = _normalize_experience_payload(raw_exp if isinstance(raw_exp, dict) else {})
+
+    c1, c2, c3 = st.columns([3, 1, 1])
+    with c1:
+        exp["objective"] = st.text_area(
+            "Learner Objective", value=exp.get("objective", ""),
+            key=f"{key_prefix}_obj", height=70,
+        )
+    with c2:
+        exp["progress_metric_label"] = st.text_input(
+            "Progress Label", value=exp.get("progress_metric_label", "Progress"),
+            key=f"{key_prefix}_plbl",
+        )
+    with c3:
+        exp["progress_target"] = st.number_input(
+            "Target", min_value=1, value=int(exp.get("progress_target", 3)),
+            key=f"{key_prefix}_ptgt",
+        )
+
+    criteria_text = "\n".join(exp.get("success_criteria", []))
+    new_criteria = st.text_area(
+        "Success Criteria (one per line)", value=criteria_text,
+        key=f"{key_prefix}_crit", height=100,
+    )
+    exp["success_criteria"] = [ln.strip() for ln in new_criteria.splitlines() if ln.strip()]
+
+    st.markdown("**Phase Flow**")
+    phases_data = exp.get("phases", [])
+    if not phases_data:
+        phases_data = [{"phase_name": n, "objective": "", "player_action": "",
+                        "expected_feedback": "", "completion_criteria": ""}
+                       for n in EXPERIENCE_PHASE_SEQUENCE]
+    edited_phases = st.data_editor(
+        pd.DataFrame(phases_data), width="stretch", num_rows="dynamic",
+        key=f"{key_prefix}_ph",
+        column_config={
+            "phase_name": st.column_config.TextColumn("Phase", width="small"),
+            "objective": st.column_config.TextColumn("Objective", width="medium"),
+            "player_action": st.column_config.TextColumn("Player Action", width="medium"),
+            "expected_feedback": st.column_config.TextColumn("Feedback", width="medium"),
+            "completion_criteria": st.column_config.TextColumn("Completion", width="medium"),
+        },
+    )
+    exp["phases"] = [
+        {"phase_name": str(r.get("phase_name", "")).strip(),
+         "objective": str(r.get("objective", "")).strip(),
+         "player_action": str(r.get("player_action", "")).strip(),
+         "expected_feedback": str(r.get("expected_feedback", "")).strip(),
+         "completion_criteria": str(r.get("completion_criteria", "")).strip()}
+        for _, r in edited_phases.iterrows()
+        if str(r.get("phase_name", "")).strip()
+    ]
+
+    st.markdown("**Causal Chain**")
+    chain_data = exp.get("causal_chain", [])
+    if not chain_data:
+        chain_data = [{"step": 1, "trigger_event": "", "immediate_feedback": "",
+                       "delayed_system_update": "", "observable_outcome": ""}]
+    edited_chain = st.data_editor(
+        pd.DataFrame(chain_data), width="stretch", num_rows="dynamic",
+        key=f"{key_prefix}_cc",
+        column_config={
+            "step": st.column_config.NumberColumn("Step", width="small"),
+            "trigger_event": st.column_config.TextColumn("Trigger", width="medium"),
+            "immediate_feedback": st.column_config.TextColumn("Immediate", width="medium"),
+            "delayed_system_update": st.column_config.TextColumn("Delayed Update", width="medium"),
+            "observable_outcome": st.column_config.TextColumn("Outcome", width="medium"),
+        },
+    )
+    chain_rows: list[dict[str, Any]] = []
+    for i, row in edited_chain.iterrows():
+        try:
+            step_v = int(row.get("step", i + 1))
+        except (TypeError, ValueError):
+            step_v = i + 1
+        chain_rows.append({
+            "step": max(1, step_v),
+            "trigger_event": str(row.get("trigger_event", "")).strip(),
+            "immediate_feedback": str(row.get("immediate_feedback", "")).strip(),
+            "delayed_system_update": str(row.get("delayed_system_update", "")).strip(),
+            "observable_outcome": str(row.get("observable_outcome", "")).strip(),
+        })
+    chain_rows.sort(key=lambda item: item["step"])
+    exp["causal_chain"] = chain_rows
+
+    with st.expander("Guided Prompts & HUD Settings", expanded=False):
+        prompts_data = exp.get("guided_prompts", [])
+        if not prompts_data:
+            prompts_data = [{"phase_name": "", "prompt": "", "optional": True}]
+        edited_prompts = st.data_editor(
+            pd.DataFrame(prompts_data), width="stretch", num_rows="dynamic",
+            key=f"{key_prefix}_gp",
+        )
+        exp["guided_prompts"] = [
+            {"phase_name": str(r.get("phase_name", "")).strip(),
+             "prompt": str(r.get("prompt", "")).strip(),
+             "optional": bool(r.get("optional", True))}
+            for _, r in edited_prompts.iterrows()
+            if str(r.get("prompt", "")).strip()
+        ]
+        exp["feedback_hud_enabled"] = st.checkbox(
+            "Enable Feedback HUD", value=bool(exp.get("feedback_hud_enabled", True)),
+            key=f"{key_prefix}_hud",
+        )
+        hud_text = ", ".join(exp.get("feedback_hud_sections", []))
+        hud_input = st.text_input(
+            "HUD Sections (comma-separated)", value=hud_text, key=f"{key_prefix}_huds",
+        )
+        exp["feedback_hud_sections"] = [s.strip() for s in hud_input.split(",") if s.strip()]
+
+    with st.expander("Spatial Staging & Audio Cues", expanded=False):
+        spatial = exp.get("spatial_staging", [])
+        spatial_rows: list[dict[str, Any]] = []
+        for zone in spatial:
+            center = zone.get("suggested_center", [0, 0, 0])
+            if not isinstance(center, list) or len(center) < 3:
+                center = [0, 0, 0]
+            spatial_rows.append({
+                "zone_name": zone.get("zone_name", ""),
+                "purpose": zone.get("purpose", ""),
+                "anchor_object": zone.get("anchor_object", ""),
+                "center_x": float(center[0]), "center_y": float(center[1]),
+                "center_z": float(center[2]),
+                "suggested_radius": float(zone.get("suggested_radius", 4.0)),
+            })
+        if not spatial_rows:
+            spatial_rows = [{"zone_name": "", "purpose": "", "anchor_object": "",
+                            "center_x": 0.0, "center_y": 0.0, "center_z": 0.0,
+                            "suggested_radius": 4.0}]
+        edited_spatial = st.data_editor(
+            pd.DataFrame(spatial_rows), width="stretch", num_rows="dynamic",
+            key=f"{key_prefix}_sp",
+        )
+        exp["spatial_staging"] = []
+        for _, row in edited_spatial.iterrows():
+            zn = str(row.get("zone_name", "")).strip()
+            if not zn:
+                continue
+            try:
+                cx = float(row.get("center_x", 0))
+                cy = float(row.get("center_y", 0))
+                cz = float(row.get("center_z", 0))
+            except (TypeError, ValueError):
+                cx, cy, cz = 0.0, 0.0, 0.0
+            try:
+                radius = float(row.get("suggested_radius", 4.0))
+            except (TypeError, ValueError):
+                radius = 4.0
+            exp["spatial_staging"].append({
+                "zone_name": zn,
+                "purpose": str(row.get("purpose", "")).strip(),
+                "anchor_object": str(row.get("anchor_object", "")).strip(),
+                "suggested_center": [cx, cy, cz],
+                "suggested_radius": max(0.1, radius),
+            })
+
+        audio = exp.get("audio_cues", [])
+        if not audio:
+            audio = [{"cue_name": "", "trigger": "", "purpose": "",
+                      "delay_seconds": 0.0, "volume": 0.6}]
+        edited_audio = st.data_editor(
+            pd.DataFrame(audio), width="stretch", num_rows="dynamic",
+            key=f"{key_prefix}_au",
+        )
+        audio_clean: list[dict[str, Any]] = []
+        for _, row in edited_audio.iterrows():
+            cn = str(row.get("cue_name", "")).strip()
+            if not cn:
+                continue
+            try:
+                delay_s = max(0.0, float(row.get("delay_seconds", 0)))
+            except (TypeError, ValueError):
+                delay_s = 0.0
+            try:
+                vol = min(1.0, max(0.0, float(row.get("volume", 0.6))))
+            except (TypeError, ValueError):
+                vol = 0.6
+            audio_clean.append({
+                "cue_name": cn,
+                "trigger": str(row.get("trigger", "")).strip(),
+                "purpose": str(row.get("purpose", "")).strip(),
+                "delay_seconds": delay_s,
+                "volume": vol,
+            })
+        exp["audio_cues"] = audio_clean
+
+    return _normalize_experience_payload(exp)
+
+
 def _render_generate_preview() -> None:
     spec = _get_spec()
     allow_trellis = bool(st.session_state.get("allow_trellis_generation", DEFAULT_ALLOW_TRELLIS))
@@ -3018,10 +3485,88 @@ def _render_generate_preview() -> None:
                 else:
                     st.caption("No explicit surface block returned.")
 
-        # --- Scene Diagram ---
-        st.markdown("##### Scene Overview")
-        diagram_code = _build_scene_diagram(suggestions, mappings, spec)
-        st.markdown(f"```mermaid\n{diagram_code}\n```")
+        # --- Visual Overview (multiple diagrams) ---
+        with st.expander("📊 Visual Overview — Diagrams", expanded=True):
+            st.caption(
+                "These diagrams show how your analogy mapping translates into "
+                "a 3D scene. Each tab highlights a different aspect of the design."
+            )
+            diagram_tabs = st.tabs([
+                "🏗 Scene Architecture",
+                "🔄 Phase Flow",
+                "⛓ Cause & Effect",
+                "🔗 Interactions",
+            ])
+
+            with diagram_tabs[0]:
+                st.caption(
+                    "Objects grouped by type: Scene Objects are things you can see, "
+                    "System Logic handles behind-the-scenes mechanics. "
+                    "Arrows show how objects interact."
+                )
+                diagram_code = _build_scene_diagram(suggestions, mappings, spec)
+                _render_mermaid(diagram_code, height=550)
+
+            with diagram_tabs[1]:
+                st.caption(
+                    "The learner journey from start to finish. "
+                    "Each phase has an objective and triggers the next step."
+                )
+                exp_payload = suggestions.get("experience_suggestions") or spec.get("experience", {})
+                if isinstance(exp_payload, dict):
+                    phase_diagram = _build_phase_flow_diagram(_normalize_experience_payload(exp_payload))
+                    if phase_diagram:
+                        _render_mermaid(phase_diagram, height=300)
+                    else:
+                        st.caption("No phase data available yet.")
+                else:
+                    st.caption("No experience data available yet.")
+
+            with diagram_tabs[2]:
+                st.caption(
+                    "What happens step by step: the student acts, the system "
+                    "responds immediately, then updates behind the scenes, and "
+                    "the result becomes visible."
+                )
+                chain_diagram = _build_causal_chain_diagram(
+                    _normalize_experience_payload(spec.get("experience", {})),
+                    suggestions,
+                )
+                if chain_diagram:
+                    _render_mermaid(chain_diagram, height=400)
+                else:
+                    st.caption("No causal chain data available yet.")
+
+            with diagram_tabs[3]:
+                st.caption(
+                    "Which objects affect which other objects. "
+                    "Arrows show the direction and type of interaction."
+                )
+                interaction_diagram = _build_interaction_network_diagram(
+                    mappings, suggestions.get("mapping_suggestions", [])
+                )
+                if interaction_diagram:
+                    _render_mermaid(interaction_diagram, height=400)
+                else:
+                    st.caption("No interaction edges found between objects.")
+
+            # --- Color Legend ---
+            st.markdown(
+                '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;">'
+                '<span style="padding:2px 10px;border-radius:4px;background:#e3f2fd;border:2px solid #1976d2;font-size:0.85em;">3D Shape</span>'
+                '<span style="padding:2px 10px;border-radius:4px;background:#fce4ec;border:2px solid #c62828;font-size:0.85em;">AI-Generated Model</span>'
+                '<span style="padding:2px 10px;border-radius:4px;background:#f3e5f5;border:2px solid #7b1fa2;font-size:0.85em;">Visual Effect</span>'
+                '<span style="padding:2px 10px;border-radius:4px;background:#fff8e1;border:2px solid #f9a825;font-size:0.85em;">Game Logic</span>'
+                '<span style="padding:2px 10px;border-radius:4px;background:#e0f7fa;border:2px solid #00838f;font-size:0.85em;">UI Element</span>'
+                '<span style="padding:2px 10px;border-radius:4px;background:#e8f5e9;border:2px solid #4caf50;font-size:0.85em;">Environment</span>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+        # Game loop summary
+        game_loop_text = suggestions.get("game_loop_description", "")
+        if game_loop_text:
+            st.info(f"**Game Loop:** {game_loop_text}")
 
         # Brainstorm summary (if available)
         brainstorm = st.session_state.get("brainstorm_result")
@@ -3029,6 +3574,8 @@ def _render_generate_preview() -> None:
             with st.expander("Brainstorm Merge Notes", expanded=False):
                 for note in brainstorm.merge_notes:
                     st.caption(f"- {note}")
+
+        st.divider()
 
         # --- Editable Suggestion Details ---
         st.markdown("##### Edit Suggestions")
@@ -3049,11 +3596,11 @@ def _render_generate_preview() -> None:
         )
         suggestions["game_loop_description"] = new_game_loop
 
-        # Experience suggestion (read-only preview)
-        exp_sug = suggestions.get("experience_suggestions")
-        if isinstance(exp_sug, dict):
-            with st.expander("Experience Plan Preview", expanded=False):
-                _render_experience_preview(exp_sug, section_title="AI Experience Suggestions")
+        # Experience suggestion (editable)
+        with st.expander("🎯 Experience Design (Editable)", expanded=False):
+            st.caption("Edit the AI-generated experience plan — phases, causal chain, prompts, and more.")
+            updated_exp = _render_editable_experience_suggestions(suggestions, key_prefix="sug_exp")
+            suggestions["experience_suggestions"] = updated_exp
 
         # Editable per-mapping suggestion cards
         st.markdown("##### Object & Interaction Details")
