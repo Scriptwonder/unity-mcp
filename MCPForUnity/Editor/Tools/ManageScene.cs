@@ -635,7 +635,9 @@ namespace MCPForUnity.Editor.Tools
                 tempCam.farClipPlane = radius * 4f;
                 tempCam.clearFlags = CameraClearFlags.Skybox;
 
-                var screenshots = new List<object>();
+                var tiles = new List<Texture2D>();
+                var tileLabels = new List<string>();
+                var shotMeta = new List<object>();
                 try
                 {
                     foreach (var (label, pos) in angles)
@@ -643,31 +645,37 @@ namespace MCPForUnity.Editor.Tools
                         tempCam.transform.position = pos;
                         tempCam.transform.LookAt(center);
 
-                        var (b64, w, h) = ScreenshotUtility.RenderCameraToBase64(tempCam, maxRes);
-                        screenshots.Add(new Dictionary<string, object>
+                        Texture2D tile = ScreenshotUtility.RenderCameraToTexture(tempCam, maxRes);
+                        tiles.Add(tile);
+                        tileLabels.Add(label);
+                        shotMeta.Add(new Dictionary<string, object>
                         {
                             { "angle", label },
                             { "position", new[] { pos.x, pos.y, pos.z } },
-                            { "imageBase64", b64 },
-                            { "imageWidth", w },
-                            { "imageHeight", h },
                         });
                     }
+
+                    var (compositeB64, compW, compH) = ScreenshotUtility.ComposeContactSheet(tiles, tileLabels);
+
+                    string screenshotsFolder = Path.Combine(Application.dataPath, "Screenshots");
+                    return new SuccessResponse(
+                        $"Captured {shotMeta.Count} multi-angle screenshots as contact sheet ({compW}x{compH}). Scene bounds center: ({center.x:F1}, {center.y:F1}, {center.z:F1}), radius: {radius:F1}.",
+                        new
+                        {
+                            sceneCenter = new[] { center.x, center.y, center.z },
+                            sceneRadius = radius,
+                            screenshotsFolder = screenshotsFolder,
+                            imageBase64 = compositeB64,
+                            imageWidth = compW,
+                            imageHeight = compH,
+                            shots = shotMeta,
+                        }
+                    );
                 }
                 finally
                 {
                     UnityEngine.Object.DestroyImmediate(tempGo);
                 }
-
-                return new SuccessResponse(
-                    $"Captured {screenshots.Count} multi-angle screenshots (max {maxRes}px). Scene bounds center: ({center.x:F1}, {center.y:F1}, {center.z:F1}), radius: {radius:F1}.",
-                    new
-                    {
-                        sceneCenter = new[] { center.x, center.y, center.z },
-                        sceneRadius = radius,
-                        screenshots = screenshots,
-                    }
-                );
             }
             catch (Exception e)
             {
@@ -745,7 +753,9 @@ namespace MCPForUnity.Editor.Tools
                 tempCam.farClipPlane = radius * 4f;
                 tempCam.clearFlags = CameraClearFlags.Skybox;
 
-                var screenshots = new List<object>();
+                var tiles = new List<Texture2D>();
+                var tileLabels = new List<string>();
+                var shotMeta = new List<object>();
                 try
                 {
                     foreach (float elevDeg in elevations)
@@ -766,37 +776,52 @@ namespace MCPForUnity.Editor.Tools
                             tempCam.transform.position = pos;
                             tempCam.transform.LookAt(center);
 
-                            var (b64, w, h) = ScreenshotUtility.RenderCameraToBase64(tempCam, maxRes);
-                            screenshots.Add(new Dictionary<string, object>
+                            string dirLabel = GetDirectionLabel(azimuthDeg);
+                            if (azimuthCount > 8)
+                                dirLabel += $"_{azimuthDeg:F0}deg";
+                            string elevLabel = elevDeg > 0 ? $"above{elevDeg:F0}"
+                                             : elevDeg < 0 ? $"below{Mathf.Abs(elevDeg):F0}"
+                                             : "level";
+                            string angleLabel = $"{dirLabel}_{elevLabel}";
+
+                            Texture2D tile = ScreenshotUtility.RenderCameraToTexture(tempCam, maxRes);
+                            tiles.Add(tile);
+                            tileLabels.Add(angleLabel);
+                            shotMeta.Add(new Dictionary<string, object>
                             {
-                                { "angle", $"az{azimuthDeg:F0}_el{elevDeg:F0}" },
+                                { "angle", angleLabel },
                                 { "azimuth", azimuthDeg },
                                 { "elevation", elevDeg },
                                 { "position", new[] { pos.x, pos.y, pos.z } },
-                                { "imageBase64", b64 },
-                                { "imageWidth", w },
-                                { "imageHeight", h },
                             });
                         }
                     }
+
+                    // Compose all tiles into a single contact-sheet grid image
+                    var (compositeB64, compW, compH) = ScreenshotUtility.ComposeContactSheet(tiles, tileLabels);
+
+                    string screenshotsFolder = Path.Combine(Application.dataPath, "Screenshots");
+                    return new SuccessResponse(
+                        $"Captured {shotMeta.Count} orbit screenshots as contact sheet ({compW}x{compH}, {azimuthCount} azimuths x {elevations.Length} elevations). Center: ({center.x:F1}, {center.y:F1}, {center.z:F1}), radius: {radius:F1}.",
+                        new
+                        {
+                            sceneCenter = new[] { center.x, center.y, center.z },
+                            orbitRadius = radius,
+                            orbitAngles = azimuthCount,
+                            orbitElevations = elevations,
+                            orbitFov = fov,
+                            screenshotsFolder = screenshotsFolder,
+                            imageBase64 = compositeB64,
+                            imageWidth = compW,
+                            imageHeight = compH,
+                            shots = shotMeta,
+                        }
+                    );
                 }
                 finally
                 {
                     UnityEngine.Object.DestroyImmediate(tempGo);
                 }
-
-                return new SuccessResponse(
-                    $"Captured {screenshots.Count} orbit screenshots ({azimuthCount} azimuths x {elevations.Length} elevations, max {maxRes}px). Center: ({center.x:F1}, {center.y:F1}, {center.z:F1}), radius: {radius:F1}.",
-                    new
-                    {
-                        sceneCenter = new[] { center.x, center.y, center.z },
-                        orbitRadius = radius,
-                        orbitAngles = azimuthCount,
-                        orbitElevations = elevations,
-                        orbitFov = fov,
-                        screenshots = screenshots,
-                    }
-                );
             }
             catch (Exception e)
             {
@@ -867,12 +892,14 @@ namespace MCPForUnity.Editor.Tools
 
                     var (b64, w, h) = ScreenshotUtility.RenderCameraToBase64(tempCam, maxRes);
 
+                    string screenshotsFolder = Path.Combine(Application.dataPath, "Screenshots");
                     var data = new Dictionary<string, object>
                     {
                         { "imageBase64", b64 },
                         { "imageWidth", w },
                         { "imageHeight", h },
                         { "viewPosition", new[] { camPos.x, camPos.y, camPos.z } },
+                        { "screenshotsFolder", screenshotsFolder },
                     };
                     if (targetPos.HasValue)
                         data["lookAt"] = new[] { targetPos.Value.x, targetPos.Value.y, targetPos.Value.z };
@@ -891,6 +918,19 @@ namespace MCPForUnity.Editor.Tools
             {
                 return new ErrorResponse($"Error capturing positioned screenshot: {e.Message}");
             }
+        }
+
+        private static string GetDirectionLabel(float azimuthDeg)
+        {
+            float a = ((azimuthDeg % 360f) + 360f) % 360f;
+            if (a < 22.5f || a >= 337.5f) return "front";
+            if (a < 67.5f)  return "front_right";
+            if (a < 112.5f) return "right";
+            if (a < 157.5f) return "back_right";
+            if (a < 202.5f) return "back";
+            if (a < 247.5f) return "back_left";
+            if (a < 292.5f) return "left";
+            return "front_left";
         }
 
         /// <summary>

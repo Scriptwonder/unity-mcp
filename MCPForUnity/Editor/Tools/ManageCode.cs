@@ -43,9 +43,9 @@ namespace MCPForUnity.Editor.Tools
             {
                 return new ErrorResponse(
                     "Roslyn (Microsoft.CodeAnalysis.CSharp) is not available. " +
-                    "To use execute_code, add Microsoft.CodeAnalysis.CSharp.dll and Microsoft.CodeAnalysis.dll " +
-                    "to your Unity project (e.g., under Assets/Plugins). " +
-                    "These come from the Microsoft.CodeAnalysis.CSharp NuGet package.");
+                    "Install via the MCP for Unity window's Scripts tab (click 'Install Roslyn DLLs'). " +
+                    "Or manually add Microsoft.CodeAnalysis.CSharp.dll and Microsoft.CodeAnalysis.dll " +
+                    "to Assets/Plugins (from the Microsoft.CodeAnalysis.CSharp NuGet package).");
             }
 
             return CompileAndExecute(code, entryType, entryMethod, timeoutMs);
@@ -150,7 +150,7 @@ namespace MCPForUnity.Editor.Tools
                 if (createRefMethod == null)
                     return new ErrorResponse("Failed to find MetadataReference.CreateFromFile method.");
 
-                var refs = new List<object>();
+                var refsList = new List<object>();
                 foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
                 {
                     if (asm.IsDynamic || string.IsNullOrEmpty(asm.Location)) continue;
@@ -161,13 +161,19 @@ namespace MCPForUnity.Editor.Tools
                         args[0] = asm.Location;
                         for (int i = 1; i < args.Length; i++)
                             args[i] = refParams[i].HasDefaultValue ? refParams[i].DefaultValue : null;
-                        refs.Add(createRefMethod.Invoke(null, args));
+                        refsList.Add(createRefMethod.Invoke(null, args));
                     }
                     catch { }
                 }
 
+                // Build a typed MetadataReference[] so it's assignable to IEnumerable<MetadataReference>
+                var refs = Array.CreateInstance(s_metadataReferenceType, refsList.Count);
+                for (int i = 0; i < refsList.Count; i++)
+                    refs.SetValue(refsList[i], i);
+
                 // Create compilation
-                var outputKindType = s_compilationOptionsType.Assembly.GetType("Microsoft.CodeAnalysis.OutputKind");
+                // OutputKind is in Microsoft.CodeAnalysis.dll (common), not the CSharp assembly
+                var outputKindType = s_metadataReferenceType.Assembly.GetType("Microsoft.CodeAnalysis.OutputKind");
                 var dllKind = Enum.Parse(outputKindType, "DynamicallyLinkedLibrary");
                 var optionsCtor = s_compilationOptionsType.GetConstructors()
                     .OrderByDescending(c => c.GetParameters().Length)
@@ -180,7 +186,8 @@ namespace MCPForUnity.Editor.Tools
                 var options = optionsCtor.Invoke(optionsArgs);
 
                 // CSharpCompilation.Create(assemblyName, syntaxTrees, references, options)
-                var syntaxTreeBaseType = s_syntaxTreeType.Assembly.GetType("Microsoft.CodeAnalysis.SyntaxTree");
+                // SyntaxTree base type is in Microsoft.CodeAnalysis.dll (common), not the CSharp assembly
+                var syntaxTreeBaseType = s_metadataReferenceType.Assembly.GetType("Microsoft.CodeAnalysis.SyntaxTree");
                 var metaRefBaseType = s_metadataReferenceType;
 
                 var createMethods = s_compilationType.GetMethods(BindingFlags.Public | BindingFlags.Static)

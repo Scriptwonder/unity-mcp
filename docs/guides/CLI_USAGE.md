@@ -68,8 +68,31 @@ unity-mcp scene active
 unity-mcp scene load "Assets/Scenes/Main.unity"
 unity-mcp scene save
 
-# Take screenshot
-unity-mcp scene screenshot --name "capture"
+# Take screenshot (saves to Assets/Screenshots/)
+unity-mcp scene screenshot
+unity-mcp scene screenshot --filename "level_preview"
+unity-mcp scene screenshot --supersize 2
+unity-mcp scene screenshot --camera "SecondCamera" --include-image
+
+# Positioned screenshot (single shot from a custom viewpoint)
+unity-mcp scene screenshot --view-position "0,10,-10" --look-at "0,0,0"
+unity-mcp scene screenshot --look-at "Player" --max-resolution 512
+```
+
+#### Batch Screenshots (Contact Sheet)
+
+Batch modes output a single composite contact-sheet PNG — a labeled grid of all captured angles.
+
+```bash
+# Surround: 6 fixed angles (front/back/left/right/top/bird_eye)
+unity-mcp scene screenshot --batch surround --max-resolution 256
+unity-mcp scene screenshot --batch surround --look-at "Player"
+
+# Orbit: configurable multi-angle grid around a target
+unity-mcp scene screenshot --batch orbit --look-at "Player" --orbit-angles 8
+unity-mcp scene screenshot --batch orbit --look-at "Player" --orbit-angles 10 --orbit-elevations "[0,30,-15]"
+unity-mcp scene screenshot --batch orbit --look-at "Main Camera" --orbit-angles 4 --max-resolution 512
+unity-mcp scene screenshot --batch orbit --look-at "0,1,0" --orbit-distance 10 --output-dir ./my_shots
 ```
 
 ### GameObject Operations
@@ -173,6 +196,25 @@ unity-mcp editor custom-tool "Deploy" --params '{"target": "Android"}'
 unity-mcp tool list
 unity-mcp custom_tool list
 ```
+
+#### Screenshot Parameters
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `--filename, -f` | string | Output filename (default: timestamp-based) |
+| `--supersize, -s` | int | Resolution multiplier 1–4 for file-saved screenshots |
+| `--camera, -c` | string | Camera name/path/ID (default: Camera.main) |
+| `--include-image` | flag | Return base64 PNG inline in the response |
+| `--max-resolution, -r` | int | Max longest-edge pixels (default 640) |
+| `--batch, -b` | string | `surround` (6 angles) or `orbit` (configurable grid) |
+| `--look-at` | string | Target: GameObject name/path/ID, or `x,y,z` world position |
+| `--view-position` | string | Camera position as `x,y,z` (positioned screenshot) |
+| `--view-rotation` | string | Camera euler rotation as `x,y,z` (positioned screenshot) |
+| `--orbit-angles` | int | Number of azimuth steps around target (default 8) |
+| `--orbit-elevations` | string | Vertical angles as JSON array, e.g. `[0,30,-15]` (default `[0]`) |
+| `--orbit-distance` | float | Camera distance from target in world units (auto-fit if omitted) |
+| `--orbit-fov` | float | Camera FOV in degrees (default 60) |
+| `--output-dir, -o` | string | Save directory (default: Unity project's `Assets/Screenshots/`) |
 
 ### Testing
 
@@ -316,6 +358,47 @@ unity-mcp ui create-button "StartBtn" --parent "MainCanvas" --text "Start"
 unity-mcp ui create-image "Background" --parent "MainCanvas"
 ```
 
+### Input Simulation
+
+Simulate keyboard, mouse, and sequenced input during Play Mode.
+
+```bash
+# Key press
+unity-mcp input key W --hold 1000
+unity-mcp input key Space
+unity-mcp input key Mouse0
+
+# Mouse click
+unity-mcp input click --x 400 --y 300
+unity-mcp input click --x 100 --y 200 --button 1
+
+# Mouse movement
+unity-mcp input move --dx 50 --dy 0
+
+# Timed input sequence (JSON array)
+unity-mcp input sequence '[{"action":"key","key":"W","duration_ms":2000},{"action":"wait","duration_ms":500},{"action":"key","key":"Space","duration_ms":100}]'
+
+# Read game state (play mode info, camera, player position)
+unity-mcp input state
+unity-mcp input state --query ui
+```
+
+### Code Execution
+
+Compile and execute C# code at runtime using Roslyn.
+Install the required DLLs from the MCP for Unity window's **Scripts** tab (click **Install Roslyn DLLs**).
+
+```bash
+# Execute a simple snippet
+unity-mcp code execute 'public class V { public static string Run() { return "hello"; } }' --entry-type V
+
+# Count mesh renderers in the scene
+unity-mcp code execute 'public class V { public static int Run() { return UnityEngine.Object.FindObjectsOfType<UnityEngine.MeshRenderer>().Length; } }' --entry-type V
+
+# Custom entry point
+unity-mcp code execute "..." --entry-type MyClass --entry-method Validate --timeout 10000
+```
+
 ### Raw Commands
 
 For any MCP tool not covered by dedicated commands:
@@ -323,6 +406,7 @@ For any MCP tool not covered by dedicated commands:
 ```bash
 unity-mcp raw manage_scene '{"action": "get_hierarchy", "max_nodes": 100}'
 unity-mcp raw read_console '{"count": 20}'
+unity-mcp raw simulate_input '{"action": "send_key", "key": "W", "holdDurationMs": 1000}'
 ```
 
 ---
@@ -333,10 +417,11 @@ unity-mcp raw read_console '{"count": 20}'
 |-------|-------------|
 | `instance` | `list`, `set`, `current` |
 | `scene` | `hierarchy`, `active`, `load`, `save`, `create`, `screenshot`, `build-settings` |
+| `input` | `key`, `click`, `move`, `sequence`, `state` |
+| `code` | `read`, `search`, `execute` |
 | `gameobject` | `find`, `create`, `modify`, `delete`, `duplicate`, `move` |
 | `component` | `add`, `remove`, `set`, `modify` |
 | `script` | `create`, `read`, `delete`, `edit`, `validate` |
-| `code` | `read`, `search` |
 | `shader` | `create`, `read`, `update`, `delete` |
 | `editor` | `play`, `pause`, `stop`, `refresh`, `console`, `menu`, `tool`, `add-tag`, `remove-tag`, `add-layer`, `remove-layer`, `tests`, `poll-test`, `custom-tool` |
 | `asset` | `search`, `info`, `create`, `delete`, `duplicate`, `move`, `rename`, `import`, `mkdir` |
@@ -353,6 +438,7 @@ unity-mcp raw read_console '{"count": 20}'
 | `tool` | `list` |
 | `custom_tool` | `list` |
 | `ui` | `create-canvas`, `create-text`, `create-button`, `create-image` |
+| `raw` | *(any MCP tool name + JSON params)* |
 
 ---
 

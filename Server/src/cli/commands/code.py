@@ -1,4 +1,4 @@
-"""Code CLI commands - read source code. search might be implemented later (but can be totally achievable with AI)."""
+"""Code CLI commands - read source code, execute runtime snippets."""
 
 import sys
 import os
@@ -6,13 +6,13 @@ import click
 from typing import Optional, Any
 
 from cli.utils.config import get_config
-from cli.utils.output import format_output, print_error, print_info
+from cli.utils.output import format_output, print_error, print_info, print_success
 from cli.utils.connection import run_command, handle_unity_errors
 
 
 @click.group()
 def code():
-    """Code operations - read source files."""
+    """Code operations - read source files, execute runtime snippets."""
     pass
 
 
@@ -180,3 +180,61 @@ def search(pattern: str, path: str, max_results: int, case_sensitive: bool):
     click.echo(f"Found {len(results)} matches (total: {len(found)}):\n")
     for match in results:
         click.echo(f"  Line {match['line']}: {match['content']}")
+
+
+@code.command("execute")
+@click.argument("source_code")
+@click.option(
+    "--entry-type", "-t",
+    default="Validator",
+    help="Type name to invoke (default: Validator)."
+)
+@click.option(
+    "--entry-method", "-m",
+    default="Run",
+    help="Static method name to call (default: Run)."
+)
+@click.option(
+    "--timeout", "-T",
+    default=5000,
+    type=int,
+    help="Execution timeout in milliseconds (default: 5000)."
+)
+@handle_unity_errors
+def execute(source_code: str, entry_type: str, entry_method: str, timeout: int):
+    """Compile and execute C# code at runtime using Roslyn.
+
+    Requires Microsoft.CodeAnalysis DLLs in the Unity project.
+
+    \b
+    Examples:
+        unity-mcp code execute "public class V { public static string Run() { return \\"hello\\"; } }" --entry-type V
+        unity-mcp code execute "public class V { public static int Run() { return UnityEngine.Object.FindObjectsOfType<UnityEngine.MeshRenderer>().Length; } }" --entry-type V
+    """
+    config = get_config()
+
+    params: dict[str, Any] = {
+        "code": source_code,
+        "entryType": entry_type,
+        "entryMethod": entry_method,
+        "timeoutMs": timeout,
+    }
+
+    result = run_command("execute_code", params, config)
+    click.echo(format_output(result, config.format))
+    if result.get("success"):
+        data = result.get("data", {})
+        if data.get("success"):
+            print_success("Code executed successfully")
+            if data.get("return_value"):
+                click.echo(f"  Return: {data['return_value']}")
+            if data.get("output"):
+                click.echo(f"  Output:\n{data['output']}")
+        else:
+            errors = data.get("compile_errors", [])
+            if errors:
+                print_error("Compilation failed:")
+                for e in errors:
+                    click.echo(f"  {e}")
+            elif data.get("execution_error"):
+                print_error(f"Execution failed: {data['execution_error']}")

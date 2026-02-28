@@ -45,7 +45,6 @@ namespace MCPForUnity.Editor.Tools
 
         private void Awake()
         {
-            // Check if new Input System is available
             _isNewInputSystem = IsNewInputSystemAvailable();
         }
 
@@ -143,159 +142,165 @@ namespace MCPForUnity.Editor.Tools
         {
             if (_isNewInputSystem)
             {
-                yield return StartCoroutine(SimulateKeyNewInputSystem(action));
-            }
-            else
-            {
-                yield return StartCoroutine(SimulateKeyLegacy(action));
-            }
-        }
-
-        private IEnumerator SimulateKeyLegacy(KeyAction action)
-        {
-            // For legacy Input system, we simulate by sending keyboard events
-            // through the Event system or by using SendMessage patterns
-            var keyCode = ParseKeyCode(action.Key);
-            if (keyCode == KeyCode.None)
-            {
-                Debug.LogWarning($"[MCP InputSimulator] Unknown key: '{action.Key}'");
-                yield break;
-            }
-
-            // Simulate by dispatching GUI events
-            if (action.Press)
-            {
-                var evt = new Event { type = EventType.KeyDown, keyCode = keyCode };
-                DispatchInputEvent(evt);
-            }
-
-            if (action.DurationMs > 0)
-                yield return new WaitForSeconds(action.DurationMs / 1000f);
-
-            if (action.Release)
-            {
-                var evt = new Event { type = EventType.KeyUp, keyCode = keyCode };
-                DispatchInputEvent(evt);
-            }
-        }
-
-        private IEnumerator SimulateKeyNewInputSystem(KeyAction action)
-        {
-            // Use reflection to access InputSystem API
-            try
-            {
-                var inputSystemType = FindType("UnityEngine.InputSystem.InputSystem");
-                if (inputSystemType == null)
-                {
-                    Debug.LogWarning("[MCP InputSimulator] New Input System assembly loaded but InputSystem type not found.");
-                    yield return StartCoroutine(SimulateKeyLegacy(action));
-                    yield break;
-                }
-
-                var keyboardType = FindType("UnityEngine.InputSystem.Keyboard");
-                if (keyboardType == null)
-                {
-                    yield return StartCoroutine(SimulateKeyLegacy(action));
-                    yield break;
-                }
-
-                var currentProp = keyboardType.GetProperty("current", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                var keyboard = currentProp?.GetValue(null);
-                if (keyboard == null)
-                {
-                    yield return StartCoroutine(SimulateKeyLegacy(action));
-                    yield break;
-                }
-
-                // Find the key control by name
-                var indexer = keyboardType.GetProperty("Item", new[] { typeof(string) });
-                var keyControl = indexer?.GetValue(keyboard, new object[] { action.Key.ToLowerInvariant() });
-                if (keyControl == null)
-                {
-                    Debug.LogWarning($"[MCP InputSimulator] Key '{action.Key}' not found on Keyboard device.");
-                    yield break;
-                }
-
-                // Use InputSystem low-level API to queue state events
-                var queueStateMethod = FindType("UnityEngine.InputSystem.LowLevel.InputState")
-                    ?.GetMethod("Change", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-
-                if (queueStateMethod != null && action.Press)
-                {
-                    // Press: set key value to 1
-                    try
-                    {
-                        var generic = queueStateMethod.MakeGenericMethod(typeof(float));
-                        generic.Invoke(null, new[] { keyControl, (object)1.0f });
-                    }
-                    catch (System.Exception e)
-                    {
-                        Debug.LogWarning($"[MCP InputSimulator] Failed to simulate key press via InputSystem: {e.Message}");
-                    }
-                }
+                bool useFallback = !TrySimulateKeyPress_NewInputSystem(action);
+                if (useFallback)
+                    SimulateKeyPress_Legacy(action);
 
                 if (action.DurationMs > 0)
                     yield return new WaitForSeconds(action.DurationMs / 1000f);
 
-                if (queueStateMethod != null && action.Release)
-                {
-                    try
-                    {
-                        var generic = queueStateMethod.MakeGenericMethod(typeof(float));
-                        generic.Invoke(null, new[] { keyControl, (object)0.0f });
-                    }
-                    catch (System.Exception e)
-                    {
-                        Debug.LogWarning($"[MCP InputSimulator] Failed to simulate key release via InputSystem: {e.Message}");
-                    }
-                }
+                if (!useFallback)
+                    TrySimulateKeyRelease_NewInputSystem(action);
+                else
+                    SimulateKeyRelease_Legacy(action);
+            }
+            else
+            {
+                SimulateKeyPress_Legacy(action);
+
+                if (action.DurationMs > 0)
+                    yield return new WaitForSeconds(action.DurationMs / 1000f);
+
+                SimulateKeyRelease_Legacy(action);
+            }
+        }
+
+        private void SimulateKeyPress_Legacy(KeyAction action)
+        {
+            if (!action.Press) return;
+
+            var keyCode = ParseKeyCode(action.Key);
+            if (keyCode == KeyCode.None)
+            {
+                Debug.LogWarning($"[MCP InputSimulator] Unknown key: '{action.Key}'");
+                return;
+            }
+
+            DispatchInputEvent(new Event { type = EventType.KeyDown, keyCode = keyCode });
+        }
+
+        private void SimulateKeyRelease_Legacy(KeyAction action)
+        {
+            if (!action.Release) return;
+
+            var keyCode = ParseKeyCode(action.Key);
+            if (keyCode == KeyCode.None) return;
+
+            DispatchInputEvent(new Event { type = EventType.KeyUp, keyCode = keyCode });
+        }
+
+        /// <summary>
+        /// Attempts to press a key via the new Input System. Returns false if it should fall back to legacy.
+        /// No yield statements — safe to call from anywhere.
+        /// </summary>
+        private bool TrySimulateKeyPress_NewInputSystem(KeyAction action)
+        {
+            if (!action.Press) return true;
+
+            try
+            {
+                var keyControl = ResolveNewInputSystemKeyControl(action.Key);
+                if (keyControl == null) return false;
+
+                var queueStateMethod = FindType("UnityEngine.InputSystem.LowLevel.InputState")
+                    ?.GetMethod("Change", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+
+                if (queueStateMethod == null) return false;
+
+                var generic = queueStateMethod.MakeGenericMethod(typeof(float));
+                generic.Invoke(null, new[] { keyControl, (object)1.0f });
+                return true;
             }
             catch (System.Exception e)
             {
-                Debug.LogWarning($"[MCP InputSimulator] New Input System simulation failed: {e.Message}");
-                yield return StartCoroutine(SimulateKeyLegacy(action));
+                Debug.LogWarning($"[MCP InputSimulator] New Input System key press failed: {e.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Attempts to release a key via the new Input System.
+        /// </summary>
+        private void TrySimulateKeyRelease_NewInputSystem(KeyAction action)
+        {
+            if (!action.Release) return;
+
+            try
+            {
+                var keyControl = ResolveNewInputSystemKeyControl(action.Key);
+                if (keyControl == null) return;
+
+                var queueStateMethod = FindType("UnityEngine.InputSystem.LowLevel.InputState")
+                    ?.GetMethod("Change", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+
+                if (queueStateMethod == null) return;
+
+                var generic = queueStateMethod.MakeGenericMethod(typeof(float));
+                generic.Invoke(null, new[] { keyControl, (object)0.0f });
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[MCP InputSimulator] New Input System key release failed: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Resolves a key name to a new Input System KeyControl via reflection. Returns null on failure.
+        /// </summary>
+        private static object ResolveNewInputSystemKeyControl(string keyName)
+        {
+            try
+            {
+                var keyboardType = FindType("UnityEngine.InputSystem.Keyboard");
+                if (keyboardType == null) return null;
+
+                var currentProp = keyboardType.GetProperty("current",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                var keyboard = currentProp?.GetValue(null);
+                if (keyboard == null) return null;
+
+                var indexer = keyboardType.GetProperty("Item", new[] { typeof(string) });
+                return indexer?.GetValue(keyboard, new object[] { keyName.ToLowerInvariant() });
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[MCP InputSimulator] Failed to resolve key '{keyName}': {e.Message}");
+                return null;
             }
         }
 
         private IEnumerator ProcessMouseClickAction(MouseClickAction action)
         {
-            var evt = new Event
+            DispatchInputEvent(new Event
             {
                 type = EventType.MouseDown,
                 mousePosition = new Vector2(action.X, action.Y),
                 button = action.Button,
-            };
-            DispatchInputEvent(evt);
+            });
 
             yield return new WaitForSeconds(action.DurationMs / 1000f);
 
-            var evtUp = new Event
+            DispatchInputEvent(new Event
             {
                 type = EventType.MouseUp,
                 mousePosition = new Vector2(action.X, action.Y),
                 button = action.Button,
-            };
-            DispatchInputEvent(evtUp);
+            });
         }
 
         private void ProcessMouseMoveAction(MouseMoveAction action)
         {
-            var evt = new Event
+            DispatchInputEvent(new Event
             {
                 type = EventType.MouseMove,
                 delta = new Vector2(action.DeltaX, action.DeltaY),
-            };
-            DispatchInputEvent(evt);
+            });
         }
 
         private static void DispatchInputEvent(Event evt)
         {
-            // Push the event so that Unity's input polling picks it up
             try
             {
-                // Use Event.PopEvent / PushEvent pattern if available
-                // For most game scripts using Input.GetKey, we need to work at a lower level
-                // The most reliable approach is to find the game's input handler and send messages
                 Debug.Log($"[MCP InputSimulator] Dispatching {evt.type} event: {evt.keyCode} button={evt.button}");
             }
             catch (System.Exception e)
@@ -339,7 +344,6 @@ namespace MCPForUnity.Editor.Tools
                 case "R": return KeyCode.R;
                 case "F": return KeyCode.F;
                 default:
-                    // Try single character
                     if (key.Length == 1)
                     {
                         char c = char.ToUpper(key[0]);
