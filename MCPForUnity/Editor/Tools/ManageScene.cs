@@ -604,8 +604,8 @@ namespace MCPForUnity.Editor.Tools
                             if (r != null && r.gameObject.activeInHierarchy) targetBounds.Encapsulate(r.bounds);
                         }
                         center = targetBounds.center;
-                        radius = targetBounds.extents.magnitude * 1.8f;
-                        radius = Mathf.Max(radius, 3f);
+                        radius = targetBounds.extents.magnitude * 2.5f;
+                        radius = Mathf.Max(radius, 5f);
                     }
                 }
                 else
@@ -632,8 +632,8 @@ namespace MCPForUnity.Editor.Tools
                         return new ErrorResponse("No renderers found in the scene. Cannot determine scene bounds for batch capture.");
 
                     center = bounds.center;
-                    radius = bounds.extents.magnitude * 1.8f;
-                    radius = Mathf.Max(radius, 3f);
+                    radius = bounds.extents.magnitude * 2.5f;
+                    radius = Mathf.Max(radius, 5f);
                 }
 
                 // Define 6 viewpoints: front, back, left, right, top, bird's-eye (45° elevated front-right)
@@ -654,6 +654,10 @@ namespace MCPForUnity.Editor.Tools
                 tempCam.nearClipPlane = 0.1f;
                 tempCam.farClipPlane = radius * 4f;
                 tempCam.clearFlags = CameraClearFlags.Skybox;
+
+                // Force material refresh once before capture loop
+                EditorApplication.QueuePlayerLoopUpdate();
+                SceneView.RepaintAll();
 
                 var tiles = new List<Texture2D>();
                 var tileLabels = new List<string>();
@@ -773,6 +777,10 @@ namespace MCPForUnity.Editor.Tools
                 tempCam.farClipPlane = radius * 4f;
                 tempCam.clearFlags = CameraClearFlags.Skybox;
 
+                // Force material refresh once before capture loop
+                EditorApplication.QueuePlayerLoopUpdate();
+                SceneView.RepaintAll();
+
                 var tiles = new List<Texture2D>();
                 var tileLabels = new List<string>();
                 var shotMeta = new List<object>();
@@ -851,7 +859,7 @@ namespace MCPForUnity.Editor.Tools
 
         /// <summary>
         /// Captures a single screenshot from a temporary camera placed at view_position and aimed at look_at.
-        /// Returns inline base64 PNG (no file saved to disk).
+        /// Returns inline base64 PNG and also saves the image to Assets/Screenshots/.
         /// </summary>
         private static object CapturePositionedScreenshot(SceneCommand cmd)
         {
@@ -912,7 +920,31 @@ namespace MCPForUnity.Editor.Tools
 
                     var (b64, w, h) = ScreenshotUtility.RenderCameraToBase64(tempCam, maxRes);
 
+                    // Save to disk
                     string screenshotsFolder = Path.Combine(Application.dataPath, "Screenshots");
+                    Directory.CreateDirectory(screenshotsFolder);
+                    string fileName = !string.IsNullOrEmpty(cmd.fileName)
+                        ? (cmd.fileName.EndsWith(".png", System.StringComparison.OrdinalIgnoreCase) ? cmd.fileName : cmd.fileName + ".png")
+                        : $"screenshot-{DateTime.Now:yyyyMMdd-HHmmss}.png";
+                    string fullPath = Path.Combine(screenshotsFolder, fileName);
+                    // Ensure unique filename
+                    if (File.Exists(fullPath))
+                    {
+                        string baseName = Path.GetFileNameWithoutExtension(fullPath);
+                        string ext = Path.GetExtension(fullPath);
+                        int counter = 1;
+                        while (File.Exists(fullPath))
+                        {
+                            fullPath = Path.Combine(screenshotsFolder, $"{baseName}_{counter}{ext}");
+                            counter++;
+                        }
+                    }
+                    byte[] pngBytes = System.Convert.FromBase64String(b64);
+                    File.WriteAllBytes(fullPath, pngBytes);
+
+                    string assetsRelativePath = "Assets/Screenshots/" + Path.GetFileName(fullPath);
+                    AssetDatabase.ImportAsset(assetsRelativePath, ImportAssetOptions.ForceSynchronousImport);
+
                     var data = new Dictionary<string, object>
                     {
                         { "imageBase64", b64 },
@@ -920,12 +952,13 @@ namespace MCPForUnity.Editor.Tools
                         { "imageHeight", h },
                         { "viewPosition", new[] { camPos.x, camPos.y, camPos.z } },
                         { "screenshotsFolder", screenshotsFolder },
+                        { "path", assetsRelativePath },
                     };
                     if (targetPos.HasValue)
                         data["lookAt"] = new[] { targetPos.Value.x, targetPos.Value.y, targetPos.Value.z };
 
                     return new SuccessResponse(
-                        $"Positioned screenshot captured (max {maxRes}px).",
+                        $"Positioned screenshot captured (max {maxRes}px) and saved to '{assetsRelativePath}'.",
                         data
                     );
                 }
