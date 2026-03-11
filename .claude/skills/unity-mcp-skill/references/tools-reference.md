@@ -172,6 +172,30 @@ manage_scene(action="get_build_settings") # Build settings
 manage_scene(action="create", name="NewScene", path="Assets/Scenes/")
 manage_scene(action="load", path="Assets/Scenes/Main.unity")
 manage_scene(action="save")
+
+# Scene templates — create with preset objects
+manage_scene(action="create", name="Level1", template="3d_basic")   # Camera + Light + Ground
+manage_scene(action="create", name="Level2", template="2d_basic")   # Camera (ortho) + Light
+manage_scene(action="create", name="Empty", template="empty")       # No default objects
+manage_scene(action="create", name="Default", template="default")   # Camera + Light (Unity default)
+
+# Multi-scene editing
+manage_scene(action="load", path="Assets/Scenes/Level2.unity", additive=True)  # Keep current scene
+manage_scene(action="get_loaded_scenes")                            # List all loaded scenes
+manage_scene(action="set_active_scene", scene_name="Level2")        # Set active scene
+manage_scene(action="close_scene", scene_name="Level2")             # Unload scene
+manage_scene(action="close_scene", scene_name="Level2", remove_scene=True)  # Fully remove
+manage_scene(action="move_to_scene", target="Player", scene_name="Level2")  # Move root GO
+
+# Build settings management (consolidated)
+manage_scene(action="modify_build_settings", scene_path="Assets/Scenes/Level2.unity", operation="add")
+manage_scene(action="modify_build_settings", scene_path="Assets/Scenes/Old.unity", operation="remove")
+manage_scene(action="modify_build_settings", scene_path="Assets/Scenes/Debug.unity",
+             operation="set_enabled", enabled=False)
+
+# Scene validation
+manage_scene(action="validate")                    # Detect missing scripts, broken prefabs
+manage_scene(action="validate", auto_repair=True)  # Also auto-fix missing scripts (undoable)
 ```
 
 ### find_gameobjects
@@ -675,7 +699,7 @@ manage_ui(
 
 ### manage_editor
 
-Control Unity Editor state.
+Control Unity Editor state, undo/redo.
 
 ```python
 manage_editor(action="play")               # Enter play mode
@@ -689,6 +713,10 @@ manage_editor(action="remove_tag", tag_name="OldTag")
 
 manage_editor(action="add_layer", layer_name="Projectiles")
 manage_editor(action="remove_layer", layer_name="OldLayer")
+
+# Undo/Redo — returns the affected undo group name
+manage_editor(action="undo")               # Undo last action
+manage_editor(action="redo")               # Redo last undone action
 ```
 
 ### execute_menu_item

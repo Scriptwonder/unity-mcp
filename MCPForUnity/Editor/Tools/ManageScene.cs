@@ -53,6 +53,17 @@ namespace MCPForUnity.Editor.Tools
             public int? maxDepth { get; set; }
             public int? maxChildrenPerNode { get; set; }
             public bool? includeTransform { get; set; }
+
+            // Multi-scene editing
+            public string sceneName { get; set; }
+            public string scenePath { get; set; }
+            public string target { get; set; }           // GO reference for move_to_scene
+            public bool? removeScene { get; set; }       // for close_scene
+            public bool? additive { get; set; }          // for load additive mode
+            public bool? enabled { get; set; }           // for modify_build_settings set_enabled
+            public string operation { get; set; }        // for modify_build_settings
+            public string template { get; set; }         // for create with template
+            public bool? autoRepair { get; set; }        // for validate with auto-repair
         }
 
         private static float[] ParseFloatArray(JToken token)
@@ -119,7 +130,31 @@ namespace MCPForUnity.Editor.Tools
                 maxDepth = ParamCoercion.CoerceIntNullable(p["maxDepth"] ?? p["max_depth"]),
                 maxChildrenPerNode = ParamCoercion.CoerceIntNullable(p["maxChildrenPerNode"] ?? p["max_children_per_node"]),
                 includeTransform = ParamCoercion.CoerceBoolNullable(p["includeTransform"] ?? p["include_transform"]),
+
+                // Multi-scene editing
+                sceneName = (p["sceneName"] ?? p["scene_name"])?.ToString(),
+                scenePath = (p["scenePath"] ?? p["scene_path"])?.ToString(),
+                target = (p["target"])?.ToString(),
+                removeScene = ParamCoercion.CoerceBoolNullable(p["removeScene"] ?? p["remove_scene"]),
+                additive = ParamCoercion.CoerceBoolNullable(p["additive"]),
+                enabled = ParamCoercion.CoerceBoolNullable(p["enabled"]),
+                operation = (p["operation"])?.ToString()?.ToLowerInvariant(),
+                template = (p["template"])?.ToString()?.ToLowerInvariant(),
+                autoRepair = ParamCoercion.CoerceBoolNullable(p["autoRepair"] ?? p["auto_repair"]),
             };
+        }
+
+        private static Scene? FindLoadedScene(string sceneName, string scenePath)
+        {
+            for (int i = 0; i < SceneManager.sceneCount; i++)
+            {
+                var scene = SceneManager.GetSceneAt(i);
+                if (!string.IsNullOrEmpty(scenePath) && scene.path == scenePath)
+                    return scene;
+                if (!string.IsNullOrEmpty(sceneName) && scene.name == sceneName)
+                    return scene;
+            }
+            return null;
         }
 
         /// <summary>
@@ -192,11 +227,17 @@ namespace MCPForUnity.Editor.Tools
                         return new ErrorResponse(
                             "'name' and 'path' parameters are required for 'create' action."
                         );
+                    if (!string.IsNullOrEmpty(cmd.template))
+                        return CreateSceneFromTemplate(fullPath, relativePath, cmd.template);
                     return CreateScene(fullPath, relativePath);
                 case "load":
                     // Loading can be done by path/name or build index
                     if (!string.IsNullOrEmpty(relativePath))
+                    {
+                        if (cmd.additive == true)
+                            return LoadSceneAdditive(relativePath);
                         return LoadScene(relativePath);
+                    }
                     else if (buildIndex.HasValue)
                         return LoadScene(buildIndex.Value);
                     else
@@ -222,9 +263,26 @@ namespace MCPForUnity.Editor.Tools
                     return CaptureScreenshot(cmd);
                 case "scene_view_frame":
                     return FrameSceneView(cmd);
+
+                // Multi-scene editing
+                case "close_scene":
+                    return CloseScene(cmd);
+                case "set_active_scene":
+                    return SetActiveScene(cmd);
+                case "get_loaded_scenes":
+                    return GetLoadedScenes();
+                case "move_to_scene":
+                    return MoveToScene(cmd);
+                case "modify_build_settings":
+                    return ModifyBuildSettings(cmd);
+
+                // Scene validation
+                case "validate":
+                    return ValidateScene(cmd.autoRepair == true);
+
                 default:
                     return new ErrorResponse(
-                        $"Unknown action: '{action}'. Valid actions: create, load, save, get_hierarchy, get_active, get_build_settings, screenshot, scene_view_frame."
+                        $"Unknown action: '{action}'. Valid actions: create, load, save, get_hierarchy, get_active, get_build_settings, screenshot, scene_view_frame, close_scene, set_active_scene, get_loaded_scenes, move_to_scene, modify_build_settings, validate."
                     );
             }
         }
@@ -1221,6 +1279,298 @@ namespace MCPForUnity.Editor.Tools
             };
 
             EditorApplication.update += tick;
+        }
+
+        // ── Multi-scene editing ────────────────────────────────────────────
+
+        private static object LoadSceneAdditive(string scenePath)
+        {
+            string projectRoot = Application.dataPath.Substring(0, Application.dataPath.Length - "Assets".Length);
+            if (!File.Exists(Path.Combine(projectRoot, scenePath)))
+                return new ErrorResponse($"Scene not found: '{scenePath}'");
+
+            var scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Additive);
+            return new SuccessResponse($"Opened '{scene.name}' additively.", new
+            {
+                sceneName = scene.name,
+                scenePath = scene.path,
+                loadedSceneCount = SceneManager.sceneCount
+            });
+        }
+
+        private static object CloseScene(SceneCommand cmd)
+        {
+            var scene = FindLoadedScene(cmd.sceneName ?? cmd.name, cmd.scenePath);
+            if (!scene.HasValue)
+                return new ErrorResponse("Scene not found among loaded scenes. Provide 'sceneName' or 'scenePath'.");
+
+            if (SceneManager.sceneCount <= 1)
+                return new ErrorResponse("Cannot close the last loaded scene.");
+
+            if (scene.Value.isDirty)
+                return new ErrorResponse($"Scene '{scene.Value.name}' has unsaved changes. Save first or data will be lost.");
+
+            bool remove = cmd.removeScene ?? false;
+            EditorSceneManager.CloseScene(scene.Value, remove);
+            string verb = remove ? "Removed" : "Unloaded";
+            return new SuccessResponse($"{verb} scene '{scene.Value.name}'.", new
+            {
+                sceneName = scene.Value.name,
+                removed = remove,
+                loadedSceneCount = SceneManager.sceneCount
+            });
+        }
+
+        private static object SetActiveScene(SceneCommand cmd)
+        {
+            var scene = FindLoadedScene(cmd.sceneName ?? cmd.name, cmd.scenePath);
+            if (!scene.HasValue)
+                return new ErrorResponse("Scene not found among loaded scenes. Provide 'sceneName' or 'scenePath'.");
+            if (!scene.Value.isLoaded)
+                return new ErrorResponse($"Scene '{scene.Value.name}' is not loaded. Open it first.");
+
+            SceneManager.SetActiveScene(scene.Value);
+            return new SuccessResponse($"Set '{scene.Value.name}' as the active scene.");
+        }
+
+        private static object GetLoadedScenes()
+        {
+            var activeScene = SceneManager.GetActiveScene();
+            var scenes = new List<object>();
+            for (int i = 0; i < SceneManager.sceneCount; i++)
+            {
+                var s = SceneManager.GetSceneAt(i);
+                scenes.Add(new
+                {
+                    name = s.name,
+                    path = s.path,
+                    buildIndex = s.buildIndex,
+                    isLoaded = s.isLoaded,
+                    isDirty = s.isDirty,
+                    isActive = s == activeScene,
+                    rootCount = s.isLoaded ? s.rootCount : 0
+                });
+            }
+            return new SuccessResponse($"{scenes.Count} scene(s) loaded.", new { scenes });
+        }
+
+        private static object MoveToScene(SceneCommand cmd)
+        {
+            if (string.IsNullOrEmpty(cmd.target))
+                return new ErrorResponse("'target' (GameObject name/path/instanceID) is required for move_to_scene.");
+
+            var go = GameObjectLookup.Resolve(cmd.target);
+            if (go == null)
+                return new ErrorResponse($"GameObject not found: '{cmd.target}'");
+            if (go.transform.parent != null)
+                return new ErrorResponse($"'{go.name}' is not a root GameObject. Only root objects can be moved between scenes.");
+
+            var targetScene = FindLoadedScene(cmd.sceneName ?? cmd.name, cmd.scenePath);
+            if (!targetScene.HasValue)
+                return new ErrorResponse("Target scene not found. Provide 'sceneName' or 'scenePath'.");
+            if (!targetScene.Value.isLoaded)
+                return new ErrorResponse($"Target scene '{targetScene.Value.name}' is not loaded.");
+
+            SceneManager.MoveGameObjectToScene(go, targetScene.Value);
+            return new SuccessResponse($"Moved '{go.name}' to scene '{targetScene.Value.name}'.");
+        }
+
+        private static object ModifyBuildSettings(SceneCommand cmd)
+        {
+            string op = cmd.operation;
+            string scenePath = cmd.scenePath;
+
+            if (string.IsNullOrEmpty(scenePath))
+                return new ErrorResponse("'scenePath' is required for modify_build_settings.");
+            if (string.IsNullOrEmpty(op))
+                return new ErrorResponse("'operation' is required. Valid operations: add, remove, set_enabled.");
+
+            var current = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
+
+            switch (op)
+            {
+                case "add":
+                    if (current.Exists(s => s.path == scenePath))
+                        return new ErrorResponse($"Scene '{scenePath}' is already in build settings.");
+                    current.Add(new EditorBuildSettingsScene(scenePath, true));
+                    EditorBuildSettings.scenes = current.ToArray();
+                    return new SuccessResponse($"Added '{scenePath}' to build settings at index {current.Count - 1}.", new
+                    {
+                        scenePath,
+                        buildIndex = current.Count - 1,
+                        totalScenes = current.Count
+                    });
+
+                case "remove":
+                    int removed = current.RemoveAll(s => s.path == scenePath);
+                    if (removed == 0)
+                        return new ErrorResponse($"Scene '{scenePath}' is not in build settings.");
+                    EditorBuildSettings.scenes = current.ToArray();
+                    return new SuccessResponse($"Removed '{scenePath}' from build settings.", new
+                    {
+                        scenePath,
+                        totalScenes = current.Count
+                    });
+
+                case "set_enabled":
+                    if (!cmd.enabled.HasValue)
+                        return new ErrorResponse("'enabled' (true/false) is required for set_enabled operation.");
+                    bool found = false;
+                    var scenes = EditorBuildSettings.scenes;
+                    for (int i = 0; i < scenes.Length; i++)
+                    {
+                        if (scenes[i].path == scenePath)
+                        {
+                            scenes[i].enabled = cmd.enabled.Value;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found)
+                        return new ErrorResponse($"Scene '{scenePath}' is not in build settings.");
+                    EditorBuildSettings.scenes = scenes;
+                    string state = cmd.enabled.Value ? "enabled" : "disabled";
+                    return new SuccessResponse($"Scene '{scenePath}' is now {state} in build settings.");
+
+                default:
+                    return new ErrorResponse($"Unknown operation: '{op}'. Valid operations: add, remove, set_enabled.");
+            }
+        }
+
+        // ── Scene templates ────────────────────────────────────────────────
+
+        private static object CreateSceneFromTemplate(string fullPath, string relativePath, string template)
+        {
+            NewSceneSetup setup;
+            switch (template)
+            {
+                case "empty":
+                    setup = NewSceneSetup.EmptyScene;
+                    break;
+                case "default":
+                case "3d_basic":
+                case "2d_basic":
+                    setup = NewSceneSetup.DefaultGameObjects;
+                    break;
+                default:
+                    return new ErrorResponse(
+                        $"Unknown template: '{template}'. Valid: empty, default, 3d_basic, 2d_basic.");
+            }
+
+            var scene = EditorSceneManager.NewScene(setup, NewSceneMode.Single);
+
+            if (template == "3d_basic")
+            {
+                var plane = GameObject.CreatePrimitive(PrimitiveType.Plane);
+                plane.name = "Ground";
+                plane.transform.position = Vector3.zero;
+            }
+            else if (template == "2d_basic")
+            {
+                var cam = Camera.main;
+                if (cam != null)
+                    cam.orthographic = true;
+            }
+
+            if (!string.IsNullOrEmpty(fullPath) && !string.IsNullOrEmpty(relativePath))
+            {
+                string dir = Path.GetDirectoryName(fullPath);
+                if (!string.IsNullOrEmpty(dir))
+                    Directory.CreateDirectory(dir);
+                EditorSceneManager.SaveScene(scene, relativePath);
+            }
+
+            return new SuccessResponse($"Created scene from template '{template}'.", new
+            {
+                sceneName = scene.name,
+                scenePath = scene.path,
+                template,
+                rootObjectCount = scene.rootCount
+            });
+        }
+
+        // ── Scene validation ───────────────────────────────────────────────
+
+        private static object ValidateScene(bool autoRepair)
+        {
+            var activeScene = SceneManager.GetActiveScene();
+            var rootObjects = activeScene.GetRootGameObjects();
+
+            int missingScripts = 0;
+            int brokenPrefabs = 0;
+            int repaired = 0;
+            var issues = new List<object>();
+            const int maxIssues = 200;
+
+            foreach (var root in rootObjects)
+            {
+                var allTransforms = root.GetComponentsInChildren<Transform>(true);
+                foreach (var t in allTransforms)
+                {
+                    var go = t.gameObject;
+
+                    int missing = GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(go);
+                    if (missing > 0)
+                    {
+                        missingScripts += missing;
+                        if (issues.Count < maxIssues)
+                        {
+                            issues.Add(new
+                            {
+                                type = "missing_script",
+                                gameObject = go.name,
+                                path = GetGameObjectPath(go),
+                                count = missing
+                            });
+                        }
+
+                        if (autoRepair)
+                        {
+                            Undo.RegisterCompleteObjectUndo(go, "Remove Missing Scripts");
+                            repaired += GameObjectUtility.RemoveMonoBehavioursWithMissingScript(go);
+                        }
+                    }
+
+                    var prefabStatus = PrefabUtility.GetPrefabInstanceStatus(go);
+                    if (prefabStatus == PrefabInstanceStatus.MissingAsset ||
+                        prefabStatus == PrefabInstanceStatus.Disconnected)
+                    {
+                        brokenPrefabs++;
+                        if (issues.Count < maxIssues)
+                        {
+                            issues.Add(new
+                            {
+                                type = "broken_prefab",
+                                gameObject = go.name,
+                                path = GetGameObjectPath(go),
+                                status = prefabStatus.ToString()
+                            });
+                        }
+                    }
+                }
+            }
+
+            if (repaired > 0)
+                EditorSceneManager.MarkSceneDirty(activeScene);
+
+            int totalIssues = missingScripts + brokenPrefabs;
+            string message = totalIssues == 0
+                ? $"Scene '{activeScene.name}' is clean — no issues found."
+                : $"Scene '{activeScene.name}' has {totalIssues} issue(s).";
+            if (repaired > 0)
+                message += $" Auto-repaired {repaired} missing script(s). Use undo to revert.";
+
+            return new SuccessResponse(message, new
+            {
+                sceneName = activeScene.name,
+                totalIssues,
+                missingScripts,
+                brokenPrefabs,
+                repaired,
+                issues,
+                truncated = issues.Count >= maxIssues,
+                note = brokenPrefabs > 0 ? "Broken prefab references are not auto-repaired (too risky). Fix manually." : null
+            });
         }
 
         private static object GetActiveSceneInfo()

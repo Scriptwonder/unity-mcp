@@ -155,11 +155,11 @@ uri="file:///full/path/to/file.cs"
 
 | Category | Key Tools | Use For |
 |----------|-----------|---------|
-| **Scene** | `manage_scene`, `find_gameobjects` | Scene operations, finding objects |
+| **Scene** | `manage_scene`, `find_gameobjects` | Scene operations, finding objects. Multi-scene editing (additive load, close, set active, move GO between scenes), `modify_build_settings`, scene templates (`3d_basic`, `2d_basic`, `empty`, `default`), scene validation with `auto_repair`. |
 | **Objects** | `manage_gameobject`, `manage_components` | Creating/modifying GameObjects |
 | **Scripts** | `create_script`, `script_apply_edits`, `refresh_unity` | C# code management |
 | **Assets** | `manage_asset`, `manage_prefabs` | Asset operations |
-| **Editor** | `manage_editor`, `execute_menu_item`, `read_console` | Editor control, package deployment (`deploy_package`/`restore_package` actions) |
+| **Editor** | `manage_editor`, `execute_menu_item`, `read_console` | Editor control, package deployment (`deploy_package`/`restore_package`), undo/redo (`undo`/`redo` actions) |
 | **Testing** | `run_tests`, `get_test_job` | Unity Test Framework |
 | **Batch** | `batch_execute` | Parallel/bulk operations |
 | **Camera** | `manage_camera` | Camera management (Unity Camera + Cinemachine). **Tier 1** (always available): create, target, lens, priority, list, screenshot. **Tier 2** (requires `com.unity.cinemachine`): brain, body/aim/noise pipeline, extensions, blending, force/release. 7 presets: follow, third_person, freelook, dolly, static, top_down, side_scroller. Resource: `mcpforunity://scene/cameras`. Use `ping` to check Cinemachine availability. See [tools-reference.md](references/tools-reference.md#camera-tools). |

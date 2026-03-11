@@ -20,14 +20,15 @@
 <details>
 <summary><strong>Recent Updates</strong></summary>
 
-* **v9.5.4 (beta)** — New `manage_packages` tool: install, remove, search, and manage Unity packages and scoped registries. Includes input validation, dependency checks on removal, and git URL warnings.
+* **v9.5.5 (beta)** — QoL extensions: `manage_editor` gains undo/redo actions. `manage_scene` gains multi-scene editing (additive load, close, set active, move GO between scenes), `modify_build_settings`, scene templates (3d_basic, 2d_basic, etc.), and scene validation with auto-repair.
+* **v9.5.4** — New `manage_packages` tool: install, remove, search, and manage Unity packages and scoped registries. Includes input validation, dependency checks on removal, and git URL warnings.
 * **v9.5.3** — New `manage_graphics` tool (33 actions): volume/post-processing, light baking, rendering stats, pipeline settings, URP renderer features. 3 new resources: `volumes`, `rendering_stats`, `renderer_features`.
 * **v9.5.2** — New `manage_camera` tool with Cinemachine support (presets, priority, noise, blending, extensions), `cameras` resource, priority persistence fix via SerializedProperty.
-* **v9.4.8** — New editor UI, real-time tool toggling via `manage_tools`, skill sync window, multi-view screenshot, one-click Roslyn installer, Qwen Code & Gemini CLI clients, ProBuilder mesh editing via `manage_probuilder`.
 
 <details>
 <summary>Older releases</summary>
 
+* **v9.4.8** — New editor UI, real-time tool toggling via `manage_tools`, skill sync window, multi-view screenshot, one-click Roslyn installer, Qwen Code & Gemini CLI clients, ProBuilder mesh editing via `manage_probuilder`.
 * **v9.4.7** — Per-call Unity instance routing, macOS pyenv PATH fix, domain reload resilience for script tools.
 * **v9.4.6** — New `manage_animation` tool, Cline client support, stale connection detection, tool state persistence across reloads.
 * **v9.4.4** — Configurable `batch_execute` limits, tool filtering by session state, IPv6/IPv4 loopback fixes.

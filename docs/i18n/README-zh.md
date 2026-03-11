@@ -20,14 +20,15 @@
 <details>
 <summary><strong>最近更新</strong></summary>
 
-* **v9.5.4 (beta)** — 新增 `manage_packages` 工具：安装、移除、搜索和管理 Unity 包及作用域注册表。包含输入验证、移除时依赖检查和 git URL 警告。
+* **v9.5.5 (beta)** — QoL 扩展：`manage_editor` 新增撤销/重做操作。`manage_scene` 新增多场景编辑（叠加加载、关闭、设置活动场景、跨场景移动物体）、`modify_build_settings`、场景模板（3d_basic、2d_basic 等）、场景验证与自动修复。
+* **v9.5.4** — 新增 `manage_packages` 工具：安装、移除、搜索和管理 Unity 包及作用域注册表。包含输入验证、移除时依赖检查和 git URL 警告。
 * **v9.5.3** — 新增 `manage_graphics` 工具（33个操作）：体积/后处理、光照烘焙、渲染统计、管线设置、URP渲染器特性。3个新资源：`volumes`、`rendering_stats`、`renderer_features`。
 * **v9.5.2** — 新增 `manage_camera` 工具，支持 Cinemachine（预设、优先级、噪声、混合、扩展）、`cameras` 资源、通过 SerializedProperty 修复优先级持久化问题。
-* **v9.4.8** — 新编辑器 UI、通过 `manage_tools` 实时切换工具、技能同步窗口、多视图截图、一键 Roslyn 安装器、支持 Qwen Code 与 Gemini CLI 客户端、通过 `manage_probuilder` 进行 ProBuilder 网格编辑。
 
 <details>
 <summary>更早的版本</summary>
 
+* **v9.4.8** — 新编辑器 UI、通过 `manage_tools` 实时切换工具、技能同步窗口、多视图截图、一键 Roslyn 安装器、支持 Qwen Code 与 Gemini CLI 客户端、通过 `manage_probuilder` 进行 ProBuilder 网格编辑。
 * **v9.4.7** — 支持按调用路由 Unity 实例、修复 macOS pyenv PATH 问题、脚本工具的域重载稳定性提升。
 * **v9.4.6** — 新增 `manage_animation` 工具、支持 Cline 客户端、失效连接检测、工具状态跨重载持久化。
 * **v9.4.4** — 可配置 `batch_execute` 限制、按会话状态过滤工具、修复 IPv6/IPv4 回环问题。
