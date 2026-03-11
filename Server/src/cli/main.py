@@ -270,6 +270,7 @@ def register_commands():
         ("cli.commands.camera", "camera"),
         ("cli.commands.graphics", "graphics"),
         ("cli.commands.packages", "packages"),
+        ("cli.commands.input", "input"),
     ]
 
     for module_name, command_name in optional_commands:
