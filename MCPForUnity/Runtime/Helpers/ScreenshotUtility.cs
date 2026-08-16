@@ -221,7 +221,13 @@ namespace MCPForUnity.Runtime.Helpers
             int maxResolution = 0,
             string folderOverride = null)
         {
-            await CompositedCaptureGate.WaitAsync().ConfigureAwait(true);
+            if (!await CompositedCaptureGate
+                    .WaitAsync(TimeSpan.FromSeconds(ScreenshotCapturer.DefaultTimeoutSeconds * 4))
+                    .ConfigureAwait(true))
+            {
+                throw new TimeoutException(
+                    "Another composited screenshot capture is still in progress. Retry shortly.");
+            }
             try
             {
                 return await CaptureCompositedAsyncUngated(
@@ -243,7 +249,8 @@ namespace MCPForUnity.Runtime.Helpers
             string folderOverride)
         {
             var prepared = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, folderOverride: folderOverride, isAsync: false);
-            var tcs = new TaskCompletionSource<ScreenshotCaptureResult>();
+            var tcs = new TaskCompletionSource<ScreenshotCaptureResult>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
 
             ScreenshotCapturer.Begin(prepared.SuperSize, (tex, timedOut) =>
             {
