@@ -427,6 +427,95 @@ def poll_test(job_id: str, wait: int, details: bool, failed_only: bool):
             print_info(f"Tests running: {completed}/{total}")
 
 
+@editor.command("compile")
+@click.option(
+    "--wait", "-w",
+    type=int,
+    default=120,
+    help="Wait up to N seconds for the compile report (default: 120)."
+)
+@click.option(
+    "--async", "async_mode",
+    is_flag=True,
+    help="Start the compile job and return the job ID for polling."
+)
+@handle_unity_errors
+def compile_scripts(wait: int, async_mode: bool):
+    """Request script compilation and report errors/warnings.
+
+    \b
+    Examples:
+        unity-mcp editor compile
+        unity-mcp editor compile --wait 300
+        unity-mcp editor compile --async
+    """
+    import time
+
+    config = get_config()
+
+    result = run_command("compile_and_report", {}, config)
+    job_id = result.get("data", {}).get("job_id") if isinstance(result, dict) else None
+
+    if async_mode or not result.get("success") or not job_id:
+        click.echo(format_output(result, config.format))
+        if job_id:
+            print_info("Poll with: unity-mcp editor poll-compile " + job_id)
+        return
+
+    # Poll the SessionState-backed job (survives the domain reload) until
+    # terminal or the wait budget elapses.
+    deadline = time.time() + max(1, wait)
+    status = "running"
+    while True:
+        try:
+            result = run_command("get_compile_job", {"job_id": job_id}, config)
+        except UnityConnectionError:
+            # Expected mid-compile: the domain reload drops the bridge.
+            result = None
+        data = result.get("data", {}) if isinstance(result, dict) else {}
+        status = data.get("status", "running")
+        if result is not None and (status in ("succeeded", "failed") or not result.get("success", True)):
+            break
+        if time.time() >= deadline:
+            print_info(f"Still compiling; poll with: unity-mcp editor poll-compile {job_id}")
+            break
+        time.sleep(1.0)
+
+    if result is not None:
+        click.echo(format_output(result, config.format))
+    if status == "succeeded":
+        print_success(
+            f"Compilation succeeded ({data.get('warnings_count', 0)} warning(s), "
+            f"{data.get('duration_ms', '?')} ms)")
+    elif status == "failed":
+        print_error(f"Compilation failed: {data.get('errors_total', 0)} error(s)")
+
+
+@editor.command("poll-compile")
+@click.argument("job_id")
+@handle_unity_errors
+def poll_compile(job_id: str):
+    """Poll an async compile job for its report.
+
+    \b
+    Examples:
+        unity-mcp editor poll-compile abc123
+    """
+    config = get_config()
+    result = run_command("get_compile_job", {"job_id": job_id}, config)
+    click.echo(format_output(result, config.format))
+
+    if isinstance(result, dict) and result.get("success"):
+        data = result.get("data", {})
+        status = data.get("status", "unknown")
+        if status == "succeeded":
+            print_success("Compilation succeeded")
+        elif status == "failed":
+            print_error(f"Compilation failed: {data.get('errors_total', 0)} error(s)")
+        elif status == "running":
+            print_info(f"Compile job running (phase: {data.get('phase', 'unknown')})")
+
+
 @editor.command("refresh")
 @click.option(
     "--mode",

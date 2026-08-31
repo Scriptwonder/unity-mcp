@@ -10,6 +10,7 @@ Essential scene, script, asset & editor tools (always on by default)
 
 - **[`apply_text_edits`](./apply_text_edits.md)** — Apply small text edits to a C# script identified by URI.
 - **[`batch_execute`](./batch_execute.md)** — Executes multiple MCP commands in a single batch for dramatically better performance.
+- **[`compile_and_report`](./compile_and_report.md)** — Requests a Unity script compilation, waits for it to finish, and returns one consolidated report: success, duration_ms, errors ([{file, line, message}]), and warnings_count.
 - **[`create_script`](./create_script.md)** — Create a new C# script at the given project path.
 - **[`debug_request_context`](./debug_request_context.md)** — Return the current FastMCP request context details (client_id, session_id, and meta dump).
 - **[`delete_script`](./delete_script.md)** — Delete a C# script by URI or Assets-relative path.
@@ -17,6 +18,7 @@ Essential scene, script, asset & editor tools (always on by default)
 - **[`execute_menu_item`](./execute_menu_item.md)** — Execute a Unity menu item by path.
 - **[`find_gameobjects`](./find_gameobjects.md)** — Search for GameObjects in the scene by name, tag, layer, component type, or path.
 - **[`find_in_file`](./find_in_file.md)** — Searches a file with a regex pattern and returns line numbers and excerpts.
+- **[`get_compile_job`](./get_compile_job.md)** — Polls an async Unity compile job by job_id (returned by compile_and_report).
 - **[`get_sha`](./get_sha.md)** — Get SHA256 and basic metadata for a Unity C# script without returning file contents.
 - **[`manage_asset`](./manage_asset.md)** — Performs asset operations (import, create, modify, delete, etc.) in Unity.
 - **[`manage_build`](./manage_build.md)** — Manage Unity player builds — trigger builds, switch platforms, configure settings, manage build scenes and profiles, run batch builds across platforms.

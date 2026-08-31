@@ -1363,6 +1363,62 @@ class TestEditorEnhancedCommands:
                 cli, ["editor", "poll-test", "test-job-123"])
             assert result.exit_code == 0
 
+    def test_editor_compile_waits_for_report(self, runner):
+        """Test compile command polling the job to a terminal report."""
+        start_response = {
+            "success": True,
+            "data": {"job_id": "compile-job-1", "status": "running", "attached": False}
+        }
+        report_response = {
+            "success": True,
+            "data": {
+                "job_id": "compile-job-1",
+                "status": "succeeded",
+                "duration_ms": 4200,
+                "errors": [],
+                "errors_total": 0,
+                "warnings_count": 1,
+            }
+        }
+        with patch("cli.commands.editor.run_command",
+                   side_effect=[start_response, report_response]) as mock_run:
+            result = runner.invoke(cli, ["editor", "compile"])
+            assert result.exit_code == 0
+            assert "Compilation succeeded" in result.output
+            assert mock_run.call_args_list[0][0][0] == "compile_and_report"
+            assert mock_run.call_args_list[1][0][0] == "get_compile_job"
+            assert mock_run.call_args_list[1][0][1] == {"job_id": "compile-job-1"}
+
+    def test_editor_compile_async(self, runner):
+        """Test async compile start returning the job id."""
+        start_response = {
+            "success": True,
+            "data": {"job_id": "compile-job-2", "status": "running"}
+        }
+        with patch("cli.commands.editor.run_command", return_value=start_response):
+            result = runner.invoke(cli, ["editor", "compile", "--async"])
+            assert result.exit_code == 0
+            assert "compile-job-2" in result.output
+            assert "poll-compile" in result.output
+
+    def test_editor_poll_compile_failed(self, runner):
+        """Test polling a compile job that failed with errors."""
+        poll_response = {
+            "success": True,
+            "data": {
+                "job_id": "compile-job-3",
+                "status": "failed",
+                "errors": [{"file": "Assets/S.cs", "line": 3, "message": "error CS1002"}],
+                "errors_total": 1,
+                "warnings_count": 0,
+            }
+        }
+        with patch("cli.commands.editor.run_command", return_value=poll_response):
+            result = runner.invoke(
+                cli, ["editor", "poll-compile", "compile-job-3"])
+            assert result.exit_code == 0
+            assert "Compilation failed" in result.output
+
 
 # =============================================================================
 # Code Search Tests

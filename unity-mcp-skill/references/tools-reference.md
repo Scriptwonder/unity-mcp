@@ -98,6 +98,32 @@ refresh_unity(
 )
 ```
 
+### compile_and_report
+
+Request script compilation, wait for it to finish, get one consolidated report. Backed by a SessionState-persisted compile job, so the report survives the domain reload a successful compile triggers. If Unity is already compiling on entry, the current compilation is awaited first and a fresh one is then requested.
+
+```python
+result = compile_and_report(
+    timeout=120                  # max seconds to wait (job keeps running on timeout)
+)
+# Returns: {"success": bool, "data": {"job_id": "...", "status": "succeeded"|"failed",
+#           "duration_ms": 5000, "errors": [{"file": "...", "line": 12, "message": "..."}],
+#           "errors_total": 0, "warnings_count": 0}}
+# On timeout: {"success": false, "error": "compile_timeout", "data": {"job_id": "..."}}
+```
+
+### get_compile_job
+
+Poll a compile job started by `compile_and_report` (e.g. after a `compile_timeout`).
+
+```python
+result = get_compile_job(
+    job_id="abc123"
+)
+# Returns: {"status": "running"|"succeeded"|"failed", "phase": "...",
+#           "duration_ms": ..., "errors": [...], "warnings_count": ...}
+```
+
 ---
 
 ## Scene Tools
