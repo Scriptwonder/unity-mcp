@@ -183,6 +183,7 @@ async def compile_and_report(
     annotations=ToolAnnotations(
         title="Get Compile Job",
         readOnlyHint=True,
+        destructiveHint=False,
     ),
 )
 async def get_compile_job(

@@ -33,6 +33,7 @@ from utils.module_discovery import discover_modules
 READ_ONLY = {
     "debug_request_context",
     "find_in_file",
+    "get_compile_job",
     "get_sha",
     "get_test_job",
     "manage_script_capabilities",
