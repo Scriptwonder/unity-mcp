@@ -368,28 +368,34 @@ end tell
 def _get_frontmost_app_windows() -> _FrontmostAppInfo | None:
     """Capture the foreground HWND and title without mixing native return values."""
     try:
-        # PowerShell command to get active window title
         script = '''
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$ErrorActionPreference = 'Stop'
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
 public class Win32 {
     [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")]
-    public static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int count);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetWindowTextW(IntPtr hWnd, System.Text.StringBuilder text, int count);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetWindowTextLengthW(IntPtr hWnd);
 }
 "@
 $hwnd = [Win32]::GetForegroundWindow()
 if ($hwnd -eq [IntPtr]::Zero) { exit 1 }
-$sb = New-Object System.Text.StringBuilder 256
-[void][Win32]::GetWindowText($hwnd, $sb, 256)
+$length = [Win32]::GetWindowTextLengthW($hwnd) + 1
+$sb = New-Object System.Text.StringBuilder $length
+[void][Win32]::GetWindowTextW($hwnd, $sb, $length)
 @{ name = $sb.ToString(); window_handle = $hwnd.ToInt64() } | ConvertTo-Json -Compress
 '''
         result = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             timeout=5,
         )
         if result.returncode == 0:
@@ -410,6 +416,7 @@ def _find_unity_pid_by_project_path_windows(project_path: str) -> int | None:
         # Native tokenization distinguishes a real flag from text inside another
         # quoted argument and handles Windows quote/backslash escaping.
         script = '''
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $ErrorActionPreference = 'Stop'
 Add-Type @"
 using System;
@@ -447,7 +454,8 @@ ConvertTo-Json -InputObject $processes -Depth 3 -Compress
 '''
         result = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True, text=True, encoding="utf-8",
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), timeout=5,
         )
         if result.returncode != 0 or not result.stdout.strip():
             return None
@@ -515,12 +523,16 @@ public class Win32 {
     [DllImport("user32.dll")]
     public static extern bool IsWindow(IntPtr hWnd);
     [DllImport("user32.dll")]
+    public static extern bool IsIconic(IntPtr hWnd);
+    [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();
 }
 "@
 ''' + target_script + '''
 if (-not [Win32]::IsWindow($targetHwnd)) { exit 1 }
-[void][Win32]::ShowWindow($targetHwnd, 9)
+if ([Win32]::IsIconic($targetHwnd)) {
+    [void][Win32]::ShowWindow($targetHwnd, 9)
+}
 if (-not [Win32]::SetForegroundWindow($targetHwnd)) { exit 1 }
 if ([Win32]::GetForegroundWindow() -ne $targetHwnd) { exit 1 }
 exit 0
@@ -529,6 +541,7 @@ exit 0
             ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
             capture_output=True,
             text=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             timeout=5,
         )
         return result.returncode == 0
