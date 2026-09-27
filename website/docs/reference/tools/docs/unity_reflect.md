@@ -47,7 +47,7 @@ A `dict` containing the Unity response. The exact shape depends on the action.
 }
 ```
 
-Returns type metadata (namespace, assembly, base class, interfaces) plus the names of its methods, properties, fields and events, its extension methods and any obsolete members — no signatures. A cheap way to confirm an API exists in the editor that is actually open, instead of trusting what the model remembers.
+Returns type metadata (namespace, assembly, base class, interfaces) plus the names of the methods, properties, fields and events declared on the type itself, its extension methods and any obsolete members — no signatures. Inherited members are not listed (`Rigidbody` does not show `transform`); `get_member` does find inherited instance members. A cheap way to confirm an API exists in the editor that is actually open, instead of trusting what the model remembers.
 
 ### Get the exact signature of one member
 
@@ -61,7 +61,7 @@ Returns type metadata (namespace, assembly, base class, interfaces) plus the nam
 }
 ```
 
-Methods come back with `overload_count` and one entry per overload. If the name is not a method, property or field of the type, extension methods are tried last.
+Methods come back with `overload_count` and one entry per overload. The lookup includes inherited instance members and tries methods, properties, fields and events in that order; extension methods are tried last.
 
 ### Resolve an ambiguous short name
 
@@ -88,6 +88,6 @@ When several loaded types share the short name, the response has `ambiguous: tru
 }
 ```
 
-`scope` defaults to `unity` (UnityEngine / UnityEditor / Unity.* assemblies). `project` covers only the `Assembly-CSharp*` assemblies, so types in your own `.asmdef` assemblies need `packages` or `all`.
+`scope` defaults to `unity` (UnityEngine / UnityEditor / Unity.* assemblies). `project` covers only the `Assembly-CSharp*` assemblies, so types in your own `.asmdef` assemblies need `packages` (everything except `System*`, `mscorlib` and `netstandard`, so UnityEngine too) or `all`. Results are capped at 25 (`truncated: true` when more matched), so keep the query specific when the scope is wide.
 <!-- examples:end -->
 
