@@ -54,7 +54,7 @@ With `wait_timeout`, the server polls Unity every 2 seconds and returns as soon 
 }
 ```
 
-Returns straight away. `data.progress` has `completed` / `total`, the test currently running, and `failures_so_far`. `data.result` (with `summary` and the `include_*` test lists) is only filled when the job succeeded: a run with failing tests ends as `failed` with `result: null`, so read the failures from `data.progress.failures_so_far` (at most 25; `failures_capped` turns `true` once 25 are recorded, so there may be more). `data.error` stays `null` for failing tests; it is only set when the job itself broke (did not start in time, threw, or was orphaned by a domain reload).
+Returns straight away. `data.progress` has `completed` / `total`, the test currently running, and `failures_so_far`. `data.result` (`summary`, plus a `results` list when `include_details` or `include_failed_tests` is set) is only filled when the job succeeded: a run with failing tests ends as `failed` with `result: null`, so read the failures from `data.progress.failures_so_far` (at most 25; `failures_capped` turns `true` once 25 are recorded, so there may be more). `data.error` stays `null` for failing tests; it is only set when the job itself did not finish normally (did not start in time, threw, was canceled, was cleared with `clear_stuck`, or was orphaned by a domain reload).
 
 If Unity is in the background and the job has not moved for 3 s, both this call and the `wait_timeout` form start a focus nudge that brings the Unity window to the front for a few seconds and then switches back. This form runs it in the background, so the response is not delayed.
 
