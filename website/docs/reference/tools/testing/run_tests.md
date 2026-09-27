@@ -73,7 +73,7 @@ Returns immediately with a `job_id` and `status: "running"`. Poll it with [`get_
 }
 ```
 
-`group_names` takes the same full names as `test_names`, but each entry is a regular expression. Filters can be combined with `category_names` and `assembly_names`.
+Each `group_names` entry is a regular expression matched against the full test name, not a name that has to match exactly. Filters can be combined with `category_names` and `assembly_names`.
 
 ### Run PlayMode tests from one assembly
 
@@ -99,6 +99,6 @@ PlayMode runs start with a domain reload, so the default 15 s `init_timeout` is 
 }
 ```
 
-Only clears the orphaned job; it does not start a run. The response says `Stuck job cleared.` or `No running job to clear.` Start the run again afterwards. (While a job really is running, `run_tests` answers `tests_running` with `retry_after_ms` instead — wait for it rather than clearing it.)
+Only clears the orphaned job; it does not start a run. The response says `Stuck job cleared.` or `No running job to clear.` Start the run again afterwards. `clear_stuck` does not check whether the job is still alive: it marks any job in the `running` state as failed. If a run is really in progress, `run_tests` answers `tests_running` with `retry_after_ms`; wait for it instead, because clearing it does not stop the tests already running in Unity.
 <!-- examples:end -->
 
