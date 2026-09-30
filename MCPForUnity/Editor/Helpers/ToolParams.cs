@@ -48,13 +48,12 @@ namespace MCPForUnity.Editor.Helpers
         /// </summary>
         public int? GetInt(string key, int? defaultValue = null)
         {
-            var token = GetToken(key);
-            if (token == null || token.Type == JTokenType.Null) return defaultValue;
-            if (token.Type == JTokenType.Integer) return token.ToObject<int>();
-            var str = token.ToString();
+            var str = GetString(key);
             if (string.IsNullOrEmpty(str)) return defaultValue;
-            // Strings are parsed with the invariant culture: "1.5" must mean the same on a
-            // de-DE or tr-TR editor (where '.' is the thousands separator) as on en-US.
+            // Parsed with the invariant culture: "1.5" must mean the same on a de-DE or
+            // tr-TR editor (where '.' is the thousands separator) as on en-US. JSON
+            // integers stringify without separators in every culture, so they take the
+            // same path and an out-of-range value still falls back to the default.
             return int.TryParse(str, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result) ? result : defaultValue;
         }
 

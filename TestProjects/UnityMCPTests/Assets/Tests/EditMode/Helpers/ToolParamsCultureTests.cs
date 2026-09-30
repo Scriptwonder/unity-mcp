@@ -57,6 +57,13 @@ namespace MCPForUnityTests.Editor.Helpers
         }
 
         [Test]
+        public void GetInt_JsonIntegerOutOfRange_ReturnsDefault()
+        {
+            var p = new ToolParams(new JObject { ["count"] = 2147483648L });
+            Assert.AreEqual(7, p.GetInt("count", 7));
+        }
+
+        [Test]
         public void GetInt_PlainString_Unchanged()
         {
             var p = new ToolParams(new JObject { ["count"] = "42" });
