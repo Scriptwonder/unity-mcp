@@ -3,10 +3,12 @@
 Automates: sprite sheet slicing, AnimationClip creation from sliced frames,
 and AnimatorController generation.
 """
+import json
 from typing import Annotated, Any, Literal, get_args
 
 from fastmcp import Context
-from mcp.types import ToolAnnotations
+from fastmcp.server.server import ToolResult
+from mcp.types import ImageContent, TextContent, ToolAnnotations
 
 from services.registry import mcp_for_unity_tool
 from services.tools import get_unity_instance_from_context
@@ -18,11 +20,26 @@ SpriteAction = Literal["get_info", "slice_sheet", "setup_clips", "setup_controll
 VALID_ACTIONS: list[str] = list(get_args(SpriteAction))
 
 
+def _sprite_image_result(result: dict[str, Any], image_base64: str) -> ToolResult:
+    mime = "image/png"
+    payload = image_base64
+    if image_base64.startswith("data:") and ";base64," in image_base64:
+        prefix, payload = image_base64.split(";base64,", 1)
+        mime = prefix[5:] or "image/png"
+
+    meta = result.copy()
+    meta.pop("image_base64")
+    return ToolResult(content=[
+        TextContent(type="text", text=json.dumps(meta)),
+        ImageContent(type="image", data=payload, mimeType=mime),
+    ])
+
+
 @mcp_for_unity_tool(
     group="animation",
     description=(
         "2D sprite animation tool. "
-        "get_info: read sprite import settings + return image for vision analysis; "
+        "get_info: read sprite import settings and return the sheet as an image block for vision analysis; "
         "the slice list is paged (page_size / cursor). "
         "slice_sheet: apply grid slicing to a sprite sheet. "
         "setup_clips: create AnimationClips from sliced sprites. "
@@ -48,7 +65,7 @@ async def manage_sprite(
     ] = None,
     rows: Annotated[
         int | None,
-        "Number of rows in the sprite sheet grid. Default: 1.",
+        "Number of rows in the sprite sheet grid. Default: 1, or derived from frame_height when that is given.",
     ] = None,
     frame_width: Annotated[
         int | None,
@@ -104,7 +121,7 @@ async def manage_sprite(
         "the previous response; absent next_cursor means the list is finished. The image "
         "is returned only on the first page.",
     ] = None,
-) -> dict[str, Any]:
+) -> dict[str, Any] | ToolResult:
     """2D sprite animation tool."""
 
     action_lower = action.lower() if action else ""
@@ -121,7 +138,7 @@ async def manage_sprite(
 
     if action_lower in ("slice_sheet", "full_setup") and cols is None and frame_width is None:
         return {"success": False, "message": f"'cols' or 'frame_width' is required for '{action}'. "
-                "Use get_info first to retrieve image_base64, analyze the grid visually, then call full_setup with cols/rows."}
+                "Use get_info first to view the sheet image, count the grid visually, then call full_setup with cols/rows."}
 
     if action_lower == "setup_controller" and not controller_path:
         return {"success": False, "message": "'controller_path' is required for setup_controller (e.g. 'Assets/Animators/Hero.controller')."}
@@ -150,4 +167,8 @@ async def manage_sprite(
         "manage_sprite",
         params,
     )
+    if action_lower == "get_info" and isinstance(result, dict) and result.get("success") is True:
+        image_base64 = result.get("image_base64")
+        if isinstance(image_base64, str) and image_base64:
+            return _sprite_image_result(result, image_base64)
     return result if isinstance(result, dict) else {"success": False, "message": str(result)}

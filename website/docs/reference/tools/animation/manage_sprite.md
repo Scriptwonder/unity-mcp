@@ -1,7 +1,7 @@
 ---
 title: manage_sprite
 sidebar_label: manage_sprite
-description: "2D sprite animation tool. get_info: read sprite import settings + return image for vision analysis; the slice list is paged (page_size / cursor). slice_sheet: apply grid slicing to a sprite sheet. setup_clips: create AnimationClips from…"
+description: "2D sprite animation tool. get_info: read sprite import settings and return the sheet as an image block for vision analysis; the slice list is paged (page_size / cursor). slice_sheet: apply grid slicing to a sprite sheet. setup_clips: cre…"
 ---
 
 # `manage_sprite`
@@ -12,7 +12,7 @@ description: "2D sprite animation tool. get_info: read sprite import settings + 
 
 ## Description
 
-2D sprite animation tool. get_info: read sprite import settings + return image for vision analysis; the slice list is paged (page_size / cursor). slice_sheet: apply grid slicing to a sprite sheet. setup_clips: create AnimationClips from sliced sprites. setup_controller: build AnimatorController with smart complexity (1D blend tree for locomotion, trigger states for combat, simple state for single animations). full_setup: one command — slice → clips → controller.
+2D sprite animation tool. get_info: read sprite import settings and return the sheet as an image block for vision analysis; the slice list is paged (page_size / cursor). slice_sheet: apply grid slicing to a sprite sheet. setup_clips: create AnimationClips from sliced sprites. setup_controller: build AnimatorController with smart complexity (1D blend tree for locomotion, trigger states for combat, simple state for single animations). full_setup: one command — slice → clips → controller.
 
 ## Parameters
 
@@ -21,7 +21,7 @@ description: "2D sprite animation tool. get_info: read sprite import settings + 
 | `action` | `Literal['get_info', 'slice_sheet', 'setup_clips', 'setup_controller', 'full_setup']` | yes | Action to perform. |
 | `path` | `str \| None` | — | Sprite texture asset path (e.g. 'Assets/Sprites/hero_walk.png'). Required for get_info, slice_sheet, setup_clips, full_setup. |
 | `cols` | `int \| None` | — | Number of columns in the sprite sheet grid. Used by slice_sheet and full_setup. |
-| `rows` | `int \| None` | — | Number of rows in the sprite sheet grid. Default: 1. |
+| `rows` | `int \| None` | — | Number of rows in the sprite sheet grid. Default: 1, or derived from frame_height when that is given. |
 | `frame_width` | `int \| None` | — | Frame width in pixels. Alternative to cols. |
 | `frame_height` | `int \| None` | — | Frame height in pixels. Alternative to rows. |
 | `base_name` | `str \| None` | — | Base name for sliced sprite frames (default: texture filename). |
@@ -45,8 +45,8 @@ A `dict` containing the Unity response. The exact shape depends on the action.
 ### Read the sheet before slicing it
 
 The grid is the one thing the tool cannot infer. `get_info` returns the texture's
-dimensions and the sheet itself as `image_base64`, so a vision-capable caller can count the
-frames before committing to a grid.
+dimensions as JSON and the sheet itself as an image, so a vision-capable caller can count
+the frames before committing to a grid.
 
 ```json
 { "action": "get_info", "path": "Assets/Sprites/hero_walk.png" }
