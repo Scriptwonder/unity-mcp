@@ -66,7 +66,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 ?? $"{outputDir}/{Path.GetFileNameWithoutExtension(path)}_Controller.controller";
 
             var controller = SpriteControllerBuilder.BuildController(
-                clips.Select(c => (c.name, c.path)), controllerPath, overwrite, diagnostics);
+                clips.Select(c => (c.name, c.path, (bool?)c.loop)), controllerPath, overwrite, diagnostics);
             if (diagnostics.HasErrors)
                 return Stop("setup_controller", diagnostics);
 

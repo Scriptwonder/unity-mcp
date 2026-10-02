@@ -29,7 +29,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
             bool overwrite = ParamCoercion.CoerceBool(@params["overwrite"], false);
 
-            var clips = new List<(string name, string path)>();
+            var clips = new List<(string name, string path, bool? loop)>();
             foreach (JToken clipToken in clipsToken)
             {
                 // Measured: a non-object clips entry threw InvalidCastException on a typed cast.
@@ -44,7 +44,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                     diagnostics.AddWarning("CLIP_NO_NAME", "A clips entry has no name - skipped.", "Each clip must be an object with a 'name'.");
                     continue;
                 }
-                clips.Add((name, cd["path"]?.ToString() ?? ""));
+                clips.Add((name, cd["path"]?.ToString() ?? "", null));
             }
 
             var built = BuildController(clips, controllerPath, overwrite, diagnostics);
@@ -60,9 +60,9 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             };
         }
 
-        /// <summary>Returns default when refused; the diagnostics say why.</summary>
+        /// <summary>Returns default when refused; the diagnostics say why. A non-null loop overrides the name guess.</summary>
         internal static (string path, int stateCount) BuildController(
-            IEnumerable<(string name, string path)> clips, string controllerPath, bool overwrite,
+            IEnumerable<(string name, string path, bool? loop)> clips, string controllerPath, bool overwrite,
             SpriteDiagnosticBuilder diagnostics)
         {
             controllerPath = string.IsNullOrWhiteSpace(controllerPath) ? null : AssetPathUtility.SanitizeAssetPath(controllerPath.Trim());
@@ -88,7 +88,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             }
 
             var entries = new List<(SpriteAnimEntry entry, AnimationClip clip)>();
-            foreach (var (clipName, clipPath) in clips)
+            foreach (var (clipName, clipPath, loop) in clips)
             {
                 string safeClipPath = AssetPathUtility.SanitizeAssetPath(clipPath);
                 if (safeClipPath == null)
@@ -96,7 +96,9 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(safeClipPath);
                 if (clip == null)
                 { diagnostics.AddWarning("CLIP_NOT_FOUND", $"Clip '{clipName}' not found at '{clipPath}' — skipped."); continue; }
-                entries.Add((SpriteNamingDetector.Detect(clipName), clip));
+                var entry = SpriteNamingDetector.Detect(clipName);
+                if (loop.HasValue) entry.Loop = loop.Value;
+                entries.Add((entry, clip));
             }
 
             if (entries.Count == 0)
@@ -222,10 +224,12 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                     tr.hasExitTime = false;
                 }
 
-                // A one-shot state has to hand control back, so it exits to idle on its own.
-                if (idleState != null && !pair.entry.Loop)
+                // A one-shot state has to hand control back, so it exits to idle on its own,
+                // or to the default state when there is no idle clip.
+                var exitTarget = idleState ?? rootSM.defaultState;
+                if (exitTarget != null && exitTarget != state && !pair.entry.Loop)
                 {
-                    var exitTr = state.AddTransition(idleState);
+                    var exitTr = state.AddTransition(exitTarget);
                     exitTr.hasExitTime = true;
                     exitTr.exitTime     = 1f;
                     exitTr.hasFixedDuration = false;

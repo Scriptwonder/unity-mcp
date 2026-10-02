@@ -141,13 +141,36 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             };
         }
 
-        /// <summary>Undoes the conversion above when the request is refused after it.</summary>
-        private static void RestoreTextureType(TextureImporter importer, TextureImporterType previous)
+        /// <summary>Every importer field slice_sheet writes, so a refusal can put all of them back.</summary>
+        private sealed class ImporterSnapshot
         {
-            if (importer.textureType == previous) return;
-            importer.textureType = previous;
-            EditorUtility.SetDirty(importer);
-            importer.SaveAndReimport();
+            private readonly TextureImporterType textureType;
+            private readonly TextureImporterNPOTScale npotScale;
+            private readonly SpriteImportMode spriteImportMode;
+            private readonly SpriteMetaData[] spritesheet;
+            private readonly FilterMode filterMode;
+
+            public ImporterSnapshot(TextureImporter importer)
+            {
+                textureType      = importer.textureType;
+                npotScale        = importer.npotScale;
+                spriteImportMode = importer.spriteImportMode;
+                spritesheet      = importer.spritesheet.ToArray();
+                filterMode       = importer.filterMode;
+            }
+
+            public void Restore(TextureImporter importer)
+            {
+                bool changed = false;
+                if (importer.textureType != textureType) { importer.textureType = textureType; changed = true; }
+                if (importer.npotScale != npotScale) { importer.npotScale = npotScale; changed = true; }
+                if (importer.spriteImportMode != spriteImportMode) { importer.spriteImportMode = spriteImportMode; changed = true; }
+                if (!importer.spritesheet.SequenceEqual(spritesheet)) { importer.spritesheet = spritesheet; changed = true; }
+                if (importer.filterMode != filterMode) { importer.filterMode = filterMode; changed = true; }
+                if (!changed) return;
+                EditorUtility.SetDirty(importer);
+                importer.SaveAndReimport();
+            }
         }
 
         // ── SliceSheet ───────────────────────────────────────────────────────
@@ -190,8 +213,8 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             // non-power-of-two sheet (96px to 128px) and the trailing frames then land outside
             // the real texture, where Unity drops them silently - measured on 6000.4.4f1, a
             // 96x16 sheet asked for 6 columns gave 4 sprites of 21px. Later refusals restore
-            // the previous type: a refused request must not leave a converted texture behind.
-            var previousType = importer.textureType;
+            // the snapshot: a refused request must not leave a modified importer behind.
+            var snapshot = new ImporterSnapshot(importer);
             try
             {
                 // npotScale as well as the type: Unity refuses sprite generation outright on a
@@ -209,25 +232,25 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                     EditorUtility.SetDirty(importer);
                     importer.SaveAndReimport();
                 }
-                return SliceConverted(@params, diagnostics, path, importer, previousType, cols, rows, frameW, frameH);
+                return SliceConverted(@params, diagnostics, path, importer, snapshot, cols, rows, frameW, frameH);
             }
             catch
             {
                 // A restore that throws must not replace the exception that caused it.
-                try { RestoreTextureType(importer, previousType); }
-                catch (Exception restoreError) { McpLog.Error($"[ManageSprite] Could not restore the importer type of '{path}': {restoreError.Message}"); }
+                try { snapshot.Restore(importer); }
+                catch (Exception restoreError) { McpLog.Error($"[ManageSprite] Could not restore the import settings of '{path}': {restoreError.Message}"); }
                 throw;
             }
         }
 
         private static object SliceConverted(JObject @params, SpriteDiagnosticBuilder diagnostics, string path,
-                                             TextureImporter importer, TextureImporterType previousType,
+                                             TextureImporter importer, ImporterSnapshot snapshot,
                                              int cols, int rows, int frameW, int frameH)
         {
             var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
             if (texture == null)
             {
-                RestoreTextureType(importer, previousType);
+                snapshot.Restore(importer);
                 return diagnostics.Fail("NOT_FOUND", $"Could not load texture at '{path}'.");
             }
 
@@ -247,7 +270,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             if (frameW <= 0 || frameH <= 0
                 || (long)cols * frameW > texW || (long)rows * frameH > texH)
             {
-                RestoreTextureType(importer, previousType);
+                snapshot.Restore(importer);
                 return diagnostics.Fail("SLICE_OUT_OF_BOUNDS",
                     $"A {cols}x{rows} grid of {frameW}x{frameH} frames does not fit inside the {texW}x{texH} texture, so some frames would fall outside it.",
                     "Reduce frame_width/frame_height, or cols/rows", "Confirm the texture dimensions with get_info");
@@ -271,7 +294,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             long totalFrames = (long)cols * rows;
             if (totalFrames > MaxFrames)
             {
-                RestoreTextureType(importer, previousType);
+                snapshot.Restore(importer);
                 return diagnostics.Fail("SLICE_TOO_MANY_FRAMES",
                     $"The grid works out to {totalFrames} frames, above the {MaxFrames}-frame limit.",
                     "Increase frame_width/frame_height", "Slice the sheet in smaller pieces");
@@ -279,7 +302,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
             if (totalFrames == 0)
             {
-                RestoreTextureType(importer, previousType);
+                snapshot.Restore(importer);
                 return diagnostics.Fail("SLICE_EMPTY",
                     $"A {cols}x{rows} grid works out to 0 frames - cols/rows or the frame size is wrong.",
                     "Check the cols and rows values", "Confirm the texture dimensions with get_info");
@@ -317,12 +340,17 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             // and is closed above; an import that fails for any other reason would report the
             // same success over an empty asset. Counting what is actually on the asset is the
             // only answer that does not depend on knowing the causes in advance.
+            // Sprites exist only after an import, so this check cannot run before the save;
+            // the rollback is what keeps a refusal from leaving the asset modified.
             int generated = AssetDatabase.LoadAllAssetsAtPath(path).OfType<Sprite>().Count();
             if (generated != totalFrames)
+            {
+                snapshot.Restore(importer);
                 return diagnostics.Fail("SLICE_NOT_GENERATED",
                     $"Unity accepted a {cols}x{rows} grid but generated {generated} of {totalFrames} sprites for '{path}'.",
                     "Check the Unity console for the import error",
                     "Confirm the texture's import settings allow sprite generation");
+            }
 
             return new
             {

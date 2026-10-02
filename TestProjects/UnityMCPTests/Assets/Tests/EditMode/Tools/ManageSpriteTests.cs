@@ -143,6 +143,17 @@ namespace MCPForUnityTests.Editor.Tools
                 .OrderBy(s => int.Parse(s.name.Split('_').Last()))
                 .ToArray();
 
+        /// <summary>Every importer field slice_sheet writes, as one comparable string.</summary>
+        private static string ImportState(string path)
+        {
+            var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+#pragma warning disable CS0618 // same API the tool writes through
+            int slices = importer.spritesheet.Length;
+#pragma warning restore CS0618
+            return $"type={importer.textureType} npot={importer.npotScale} mode={importer.spriteImportMode} " +
+                   $"filter={importer.filterMode} slices={slices}";
+        }
+
         // =====================================================================
         // Dispatch
         // =====================================================================
@@ -666,7 +677,7 @@ namespace MCPForUnityTests.Editor.Tools
             int sheetCols, int sheetRows, JObject grid, string code)
         {
             string path = CreateSheet("badgrid", sheetCols, sheetRows);
-            var before = ((TextureImporter)AssetImporter.GetAtPath(path)).textureType;
+            string before = ImportState(path);
 
             var request = new JObject { ["action"] = "slice_sheet", ["path"] = path };
             foreach (var p in grid.Properties())
@@ -676,10 +687,67 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsFalse(result.Value<bool>("success"));
             Assert.That(result["diagnostics"].ToString(), Does.Contain(code));
             Assert.AreEqual(0, SpritesOf(path).Length, "a refused grid must not write any frame");
-            // Every refusal after the Sprite conversion owes a RestoreTextureType call, an
-            // obligation the code cannot enforce; this assertion makes a forgotten one fail.
-            Assert.AreEqual(before, ((TextureImporter)AssetImporter.GetAtPath(path)).textureType,
-                "a refused request must not leave the texture converted behind it");
+            // Every refusal after the conversion owes a restore call, an obligation the code
+            // cannot enforce; this assertion makes a forgotten one fail.
+            Assert.AreEqual(before, ImportState(path),
+                "a refused request must not leave the importer modified behind it");
+        }
+
+        [Test]
+        public void SliceSheet_RefusedGridOnADefaultNpotSheet_RestoresNpotScaleNotJustTheType()
+        {
+            string path = CreateSheet("npot_default_refused", 6, 1);
+            var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+            Assert.AreEqual(TextureImporterType.Default, importer.textureType, "fixture: expected a Default-type sheet");
+            Assert.AreNotEqual(TextureImporterNPOTScale.None, importer.npotScale,
+                "fixture: the conversion only touches npotScale when it is not None");
+            var npotBefore = importer.npotScale;
+
+            var result = Run(new JObject { ["action"] = "slice_sheet", ["path"] = path,
+                                           ["cols"] = 6, ["frame_width"] = 4096 });
+
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("SLICE_OUT_OF_BOUNDS"));
+            Assert.AreEqual(npotBefore, ((TextureImporter)AssetImporter.GetAtPath(path)).npotScale);
+        }
+
+        /// <summary>
+        /// Turns the slice import of one armed path back into a Default texture, which yields
+        /// no sprites: the only way found to make Unity accept a spritesheet and generate nothing.
+        /// </summary>
+        public class StripSpritesFromSliceImport : AssetPostprocessor
+        {
+            internal static string ArmedPath;
+
+            private void OnPreprocessTexture()
+            {
+                if (assetPath != ArmedPath) return;
+                var importer = (TextureImporter)assetImporter;
+                if (importer.spriteImportMode == SpriteImportMode.Multiple)
+                    importer.textureType = TextureImporterType.Default;
+            }
+        }
+
+        [Test]
+        public void SliceSheet_SpritesNotGenerated_RollsTheImporterBack()
+        {
+            string path = CreateSheet("not_generated", 4, 1);
+            string before = ImportState(path);
+
+            JObject result;
+            StripSpritesFromSliceImport.ArmedPath = path;
+            try
+            {
+                result = Run(new JObject { ["action"] = "slice_sheet", ["path"] = path, ["cols"] = 4 });
+            }
+            finally
+            {
+                StripSpritesFromSliceImport.ArmedPath = null;
+            }
+
+            Assert.That(result["diagnostics"].ToString(), Does.Contain("SLICE_NOT_GENERATED"),
+                "fixture: the postprocessor did not stop sprite generation; " + result.ToString(Newtonsoft.Json.Formatting.None));
+            Assert.AreEqual(before, ImportState(path),
+                "a slice Unity did not generate must not leave its settings on the asset");
         }
 
         [Test]
@@ -1090,6 +1158,31 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
+        public void SetupController_OneShotWithoutAnIdleClip_ExitsToTheDefaultState()
+        {
+            // The exit was built only toward an Idle state, so without one 'attack' had no way out.
+            var result = SetupController(BuildClips("noidle", "walk", "attack"));
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+
+            var sm = AssetDatabase.LoadAssetAtPath<AnimatorController>($"{TempRoot}/Hero.controller").layers[0].stateMachine;
+            Assert.AreEqual("walk", sm.defaultState.name, "fixture: expected walk as the entry state");
+            var attack = sm.states.Select(s => s.state).Single(s => s.name == "attack");
+            Assert.That(attack.transitions.Where(t => t.hasExitTime).Select(t => t.destinationState),
+                Contains.Item(sm.defaultState));
+        }
+
+        [Test]
+        public void SetupController_OnlyAOneShot_GetsNoTransitionToItself()
+        {
+            var result = SetupController(BuildClips("onlyattack", "attack"));
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+
+            var sm = AssetDatabase.LoadAssetAtPath<AnimatorController>($"{TempRoot}/Hero.controller").layers[0].stateMachine;
+            var attack = sm.states.Select(s => s.state).Single(s => s.name == "attack");
+            Assert.That(attack.transitions.Select(t => t.destinationState), Has.No.Member(attack));
+        }
+
+        [Test]
         public void SetupController_WalkAndRun_BuildsASpeedDrivenBlendTree()
         {
             var result = SetupController(BuildClips("blend", "idle", "walk", "run"));
@@ -1391,6 +1484,32 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.AreEqual(onDisk, result.Value<int>("clip_count"),
                 "clip_count must count the clips that exist, not the ones that were asked for");
             Assert.That(result["diagnostics"].ToString(), Does.Contain("CLIP_BAD_FPS"));
+        }
+
+        // The controller re-derived looping from the clip name, so 'attack' with loop=true
+        // still got a one-shot exit to idle while its .anim looped.
+        [TestCase(true, false)]
+        [TestCase(null, true)]
+        public void FullSetup_ExplicitLoop_DecidesTheOneShotExit(bool? loop, bool expectExit)
+        {
+            string path = CreateSheet("loopflag", 4, 1);
+            var attackDef = new JObject { ["name"] = "attack", ["start_frame"] = 2, ["end_frame"] = 3 };
+            if (loop.HasValue) attackDef["loop"] = loop.Value;
+            var result = Run(new JObject
+            {
+                ["action"] = "full_setup", ["path"] = path, ["cols"] = 4,
+                ["output_dir"] = TempRoot, ["controller_path"] = $"{TempRoot}/Loop.controller",
+                ["clips"] = new JArray {
+                    new JObject { ["name"] = "idle", ["start_frame"] = 0, ["end_frame"] = 1 },
+                    attackDef,
+                },
+            });
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+
+            var sm = AssetDatabase.LoadAssetAtPath<AnimatorController>($"{TempRoot}/Loop.controller").layers[0].stateMachine;
+            var attack = sm.states.Select(s => s.state).Single(s => s.name == "attack");
+            bool exitsToIdle = attack.transitions.Any(t => t.destinationState != null && t.destinationState.name == "Idle");
+            Assert.AreEqual(expectExit, exitsToIdle);
         }
 
         [Test]
