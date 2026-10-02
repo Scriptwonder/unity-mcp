@@ -174,6 +174,7 @@ jobs:
       - name: Run domain reload tests
         uses: game-ci/unity-test-runner@32e57712352b500e17974b245a6dce9e11a73213 # v4
         id: domain-tests
+        continue-on-error: true
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
@@ -189,7 +190,7 @@ jobs:
           githubToken: ""
           artifactsPath: artifacts/domain-reload
 
-      # A runner failure already fails the job here; this also fails a run that executed no test.
+      # Preserve runner failures while reporting any NUnit failure details or missing results.
       - name: Check domain reload test results
         env:
           RESULTS_XML: artifacts/domain-reload/${{ matrix.testMode }}-results.xml

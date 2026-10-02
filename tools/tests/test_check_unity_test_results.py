@@ -12,7 +12,11 @@ COUNTS = 'inconclusive="0" skipped="0"'
 PASSING = '<test-run result="Passed" total="2" passed="1" failed="0" inconclusive="0" skipped="1"><test-case result="Passed"/><test-case result="Skipped"/></test-run>'
 # <test-run> attributes exactly as Unity wrote them on green beta run 33978935244 (all four Unity versions):
 # a clean run that contains [Ignore]d tests reports result="Skipped:Ignored", not "Passed".
-UNITY_CLEAN_RUN = '<test-run id="2" testcasecount="1229" result="Skipped:Ignored" total="1229" passed="1162" failed="0" inconclusive="0" skipped="67" asserts="0" engine-version="3.5.0.0"/>'
+UNITY_CLEAN_RUN = (
+    '<test-run id="2" testcasecount="1229" result="Skipped:Ignored" total="1229" passed="1162" failed="0" inconclusive="0" skipped="67" asserts="0" engine-version="3.5.0.0">'
+    '<test-suite>' + '<test-case result="Passed"/>' * 1162 + '<test-case result="Skipped"/>' * 67
+    + '</test-suite></test-run>'
+)
 # Beta run 29283113713 (6000.0.75f1), before #1294 moved ManageGraphicsTests off Assume.That.
 UNITY_INCONCLUSIVE_RUN = '''<test-run id="2" testcasecount="1166" result="Skipped:Ignored" total="1166" passed="1100" failed="0" inconclusive="18" skipped="48" asserts="0" engine-version="3.5.0.0">
   <test-case fullname="MCPForUnityTests.Editor.Tools.ManageGraphicsTests.FeatureAdd_InvalidType_ReturnsError" result="Inconclusive">
@@ -32,11 +36,21 @@ def run_gate(tmp_path, xml, outcome="success"):
     )
 
 
-@pytest.mark.parametrize("xml", [PASSING, UNITY_CLEAN_RUN])
+@pytest.mark.parametrize("xml", [PASSING, UNITY_CLEAN_RUN], ids=["passing", "unity-ignored"])
 def test_successful_runner_and_completed_results_pass(tmp_path, xml):
     result = run_gate(tmp_path, xml)
     assert result.returncode == 0, result.stdout
     assert "failed, 0 inconclusive" in result.stdout
+
+
+@pytest.mark.parametrize("records", ["", '<test-suite result="Passed"/>',
+                                      '<test-case result="Passed"/>' * 2])
+def test_summary_cannot_claim_passes_without_matching_test_cases(tmp_path, records):
+    xml = (f'<test-run result="Passed" total="1" passed="1" failed="0" {COUNTS}>'
+           f'{records}</test-run>')
+    result = run_gate(tmp_path, xml)
+    assert result.returncode == 1
+    assert "passing test-case records" in result.stdout
 
 
 # Unity exits 2 when any test is Inconclusive, so with githubToken "" game-ci fails the step and CI

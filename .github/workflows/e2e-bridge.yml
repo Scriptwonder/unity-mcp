@@ -52,6 +52,8 @@ jobs:
           UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
         run: |
           set -e
+          # Only absent secrets skip a fork run. Partial configuration must fail
+          # explicitly in prepare, rather than silently look like missing access.
           if [ -n "$UNITY_LICENSE$UNITY_EMAIL$UNITY_PASSWORD$UNITY_SERIAL" ]; then
             echo "unity_ok=true" >> "$GITHUB_OUTPUT"
           else

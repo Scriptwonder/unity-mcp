@@ -72,6 +72,10 @@ def check_results(path: Path, runner_outcome: str) -> int:
     if inconclusive or inconclusive_cases:
         print("::error::Unity fails a run with inconclusive tests; use Assert.Ignore for environment guards")
         return 1
+    recorded_passes = sum(case.get("result") == "Passed" for case in root.iter("test-case"))
+    if recorded_passes != passed:
+        print(f"::error::NUnit declares {passed} passing tests but contains {recorded_passes} passing test-case records")
+        return 1
     return 1 if runner_failed else 0
 
 
