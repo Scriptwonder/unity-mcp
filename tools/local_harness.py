@@ -1219,7 +1219,9 @@ def _poll_utf(send, job_id: str, instance_id: str, deadline: float,
     """
     while time.time() < deadline:
         try:
-            poll = send("get_test_job", {"job_id": job_id, "includeFailedTests": True},
+            # Running jobs have no result payload. Request complete rows for the terminal
+            # response so JUnit represents passes as well as failures and ignored tests.
+            poll = send("get_test_job", {"job_id": job_id, "includeDetails": True},
                         instance_id=instance_id, max_retries=max_retries, retry_ms=retry_ms,
                         retry_on_reload=True)
         except Exception:
@@ -1254,48 +1256,62 @@ def _outcome_from_terminal(name: str, mode: str, terminal: dict[str, Any] | Any,
         return LegOutcome(name, "fail", blocking=blocking, detail="wedge (no terminal status)",
                           exit_code=1, junit_suite=suite)
 
-    if status == "succeeded":
-        result = _dig(terminal, "result") or {}
+    result = _dig(terminal, "result")
+    if status == "succeeded" or (status == "failed" and isinstance(result, dict)):
         summary = (result.get("summary") if isinstance(result, dict) else None) or {}
-        total = int(summary.get("total", 0) or 0)
-        passed = int(summary.get("passed", 0) or 0)
-        failed = int(summary.get("failed", 0) or 0)
-        skipped = int(summary.get("skipped", 0) or 0)
-        duration = float(summary.get("durationSeconds", 0.0) or 0.0)
-        rows = result.get("results") if isinstance(result, dict) else None
-        if isinstance(rows, list) and rows:
+
+        def invalid_results(detail: str) -> LegOutcome:
+            suite.cases.append(JUnitCase(name=f"{mode}.results", failure=detail))
+            return LegOutcome(name, "fail", blocking=blocking, detail=detail,
+                              exit_code=1, junit_suite=suite)
+
+        try:
+            total, passed, failed, skipped = (
+                int(summary.get(key, 0) or 0) for key in ("total", "passed", "failed", "skipped")
+            )
+            if min(total, passed, failed, skipped) < 0 or total != passed + failed + skipped:
+                return invalid_results("inconsistent Unity test summary counts")
+            rows = result.get("results") if isinstance(result, dict) else None
+            if not isinstance(rows, list) or len(rows) != total:
+                return invalid_results("Unity test result rows do not match the complete summary")
+            recorded = {"passed": 0, "failed": 0, "skipped": 0}
             for r in rows:
                 if not isinstance(r, dict):
-                    continue
+                    return invalid_results("invalid Unity test result row")
                 rname = str(r.get("fullName") or r.get("name") or f"{mode}.test")
                 rtime = float(r.get("durationSeconds", 0.0) or 0.0)
-                state = str(r.get("state") or "")
-                if state.lower() in ("failed", "error"):
+                # NUnit ResultState can include a label/site, e.g. Skipped:Ignored.
+                state = str(r.get("state") or "").lower().split(":", 1)[0].split("(", 1)[0]
+                if state in ("failed", "error"):
+                    recorded["failed"] += 1
                     fmsg = str(r.get("message") or "") + "\n" + str(r.get("stackTrace") or "")
-                    suite.cases.append(JUnitCase(name=rname, time_s=rtime, failure=fmsg.strip()))
-                elif state.lower() in ("skipped", "ignored", "inconclusive"):
+                    suite.cases.append(JUnitCase(name=rname, time_s=rtime, failure=fmsg.strip() or "test failed"))
+                elif state in ("skipped", "ignored"):
+                    recorded["skipped"] += 1
                     suite.cases.append(JUnitCase(name=rname, time_s=rtime, skipped=True))
-                else:
+                elif state == "passed":
+                    recorded["passed"] += 1
                     suite.cases.append(JUnitCase(name=rname, time_s=rtime))
-        else:
-            # No per-test rows: synthesize from the summary.
-            for i in range(passed):
-                suite.cases.append(JUnitCase(name=f"{mode}.passed.{i}"))
-            for i in range(failed):
-                suite.cases.append(JUnitCase(name=f"{mode}.failed.{i}", failure="failed (no detail)"))
-            for i in range(skipped):
-                suite.cases.append(JUnitCase(name=f"{mode}.skipped.{i}", skipped=True))
-            if not suite.cases and total == 0:
-                suite.cases.append(JUnitCase(name=f"{mode}.empty", time_s=duration))
+                else:
+                    return invalid_results(f"unsupported Unity test state for {rname}: {state or '<missing>'}")
+        except (AttributeError, TypeError, ValueError, OverflowError):
+            return invalid_results("invalid Unity test summary or duration")
+
+        if recorded != {"passed": passed, "failed": failed, "skipped": skipped}:
+            return invalid_results("Unity test result states disagree with the summary counts")
         if failed > 0:
             return LegOutcome(name, "fail", blocking=blocking,
                               detail=f"{failed}/{total} {mode} tests failed", exit_code=1,
                               junit_suite=suite)
+        if status == "failed":
+            return invalid_results(str(_dig(terminal, "error") or "test job failed"))
+        if passed == 0:
+            return invalid_results("Unity did not execute any passing tests")
         return LegOutcome(name, "pass", blocking=blocking,
                           detail=f"{passed}/{total} {mode} tests passed", exit_code=0,
                           junit_suite=suite)
 
-    # status == "failed": data.result is null; surface error + capped failures.
+    # Initialization/runtime failures may have no result: surface error + capped failures.
     error = _dig(terminal, "error") or "test job failed"
     failures = _dig(terminal, "failures_so_far") or []
     detail = str(error)

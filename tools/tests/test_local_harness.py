@@ -906,3 +906,85 @@ class TestEditorDiagnostics:
             relaunch=relaunch, before_retry=lambda: events.append("snapshot"))
         assert outcome.status == "pass"
         assert events == ["poll", "snapshot", "teardown-and-relaunch", "poll"]
+
+
+class TestTerminalJUnit:
+    @staticmethod
+    def terminal(rows, passed, failed=0, skipped=0, status="succeeded"):
+        return {"success": True, "data": {
+            "status": status,
+            "result": {"summary": {"total": passed + failed + skipped,
+                                    "passed": passed, "failed": failed, "skipped": skipped},
+                       "results": rows},
+        }}
+
+    def test_complete_ci_result_keeps_passes_and_qualified_ignored_tests(self):
+        rows = [{"fullName": f"Suite.Pass{i}", "state": "Passed", "durationSeconds": 0.01}
+                for i in range(1244)]
+        rows += [{"fullName": f"Suite.Ignore{i}", "state": "Skipped:Ignored"}
+                 for i in range(73)]
+        outcome = lh._outcome_from_terminal("editmode", "EditMode", self.terminal(rows, 1244, skipped=73), True)
+        root = lh.merge_junit([outcome.junit_suite]).getroot()
+        assert outcome.status == "pass"
+        assert root.get("tests") == "1317"
+        assert root.get("skipped") == "73"
+        assert root.get("failures") == "0"
+        assert len(root.findall(".//testcase/skipped")) == 73
+        assert root.find(".//testcase[@name='Suite.Pass1243']") is not None
+
+    def test_compact_nonpassing_rows_cannot_claim_complete_results(self):
+        rows = [{"state": "Skipped:Ignored"} for _ in range(73)]
+        outcome = lh._outcome_from_terminal("editmode", "EditMode", self.terminal(rows, 1244, skipped=73), True)
+        assert outcome.status == "fail"
+        assert "do not match" in outcome.detail
+
+    def test_failed_job_with_results_preserves_individual_failure_details(self):
+        rows = [{"fullName": "Suite.Passed", "state": "Passed"},
+                {"fullName": "Suite.Failed", "state": "Failed:Error", "message": "assertion",
+                 "stackTrace": "fixture.cs:42"},
+                {"fullName": "Suite.Ignored", "state": "Skipped:Ignored"}]
+        outcome = lh._outcome_from_terminal(
+            "editmode", "EditMode", self.terminal(rows, 1, failed=1, skipped=1, status="failed"), True)
+        root = lh.merge_junit([outcome.junit_suite]).getroot()
+        assert outcome.status == "fail"
+        assert root.get("tests") == "3"
+        assert root.get("failures") == "1"
+        failure = root.find(".//testcase[@name='Suite.Failed']/failure")
+        assert "assertion" in failure.text and "fixture.cs:42" in failure.text
+
+    @pytest.mark.parametrize("rows,passed,skipped", [([], 0, 0),
+                              ([{"state": "Skipped:Ignored"}], 0, 1)])
+    def test_no_passing_test_cannot_report_success(self, rows, passed, skipped):
+        outcome = lh._outcome_from_terminal(
+            "editmode", "EditMode", self.terminal(rows, passed, skipped=skipped), True)
+        assert outcome.status == "fail"
+        assert "did not execute" in outcome.detail
+
+    @pytest.mark.parametrize("state", ["Unknown", "", "Inconclusive"])
+    def test_unrecognized_or_inconclusive_leaf_is_not_counted_as_a_pass(self, state):
+        outcome = lh._outcome_from_terminal(
+            "editmode", "EditMode", self.terminal([{"state": state}], 1), True)
+        assert outcome.status == "fail"
+        assert "unsupported" in outcome.detail
+
+    def test_row_buckets_must_match_summary(self):
+        outcome = lh._outcome_from_terminal(
+            "editmode", "EditMode", self.terminal([{"state": "Passed"}], 0, skipped=1), True)
+        assert outcome.status == "fail"
+        assert "disagree" in outcome.detail
+
+    def test_initialization_failure_without_results_retains_progress_errors(self):
+        response = {"status": "failed", "result": None, "error": "initialization timed out",
+                    "progress": {"failures_so_far": [{"full_name": "Suite.Start", "message": "callback error"}]}}
+        outcome = lh._outcome_from_terminal("editmode", "EditMode", response, True)
+        assert outcome.status == "fail"
+        assert "callback error" in outcome.junit_suite.cases[0].failure
+
+    def test_poll_requests_complete_terminal_details(self):
+        def send(command, params, **kwargs):
+            assert command == "get_test_job"
+            assert params["includeDetails"] is True
+            return self.terminal([{"state": "Passed"}], 1)
+
+        result = lh._poll_utf(send, "job", "instance", lh.time.time() + 10, 1, 10)
+        assert lh._dig(result, "status") == "succeeded"
