@@ -455,8 +455,7 @@ namespace MCPForUnity.Editor.Helpers
             error = null;
             using var so = new SerializedObject(component);
 
-            SerializedProperty prop = so.FindProperty(propertyName)
-                                   ?? so.FindProperty(normalizedName);
+            SerializedProperty prop = FindTopLevelProperty(so, propertyName, normalizedName);
             if (prop == null)
             {
                 error = $"SerializedProperty '{propertyName}' not found on component '{component.GetType().Name}'.";
@@ -474,8 +473,7 @@ namespace MCPForUnity.Editor.Helpers
                 && !(value is JValue jv && jv.Type == JTokenType.Null))
             {
                 so.Update();
-                var verifyProp = so.FindProperty(propertyName)
-                              ?? so.FindProperty(normalizedName);
+                var verifyProp = FindTopLevelProperty(so, propertyName, normalizedName);
                 if (verifyProp != null
                     && verifyProp.propertyType == SerializedPropertyType.ObjectReference
                     && verifyProp.objectReferenceValue == null)
@@ -897,6 +895,36 @@ namespace MCPForUnity.Editor.Helpers
             }
 
             return AssignObjectReference(prop, go, componentFilter, out error);
+        }
+
+        /// <summary>
+        /// Finds a top-level SerializedProperty by name. Built-in components often back a public
+        /// property with a differently named native field (SpriteRenderer.sprite is m_Sprite), so
+        /// fall back to comparing names case-insensitively with the m_ prefix and underscores removed.
+        /// </summary>
+        private static SerializedProperty FindTopLevelProperty(SerializedObject so, string propertyName, string normalizedName)
+        {
+            var prop = so.FindProperty(propertyName) ?? so.FindProperty(normalizedName);
+            if (prop != null) return prop;
+
+            string key = StripSerializedFieldPrefix(normalizedName);
+            var iter = so.GetIterator();
+            bool enterChildren = true;
+            while (iter.Next(enterChildren))
+            {
+                enterChildren = false;
+                if (StripSerializedFieldPrefix(iter.name) == key)
+                    return so.FindProperty(iter.name);
+            }
+
+            return null;
+        }
+
+        private static string StripSerializedFieldPrefix(string name)
+        {
+            if (name.StartsWith("m_", StringComparison.Ordinal))
+                name = name.Substring(2);
+            return name.Replace("_", "").ToLowerInvariant();
         }
 
         /// <summary>
