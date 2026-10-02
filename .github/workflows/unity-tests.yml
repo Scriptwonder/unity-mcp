@@ -168,8 +168,11 @@ jobs:
             Library-
 
       # Run domain reload tests first (they're [Explicit] so need explicit category)
+      # Both runner steps pin the action and its CLI. The floating v4 tag and the CLI's "latest"
+      # release changed behavior under this workflow once (red beta since 2026-09-05); a pinned
+      # cliVersion also skips the unauthenticated releases/latest lookup. Bump both on purpose.
       - name: Run domain reload tests
-        uses: game-ci/unity-test-runner@v4
+        uses: game-ci/unity-test-runner@32e57712352b500e17974b245a6dce9e11a73213 # v4
         id: domain-tests
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
@@ -181,12 +184,20 @@ jobs:
           unityVersion: ${{ matrix.unityVersion }}
           testMode: ${{ matrix.testMode }}
           customParameters: -testCategory domain_reload
+          cliVersion: v0.1.69
           # Results are gated locally; this read-only job cannot publish Checks API results.
           githubToken: ""
           artifactsPath: artifacts/domain-reload
 
+      # A runner failure already fails the job here; this also fails a run that executed no test.
+      - name: Check domain reload test results
+        env:
+          RESULTS_XML: artifacts/domain-reload/${{ matrix.testMode }}-results.xml
+          TEST_RUN_OUTCOME: ${{ steps.domain-tests.outcome }}
+        run: python3 tools/check_unity_test_results.py "$RESULTS_XML" --runner-outcome "$TEST_RUN_OUTCOME"
+
       - name: Run tests
-        uses: game-ci/unity-test-runner@v4
+        uses: game-ci/unity-test-runner@32e57712352b500e17974b245a6dce9e11a73213 # v4
         id: tests
         continue-on-error: true
         env:
@@ -198,6 +209,7 @@ jobs:
           projectPath: ${{ matrix.projectPath }}
           unityVersion: ${{ matrix.unityVersion }}
           testMode: ${{ matrix.testMode }}
+          cliVersion: v0.1.69
           githubToken: ""
           # Keep the preceding domain-reload XML out of the regular suite's result gate.
           artifactsPath: artifacts/editmode

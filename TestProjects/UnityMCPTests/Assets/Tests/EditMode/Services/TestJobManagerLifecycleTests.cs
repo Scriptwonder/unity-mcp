@@ -13,6 +13,7 @@ using UnityEditor.TestTools.TestRunner.Api;
 using UnityEngine;
 using UnityEngine.TestTools;
 using RunState = UnityEditor.TestTools.TestRunner.Api.RunState;
+using TestMode = UnityEditor.TestTools.TestRunner.Api.TestMode;
 using TestStatus = UnityEditor.TestTools.TestRunner.Api.TestStatus;
 
 namespace MCPForUnityTests.Editor.Services
@@ -412,6 +413,7 @@ namespace MCPForUnityTests.Editor.Services
             public int TestCaseTimeout => 0;
             public ITypeInfo TypeInfo => null;
             public IMethodInfo Method => null;
+            public object[] Arguments => Array.Empty<object>();
             public string[] Categories => Array.Empty<string>();
             public bool IsTestAssembly => false;
             public RunState RunState => RunState.Runnable;
