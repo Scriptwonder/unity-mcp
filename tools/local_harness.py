@@ -894,6 +894,7 @@ class DockerLauncher:
                 "-v", f"{rt}/unity-config:/root/.config/unity3d",
                 "-v", f"{rt}/unity-local:/root/.local/share/unity3d",
                 "-v", f"{rt}/unity-cache:/root/.cache/unity3d",
+                "-v", f"{rt}/unity-machine-id:/etc/machine-id:ro",
             ]
         return [
             "docker", "run", "-d", "--name", container, "--network", "host",
