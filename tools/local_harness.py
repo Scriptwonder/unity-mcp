@@ -67,6 +67,7 @@ import sys
 import tempfile
 import threading
 import time
+import uuid
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
@@ -503,17 +504,16 @@ _READY_RE = re.compile(
     r"(Bridge|MCP(For)?Unity|AutoConnect).*(listening|ready|started|port|bound)",
     re.IGNORECASE,
 )
-_REDACT_RE = re.compile(r"(?i)((email|serial|license|password|token)\S*)")
+_REDACT_RE = re.compile(
+    r"(?im)^.*\b(?:e-?mail|serial|license|licensing|password|token|username)\b.*$"
+)
+_EMAIL_RE = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
 _CS_ERROR_RE = re.compile(r"error CS\d")
 
 
 def redact(text: str) -> str:
-    """Redact secret-ish tokens from log echoes.
-
-    Mirrors the CI sed idiom
-    `sed -E 's/((email|serial|license|password|token)[^[:space:]]*)/[REDACTED]/Ig'`.
-    """
-    return _REDACT_RE.sub("[REDACTED]", text or "")
+    """Omit credential-related lines, including values separated from their labels."""
+    return _EMAIL_RE.sub("[REDACTED]", _REDACT_RE.sub("[REDACTED]", text or ""))
 
 
 def classify_log(text: str, license_grace_elapsed: bool = True) -> str:
@@ -940,13 +940,24 @@ class DockerLauncher:
             return False
 
     def tail_log(self, handle: Handle, n: int) -> str:
+        container = handle.container or self.CONTAINER
         try:
+            # Unity uses -logFile, so its diagnostics are not on Docker stdout.
+            if handle.log_path:
+                file_log = subprocess.run(
+                    ["docker", "exec", container, "tail", "-n", str(n), handle.log_path],
+                    capture_output=True, text=True, encoding="utf-8", errors="replace",
+                    check=False, timeout=10,
+                )
+                if file_log.returncode == 0:
+                    return file_log.stdout or ""
             out = subprocess.run(
-                ["docker", "logs", "--tail", str(n), self.CONTAINER],
-                capture_output=True, text=True, check=False,
+                ["docker", "logs", "--tail", str(n), container],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                check=False, timeout=10,
             )
             return (out.stdout or "") + (out.stderr or "")
-        except OSError:
+        except (OSError, subprocess.TimeoutExpired):
             return ""
 
     def fixup_permissions(self, status_dir: Path) -> None:
@@ -1039,6 +1050,20 @@ def _redacted_tail(launcher, handle: Handle, n: int = 200) -> None:
         print(redact(tail))
 
 
+def preserve_editor_diagnostics(launcher, handle: Handle, reports_dir: Path, stage: str) -> None:
+    """Keep a sanitized snapshot before a retry or teardown removes the Editor log."""
+    tail = redact(launcher.tail_log(handle, 200))
+    if not tail:
+        return
+    print(f"== Unity Editor diagnostics: {stage} ==", flush=True)
+    print(tail, flush=True)
+    try:
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        (reports_dir / f"unity-editor-{stage}.log").write_text(tail, encoding="utf-8")
+    except OSError:
+        print("::warning::Unable to save the Unity Editor diagnostic snapshot.", flush=True)
+
+
 def _console_entries(resp: Any) -> list[Any]:
     """Pull read_console log entries out of either envelope shape.
 
@@ -1127,6 +1152,28 @@ def run_smoke_leg(instance_id: str, junit_path: Path, max_retries: int, retry_ms
         return LegOutcome("smoke", "fail", blocking=True, detail="bridge smoke assertion regression", exit_code=1)
     # rc == 2 (or anything else) -> bridge unreachable / setup failure.
     return LegOutcome("smoke", "error", blocking=True, detail="no bridge reachable", exit_code=2)
+
+
+def prepare_ci_scene(args: argparse.Namespace, instance_id: str, *, send=None) -> bool:
+    """Name the disposable CI scene before smoke can dirty it and block UTF's save task."""
+    if not args.ci or args.reuse:
+        return True
+    if send is None:
+        _ensure_src_on_path()
+        from transport.legacy.unity_connection import send_command_with_retry as send
+    try:
+        response = send(
+            "manage_scene",
+            {"action": "save", "path": "Assets/__MCPHarness", "name": f"Scene_{uuid.uuid4().hex}"},
+            instance_id=instance_id, max_retries=args.max_retries,
+            retry_ms=args.retry_ms, retry_on_reload=True,
+        )
+        if _ok(response):
+            return True
+    except Exception:
+        pass
+    print("::error:: Could not save the disposable CI scene; UTF tests were not started.")
+    return False
 
 
 def _start_utf(send, mode: str, instance_id: str, init_timeout_ms: int | None,
@@ -1296,7 +1343,8 @@ def _ensure_clean_editmode(send, instance_id: str, max_retries: int, retry_ms: i
 
 def run_playmode_with_retry(instance_id: str, deadline: float, max_retries: int, retry_ms: int,
                             init_timeout_ms: int, strict: bool,
-                            relaunch: Callable[[], str] | None = None) -> LegOutcome:
+                            relaunch: Callable[[], str] | None = None,
+                            before_retry: Callable[[], None] | None = None) -> LegOutcome:
     """PlayMode state machine: start, poll, classify-can-rerun, retry ONCE.
 
     Non-blocking by default; --strict-playmode promotes failure to blocking.
@@ -1326,6 +1374,9 @@ def run_playmode_with_retry(instance_id: str, deadline: float, max_retries: int,
     can_rerun = ("failed to initialize" in error_text) or ("wedge" in error_text)
     if not can_rerun:
         return first
+
+    if before_retry is not None:
+        before_retry()
 
     # A wedge may need the editor relaunched (respecting the socket-release delay).
     inst = instance_id
@@ -1419,6 +1470,15 @@ def main(argv: list[str] | None = None) -> int:
     handle: Handle | None = None
     owns_editor = not (args.reuse or args.keep_alive)
     outcomes: list[LegOutcome] = []
+
+    def capture_diagnostics(stage: str) -> None:
+        if handle is not None:
+            preserve_editor_diagnostics(launcher, handle, reports_dir, stage)
+
+    def record_outcome(outcome: LegOutcome) -> None:
+        outcomes.append(outcome)
+        if outcome.status in ("fail", "error"):
+            capture_diagnostics(outcome.name)
 
     def do_teardown() -> None:
         # Only kill the editor we started; clean only our own status files.
@@ -1537,9 +1597,17 @@ def main(argv: list[str] | None = None) -> int:
             if not compile_ok:
                 print("::error:: project does not compile -- skipping UTF legs")
 
+        # Creating and deleting smoke objects leaves an untitled scene dirty. UTF
+        # cancels its save dialog in batch mode without firing test callbacks.
+        if wants_utf and compile_ok and not prepare_ci_scene(args, instance_id):
+            record_outcome(LegOutcome("setup", "error", blocking=True,
+                                      detail="could not prepare CI scene", exit_code=2))
+            write_reports(junit_path, reports_dir, outcomes)
+            return 2
+
         # --- Smoke leg ---
         if "smoke" in legs:
-            outcomes.append(run_smoke_leg(instance_id, junit_path, args.max_retries,
+            record_outcome(run_smoke_leg(instance_id, junit_path, args.max_retries,
                                           args.retry_ms, deadline=deadline))
 
         # --- EditMode leg ---
@@ -1548,7 +1616,7 @@ def main(argv: list[str] | None = None) -> int:
                 outcomes.append(LegOutcome("editmode", "fail", blocking=True,
                                            detail="project does not compile", exit_code=3))
             else:
-                outcomes.append(run_utf_leg("EditMode", instance_id, blocking=True,
+                record_outcome(run_utf_leg("EditMode", instance_id, blocking=True,
                                             deadline=deadline, max_retries=args.max_retries,
                                             retry_ms=args.retry_ms))
 
@@ -1568,12 +1636,16 @@ def main(argv: list[str] | None = None) -> int:
                     ready = wait_for_ready(launcher, handle, status_dir, args.bridge_wait, time.time(), deadline)
                     instance_id = ready.instance_id
                     os.environ["UNITY_MCP_DEFAULT_INSTANCE"] = instance_id
+                    if not prepare_ci_scene(args, instance_id):
+                        capture_diagnostics("setup")
+                        raise SystemExit(2)
                     return instance_id
 
                 relaunch = _relaunch if (owns_editor and not args.reuse) else None
-                outcomes.append(run_playmode_with_retry(
+                record_outcome(run_playmode_with_retry(
                     instance_id, deadline, args.max_retries, args.retry_ms,
-                    args.playmode_init_timeout, bool(args.strict_playmode), relaunch=relaunch))
+                    args.playmode_init_timeout, bool(args.strict_playmode), relaunch=relaunch,
+                    before_retry=lambda: capture_diagnostics("playmode-before-retry")))
 
         # Aggregate + write reports.
         write_reports(junit_path, reports_dir, outcomes)

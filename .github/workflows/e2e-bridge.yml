@@ -157,14 +157,13 @@ jobs:
           UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
         run: python3 tools/ci_unity_license.py return
 
-      - name: Unity logs on failure
-        if: failure()
-        run: docker logs unity-mcp --tail 200 | sed -E 's/((email|serial|license|password|token)[^[:space:]]*)/[REDACTED]/Ig' || true
-
       - name: Upload E2E report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: e2e-bridge-report
-          path: reports/junit-*.xml
+          # The harness snapshots redacted Editor logs before removing its container.
+          path: |
+            reports/junit-*.xml
+            reports/unity-editor-*.log
           if-no-files-found: ignore

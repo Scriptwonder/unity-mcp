@@ -828,3 +828,81 @@ class TestUtfTransportResilience:
         job_id, _ = lh._start_utf(fake_send, "EditMode", "inst@hash", None, 8, 50)
         assert job_id == "J9"
         assert calls["n"] == 2
+
+
+class TestEditorDiagnostics:
+    def test_docker_reads_editor_file_instead_of_stdout(self, monkeypatch):
+        from types import SimpleNamespace
+
+        calls = []
+
+        def run(argv, **kwargs):
+            calls.append(argv)
+            assert kwargs["timeout"] == 10
+            return SimpleNamespace(returncode=0, stdout="Scene(s) Have Been Modified\n", stderr="")
+
+        monkeypatch.setattr(lh.subprocess, "run", run)
+        launcher = lh.DockerLauncher(SimpleNamespace())
+        handle = lh.Handle(container="owned-editor", log_path="/root/.config/unity3d/Editor.log")
+        assert "Scene(s)" in launcher.tail_log(handle, 30)
+        assert calls == [["docker", "exec", "owned-editor", "tail", "-n", "30", handle.log_path]]
+
+    def test_docker_falls_back_to_startup_stdout_when_file_is_missing(self, monkeypatch):
+        from types import SimpleNamespace
+
+        calls = []
+
+        def run(argv, **kwargs):
+            calls.append(argv)
+            if argv[1] == "exec":
+                return SimpleNamespace(returncode=1, stdout="", stderr="file missing")
+            return SimpleNamespace(returncode=0, stdout="Editor startup failed", stderr="")
+
+        monkeypatch.setattr(lh.subprocess, "run", run)
+        launcher = lh.DockerLauncher(SimpleNamespace())
+        handle = lh.Handle(container="owned-editor", log_path="/root/Editor.log")
+        assert launcher.tail_log(handle, 30) == "Editor startup failed"
+        assert calls[-1] == ["docker", "logs", "--tail", "30", "owned-editor"]
+
+    def test_snapshot_keeps_diagnostics_but_omits_credentials(self, tmp_path, capsys):
+        from types import SimpleNamespace
+
+        raw = ("Scene(s) Have Been Modified\n"
+               "Serial number assigned to: 'private-serial'\n"
+               "password = private-password\n"
+               "Connected account developer@example.com\n")
+        launcher = SimpleNamespace(tail_log=lambda *_args: raw)
+        lh.preserve_editor_diagnostics(launcher, lh.Handle(), tmp_path, "editmode")
+        saved = (tmp_path / "unity-editor-editmode.log").read_text(encoding="utf-8")
+        output = capsys.readouterr().out
+        for text in (saved, output):
+            assert "Scene(s) Have Been Modified" in text
+            assert "[REDACTED]" in text
+            assert "private-serial" not in text
+            assert "private-password" not in text
+            assert "developer@example.com" not in text
+
+    def test_first_failure_is_captured_before_relaunch_and_retry(self, monkeypatch):
+        from types import SimpleNamespace
+
+        monkeypatch.setitem(sys.modules, "transport.legacy.unity_connection",
+                            SimpleNamespace(send_command_with_retry=lambda *_a, **_k: None))
+        monkeypatch.setattr(lh, "_ensure_src_on_path", lambda: None)
+        monkeypatch.setattr(lh, "_ensure_clean_editmode", lambda *_a: None)
+        monkeypatch.setattr(lh, "_start_utf", lambda *_a: ("job", {}))
+        monkeypatch.setattr(lh.time, "sleep", lambda *_a: None)
+        events = []
+        attempts = iter([lh.LegOutcome("playmode", "fail", False, "wedge", 1),
+                         lh.LegOutcome("playmode", "pass", False, "completed", 0)])
+        monkeypatch.setattr(lh, "_outcome_from_terminal", lambda *_a: next(attempts))
+        monkeypatch.setattr(lh, "_poll_utf", lambda *_a: events.append("poll"))
+
+        def relaunch():
+            events.append("teardown-and-relaunch")
+            return "new-instance"
+
+        outcome = lh.run_playmode_with_retry(
+            "instance", lh.time.time() + 100, 1, 10, 1000, False,
+            relaunch=relaunch, before_retry=lambda: events.append("snapshot"))
+        assert outcome.status == "pass"
+        assert events == ["poll", "snapshot", "teardown-and-relaunch", "poll"]
