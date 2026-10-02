@@ -1480,6 +1480,14 @@ def main(argv: list[str] | None = None) -> int:
         if outcome.status in ("fail", "error"):
             capture_diagnostics(outcome.name)
 
+    def record_scene_setup_failure() -> None:
+        detail = "could not prepare CI scene"
+        record_outcome(LegOutcome(
+            "setup", "error", blocking=True, detail=detail, exit_code=2,
+            junit_suite=JUnitSuite(name="setup", cases=[JUnitCase(name="setup.scene", failure=detail)]),
+        ))
+        write_reports(junit_path, reports_dir, outcomes)
+
     def do_teardown() -> None:
         # Only kill the editor we started; clean only our own status files.
         if handle is not None and owns_editor and not args.keep_alive:
@@ -1600,9 +1608,7 @@ def main(argv: list[str] | None = None) -> int:
         # Creating and deleting smoke objects leaves an untitled scene dirty. UTF
         # cancels its save dialog in batch mode without firing test callbacks.
         if wants_utf and compile_ok and not prepare_ci_scene(args, instance_id):
-            record_outcome(LegOutcome("setup", "error", blocking=True,
-                                      detail="could not prepare CI scene", exit_code=2))
-            write_reports(junit_path, reports_dir, outcomes)
+            record_scene_setup_failure()
             return 2
 
         # --- Smoke leg ---
@@ -1637,7 +1643,7 @@ def main(argv: list[str] | None = None) -> int:
                     instance_id = ready.instance_id
                     os.environ["UNITY_MCP_DEFAULT_INSTANCE"] = instance_id
                     if not prepare_ci_scene(args, instance_id):
-                        capture_diagnostics("setup")
+                        record_scene_setup_failure()
                         raise SystemExit(2)
                     return instance_id
 
