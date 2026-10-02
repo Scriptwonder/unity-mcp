@@ -1158,28 +1158,32 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
-        public void SetupController_OneShotWithoutAnIdleClip_ExitsToTheDefaultState()
+        public void SetupController_OneShotWithoutAnIdleClip_ExitsToLocomotion()
         {
             // The exit was built only toward an Idle state, so without one 'attack' had no way out.
             var result = SetupController(BuildClips("noidle", "walk", "attack"));
             Assert.IsTrue(result.Value<bool>("success"), result.ToString());
 
             var sm = AssetDatabase.LoadAssetAtPath<AnimatorController>($"{TempRoot}/Hero.controller").layers[0].stateMachine;
-            Assert.AreEqual("walk", sm.defaultState.name, "fixture: expected walk as the entry state");
+            var walk = sm.states.Select(s => s.state).Single(s => s.name == "walk");
             var attack = sm.states.Select(s => s.state).Single(s => s.name == "attack");
             Assert.That(attack.transitions.Where(t => t.hasExitTime).Select(t => t.destinationState),
-                Contains.Item(sm.defaultState));
+                Contains.Item(walk));
         }
 
         [Test]
-        public void SetupController_OnlyAOneShot_GetsNoTransitionToItself()
+        public void SetupController_OneShotsWithoutALoopingState_DoNotExitIntoEachOther()
         {
-            var result = SetupController(BuildClips("onlyattack", "attack"));
+            // With no idle or locomotion the default state is itself a one-shot; exiting
+            // into it would chain jump into attack and leave the Animator stuck there.
+            var result = SetupController(BuildClips("oneshots", "attack", "jump"));
             Assert.IsTrue(result.Value<bool>("success"), result.ToString());
 
             var sm = AssetDatabase.LoadAssetAtPath<AnimatorController>($"{TempRoot}/Hero.controller").layers[0].stateMachine;
-            var attack = sm.states.Select(s => s.state).Single(s => s.name == "attack");
-            Assert.That(attack.transitions.Select(t => t.destinationState), Has.No.Member(attack));
+            Assert.That(sm.states.Select(s => s.state.name), Is.EquivalentTo(new[] { "attack", "jump" }));
+            foreach (var state in sm.states.Select(s => s.state))
+                Assert.That(state.transitions.Where(t => t.hasExitTime), Is.Empty,
+                    $"'{state.name}' got an exit-time transition");
         }
 
         [Test]

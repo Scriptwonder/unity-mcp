@@ -158,12 +158,14 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
             // ── Locomotion ────────────────────────────────────────────────────
 
+            AnimatorState locomotionState = null;
             if (locomotionPairs.Count > 0)
             {
                 if (locomotionPairs.Count == 1)
                 {
                     var locoState = rootSM.AddState(locomotionPairs[0].entry.ClipName);
                     locoState.motion = locomotionPairs[0].clip;
+                    locomotionState = locoState;
                     if (rootSM.defaultState == null) rootSM.defaultState = locoState;
                     if (idleState != null)
                     {
@@ -188,6 +190,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                         blendTree.AddChild(pair.clip, pair.entry.BlendValue);
 
                     blendState.motion = blendTree;
+                    locomotionState = blendState;
                     if (rootSM.defaultState == null) rootSM.defaultState = blendState;
 
                     if (idleState != null)
@@ -224,10 +227,11 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                     tr.hasExitTime = false;
                 }
 
-                // A one-shot state has to hand control back, so it exits to idle on its own,
-                // or to the default state when there is no idle clip.
-                var exitTarget = idleState ?? rootSM.defaultState;
-                if (exitTarget != null && exitTarget != state && !pair.entry.Loop)
+                // A one-shot state hands control back to idle, else locomotion. With
+                // neither, the default is another one-shot, and exiting into it would
+                // just chain one stuck state into the next.
+                var exitTarget = idleState ?? locomotionState;
+                if (exitTarget != null && !pair.entry.Loop)
                 {
                     var exitTr = state.AddTransition(exitTarget);
                     exitTr.hasExitTime = true;
