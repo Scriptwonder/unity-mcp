@@ -555,10 +555,11 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             caveat.style.whiteSpace = WhiteSpace.Normal;
             parent.Add(caveat);
 
+            // A null selection hides the caveat box instead of leaving it empty.
+            UpdateModelCaveat(caveat, selected);
             if (selected != null)
             {
                 UpdateModelMeta(meta, selected);
-                UpdateModelCaveat(caveat, selected);
                 if (verifyErrors.TryGetValue(key, out var failure) && failure.Id == selected.Id) ShowVerifyError(meta, failure.Error);
             }
             else if (string.IsNullOrEmpty(selectedId)) meta.text = "Choose a model before generating.";

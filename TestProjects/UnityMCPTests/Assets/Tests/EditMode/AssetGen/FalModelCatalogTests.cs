@@ -346,6 +346,8 @@ namespace MCPForUnityTests.Editor.AssetGen
             var section = new McpAssetGenSection(root);
             Assert.AreEqual("test/music-retired", AssetGenPrefs.GetSelectedModel("audio", "fal"));
             Assert.IsTrue(root.Query<DropdownField>().ToList().Any(dropdown => dropdown.value?.Contains("Saved model unavailable") == true));
+            Assert.IsFalse(root.Query<Label>(className: "validation-description").ToList()
+                .Any(caveat => string.IsNullOrEmpty(caveat.text) && caveat.style.display.value != DisplayStyle.None), "An empty license caveat box must be hidden.");
         }
 
         [Test]
