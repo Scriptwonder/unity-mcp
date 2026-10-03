@@ -349,6 +349,64 @@ namespace MCPForUnityTests.Editor.AssetGen
         }
 
         [Test]
+        public void LongCatalog_ModelMenuIsCapped_KeepsSelection_AndSearchReachesTheRest()
+        {
+            Serve(Enumerable.Range(0, 40).Select(i => Endpoint("test/music-" + i.ToString("D2"))).ToArray());
+            Assert.IsTrue(Refresh());
+            AssetGenPrefs.SetSelectedModel("audio", "fal", "test/music-39");
+            var root = new VisualElement();
+            root.Add(new VisualElement { name = "assetgen-providers-container" });
+            var section = new McpAssetGenSection(root);
+            DropdownField AudioMenu() => root.Query<DropdownField>().ToList().Single(d => d.choices.Any(c => c.Contains("test/music-")));
+
+            var menu = AudioMenu();
+            Assert.AreEqual(McpAssetGenSection.MenuLimit + 1, menu.choices.Count, "The saved selection beyond the cap stays selectable.");
+            StringAssert.Contains("test/music-39", menu.value);
+            Assert.IsTrue(menu.choices.All(c => !McpAssetGenSection.MenuItemText(c).Contains("/")), "GenericMenu turns every '/' into a submenu.");
+            Assert.IsTrue(root.Query<Label>().ToList().Any(l => l.text.StartsWith($"The menu shows {McpAssetGenSection.MenuLimit} of 40 models")));
+
+            var searches = (System.Collections.Generic.Dictionary<string, string>)typeof(McpAssetGenSection)
+                .GetField("searches", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(section);
+            searches["audio/fal"] = "music-30";
+            typeof(McpAssetGenSection).GetMethod("RebuildModelControls", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(section, new object[] { null, null });
+            menu = AudioMenu();
+            Assert.AreEqual(2, menu.choices.Count);
+            Assert.IsTrue(menu.choices.Any(c => c.Contains("test/music-30")), "Search must reach models beyond the menu cap.");
+        }
+
+        [Test]
+        public void ProviderRows_OwnOneFalKeyField_AndSkipEmptyModelSelectors()
+        {
+            var root = new VisualElement();
+            root.Add(new VisualElement { name = "assetgen-providers-container" });
+            new McpAssetGenSection(root);
+            // Keyed rows: tripo, meshy, sketchfab, fal (2D) and openrouter. fal 3D and audio reuse the 2D fal key.
+            Assert.AreEqual(5, root.Query<TextField>().ToList().Count(field => field.isPasswordField));
+            Assert.AreEqual(5, root.Query<Toggle>().ToList().Count(toggle => toggle.label == "Enabled"));
+            Assert.IsTrue(root.Query<Label>().ToList().Any(label => label.text == "fal (3D)"));
+            var sketchfab = root.Query<Label>().ToList().Single(label => label.text == "Sketchfab").parent.parent;
+            Assert.IsEmpty(sketchfab.Query<DropdownField>().ToList());
+            Assert.IsFalse(sketchfab.Query<Label>().ToList().Any(label => label.text.StartsWith("No models found")));
+        }
+
+        [Test]
+        public void FailedCompatibilityCheck_StaysVisible_AfterCatalogRebuild()
+        {
+            Assert.IsTrue(Refresh());
+            AssetGenPrefs.SetSelectedModel("audio", "fal", Music);
+            var root = new VisualElement();
+            root.Add(new VisualElement { name = "assetgen-providers-container" });
+            var section = new McpAssetGenSection(root);
+            Serve();
+            var verify = typeof(McpAssetGenSection).GetMethod("VerifySelection", BindingFlags.NonPublic | BindingFlags.Instance);
+            ((Task)verify.Invoke(section, new object[] { AssetGenModelCatalog.Find(Music), new Label() })).GetAwaiter().GetResult();
+            typeof(McpAssetGenSection).GetMethod("RebuildModelControls", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(section, new object[] { null, null });
+            var warning = root.Query<Label>().ToList().Single(label => label.text.StartsWith("Compatibility check failed"));
+            StringAssert.Contains("unavailable", warning.text);
+            Assert.IsTrue(warning.ClassListContains("warning-banner-text"));
+        }
+
+        [Test]
         public void NullableFractionalDuration_UsesLiveTextField_AndBounds()
         {
             var model = Endpoint("test/sfx-v2", prompt: "text");

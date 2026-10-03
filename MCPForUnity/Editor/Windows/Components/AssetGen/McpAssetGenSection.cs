@@ -26,13 +26,18 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
     {
         // Fixed provider lists. Each Id is both the SecureKeyStore key and the
         // AssetGenPrefs enable-flag id. All model/marketplace providers below emit GLB.
+        // fal's key and enable toggle live on its 2D Images row; the 3D row only picks a model.
         private static readonly (string Id, string Label)[] ModelProviders =
         {
             ("tripo", "Tripo"),
             ("meshy", "Meshy"),
-            ("fal", "fal (shared key)"),
+            ("fal", "fal (3D)"),
             ("sketchfab", "Sketchfab"),
         };
+
+        // Editor dropdowns open a native menu with no search, so long catalogs are capped and
+        // the per-provider search field reaches the remaining models.
+        internal const int MenuLimit = 25;
 
         private static readonly (string Id, string Label)[] ImageProviders =
         {
@@ -54,6 +59,8 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         private readonly List<(string Id, Toggle Toggle)> modelEnableToggles = new();
         private readonly List<(VisualElement Container, string Kind, string Provider)> modelControls = new();
         private readonly Dictionary<string, string> searches = new();
+        // Last failed compatibility check per kind/provider, kept so a catalog rebuild cannot hide it.
+        private readonly Dictionary<string, (string Id, string Error)> verifyErrors = new();
 
         public VisualElement Root { get; private set; }
 
@@ -63,8 +70,13 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             CacheUIElements();
             InitializeUI();
             RegisterCallbacks();
-            Root.RegisterCallback<AttachToPanelEvent>(_ => SubscribeCatalogs());
-            Root.RegisterCallback<DetachFromPanelEvent>(_ => { FalModelCatalog.Changed -= OnCatalogChanged; OpenRouterModelCatalog.Changed -= OnRouterChanged; });
+            Root.RegisterCallback<AttachToPanelEvent>(_ =>
+            {
+                SubscribeCatalogs();
+                // Catch up on catalog changes that fired while the tab was detached.
+                RebuildModelControls(null, null);
+            });
+            Root.RegisterCallback<DetachFromPanelEvent>(_ => { FalModelCatalog.Changed -= OnFalChanged; OpenRouterModelCatalog.Changed -= OnRouterChanged; });
             if (Root.panel != null) SubscribeCatalogs();
             Root.schedule.Execute(() => { if (!modelControls.Any(c => FalModelCatalog.IsRefreshing(c.Kind)) && !OpenRouterModelCatalog.IsRefreshing) _ = RefreshCatalog(false); }).Every(60000);
             _ = RefreshCatalog(false);
@@ -72,13 +84,15 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
 
         private void SubscribeCatalogs()
         {
-            FalModelCatalog.Changed -= OnCatalogChanged;
-            FalModelCatalog.Changed += OnCatalogChanged;
+            FalModelCatalog.Changed -= OnFalChanged;
+            FalModelCatalog.Changed += OnFalChanged;
             OpenRouterModelCatalog.Changed -= OnRouterChanged;
             OpenRouterModelCatalog.Changed += OnRouterChanged;
         }
 
-        private void OnRouterChanged() => OnCatalogChanged("image");
+        private void OnFalChanged(string kind) => RebuildModelControls(kind, "fal");
+
+        private void OnRouterChanged() => RebuildModelControls("image", "openrouter");
 
         private void CacheUIElements()
         {
@@ -175,10 +189,10 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             if (refreshStatusLabel != null) SetStatus(refreshStatusLabel, "Checking model catalogs…", true);
             try
             {
+                // A committed refresh raises Changed, which rebuilds only the affected model controls;
+                // unchanged catalogs leave the rows (and any unsaved API-key input) alone.
                 await Task.WhenAll(FalModelCatalog.RefreshAsync("image", force), FalModelCatalog.RefreshAsync("audio", force),
                     FalModelCatalog.RefreshAsync("model", force), OpenRouterModelCatalog.RefreshAsync(force));
-                // Only replace model controls: an automatic refresh must preserve unsaved API-key input.
-                OnCatalogChanged(null);
                 string error = FalModelCatalog.LastError("image") ?? FalModelCatalog.LastError("audio") ?? FalModelCatalog.LastError("model") ?? OpenRouterModelCatalog.LastError;
                 string verified = FalModelCatalog.VerifiedAt("audio") ?? FalModelCatalog.VerifiedAt("image");
                 string when = DateTime.TryParse(verified, out var time) ? time.ToLocalTime().ToString("g") : "unknown";
@@ -188,11 +202,13 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             finally { refreshButton?.SetEnabled(true); }
         }
 
-        private void OnCatalogChanged(string kind)
+        /// <summary>Rebuilds live-catalog model controls; a null kind or provider matches all.</summary>
+        private void RebuildModelControls(string kind, string provider)
         {
             foreach (var control in modelControls.ToArray())
             {
-                if (control.Provider != "fal" && control.Provider != "openrouter" || kind != null && control.Kind != kind) continue;
+                if (control.Provider != "fal" && control.Provider != "openrouter") continue;
+                if (kind != null && control.Kind != kind || provider != null && control.Provider != provider) continue;
                 control.Container.Clear();
                 PopulateModelDropdown(control.Container, control.Kind, control.Provider);
             }
@@ -222,6 +238,13 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             var modelPanel = AddCategoryPanel("3D Models");
             foreach (var provider in ModelProviders)
             {
+                if (provider.Id == "fal")
+                {
+                    AddSharedFalRow(modelPanel, "model", provider.Label);
+                    // No toggle of its own: the glTFast notice reads the 2D fal row's enable pref.
+                    modelEnableToggles.Add((provider.Id, null));
+                    continue;
+                }
                 var toggle = AddProviderRow(modelPanel, provider.Id, provider.Label, "model");
                 modelEnableToggles.Add((provider.Id, toggle));
             }
@@ -233,7 +256,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             }
 
             var audioPanel = AddCategoryPanel("Sound (fal.ai)");
-            AddAudioRow(audioPanel);
+            AddSharedFalRow(audioPanel, "audio", "fal (audio)");
 
             AddBlenderHandoffRow();
         }
@@ -439,20 +462,30 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         /// </summary>
         private void AddModelDropdown(VisualElement parent, string kind, string providerId)
         {
-            if (providerId == "fal" || providerId == "openrouter")
+            bool live = providerId == "fal" || providerId == "openrouter";
+            // Bundled-only providers with no models (the Sketchfab marketplace) get no selector at all.
+            if (!live && AssetGenModelCatalog.ForProvider(providerId, kind).Count == 0) return;
+            if (live)
             {
-                var search = new TextField("Search models") { name = "model-search-" + kind + "-" + providerId };
+                // Same .setting-row / .setting-label layout as the Model row below, so both align.
+                var searchRow = new VisualElement();
+                searchRow.AddToClassList("setting-row");
+                var searchLabel = new Label("Search");
+                searchLabel.AddToClassList("setting-label");
+                searchRow.Add(searchLabel);
+
+                var search = new TextField { name = "model-search-" + kind + "-" + providerId };
+                search.AddToClassList("setting-dropdown-inline");
+                search.tooltip = "Filter this provider's models by name, id or use case.";
                 string key = kind + "/" + providerId;
                 search.SetValueWithoutNotify(searches.TryGetValue(key, out var term) ? term : "");
-                parent.Add(search);
                 search.RegisterValueChangedCallback(evt =>
                 {
                     searches[key] = evt.newValue ?? "";
-                    var control = modelControls.FirstOrDefault(c => c.Kind == kind && c.Provider == providerId);
-                    if (control.Container == null) return;
-                    control.Container.Clear();
-                    PopulateModelDropdown(control.Container, kind, providerId);
+                    RebuildModelControls(kind, providerId);
                 });
+                searchRow.Add(search);
+                parent.Add(searchRow);
             }
             var container = new VisualElement();
             parent.Add(container);
@@ -463,10 +496,15 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         private void PopulateModelDropdown(VisualElement parent, string kind, string providerId)
         {
             var all = AssetGenModelCatalog.ForProvider(providerId, kind);
+            string key = kind + "/" + providerId;
             string selectedId = AssetGenPrefs.GetSelectedModel(kind, providerId);
             if (string.IsNullOrEmpty(selectedId)) selectedId = AssetGenModelCatalog.DefaultModelId(providerId, kind);
-            string term = searches.TryGetValue(kind + "/" + providerId, out var query) ? query : "";
-            IReadOnlyList<ModelEntry> models = all.Where(m => m.Id == selectedId || (m.Id + " " + m.Label + " " + m.UseCase).IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+            string term = searches.TryGetValue(key, out var query) ? query : "";
+            var matches = all.Where(m => (m.Id + " " + m.Label + " " + m.UseCase).IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+            // Catalog order puts bundled and eagerly verified models first, so the cap keeps those.
+            var models = matches.Take(MenuLimit).ToList();
+            ModelEntry selected = all.FirstOrDefault(model => model.Id == selectedId);
+            if (selected != null && !models.Contains(selected)) models.Insert(0, selected);
             if (models.Count == 0)
             {
                 parent.Add(new Label("No models found. Clear the search or refresh the catalog."));
@@ -476,9 +514,9 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             var choices = new List<string>();
             foreach (ModelEntry m in models) choices.Add(m.Label + " (" + m.Id + ")");
 
-            ModelEntry selected = models.FirstOrDefault(model => model.Id == selectedId);
-            int selectedIndex = selected == null ? choices.Count : models.ToList().IndexOf(selected);
-            if (selected == null) choices.Add("Saved model unavailable — choose another (" + selectedId + ")");
+            int selectedIndex = selected == null ? choices.Count : models.IndexOf(selected);
+            if (selected == null)
+                choices.Add(string.IsNullOrEmpty(selectedId) ? "Choose a model" : "Saved model unavailable — choose another (" + selectedId + ")");
 
             // Lay the dropdown out like the Format row: a horizontal .setting-row (align-items:center,
             // min-height:24px) with a .setting-label + a label-less DropdownField. Adding the dropdown
@@ -490,13 +528,22 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             modelLabel.AddToClassList("setting-label");
             dropdownRow.Add(modelLabel);
 
-            var dropdown = new DropdownField(choices, 0);
+            // The list-item callback goes through the ctor: the property is not public before Unity 6.
+            var dropdown = new DropdownField(choices, 0, null, MenuItemText);
             dropdown.AddToClassList("setting-dropdown-inline");
             dropdown.tooltip = "The model generate_* uses for this provider when no explicit model is passed.";
             dropdown.SetValueWithoutNotify(choices[selectedIndex]);
             dropdownRow.Add(dropdown);
 
             parent.Add(dropdownRow);
+
+            if (matches.Count > MenuLimit)
+            {
+                var more = new Label($"The menu shows {MenuLimit} of {matches.Count} models. Use Search to find the others.");
+                more.AddToClassList("help-text");
+                more.style.whiteSpace = WhiteSpace.Normal;
+                parent.Add(more);
+            }
 
             var meta = new Label();
             meta.AddToClassList("help-text");
@@ -512,7 +559,9 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             {
                 UpdateModelMeta(meta, selected);
                 UpdateModelCaveat(caveat, selected);
+                if (verifyErrors.TryGetValue(key, out var failure) && failure.Id == selected.Id) ShowVerifyError(meta, failure.Error);
             }
+            else if (string.IsNullOrEmpty(selectedId)) meta.text = "Choose a model before generating.";
             else meta.text = "Your saved selection is preserved. Choose an available model before generating.";
 
             dropdown.RegisterValueChangedCallback(evt =>
@@ -521,36 +570,53 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
                 if (index < 0 || index >= models.Count) return;
                 ModelEntry picked = models[index];
                 AssetGenPrefs.SetSelectedModel(kind, providerId, picked.Id);
+                verifyErrors.Remove(key);
                 UpdateModelMeta(meta, picked);
                 UpdateModelCaveat(caveat, picked);
                 if (providerId == "fal" || providerId == "openrouter") _ = VerifySelection(picked, meta);
             });
         }
 
-        private static async Task VerifySelection(ModelEntry picked, Label meta)
+        private async Task VerifySelection(ModelEntry picked, Label meta)
         {
+            string key = picked.Kind + "/" + picked.Provider;
             meta.text = "Checking compatibility…";
             try
             {
-                string key = null;
-                if (picked.Provider == "fal") try { SecureKeyStore.Current.TryGet("fal", out key); } catch { }
+                string apiKey = null;
+                if (picked.Provider == "fal") try { SecureKeyStore.Current.TryGet("fal", out apiKey); } catch { }
                 string mode = picked.Modes?.FirstOrDefault() ?? "text";
                 var verified = picked.Provider == "fal"
-                    ? await FalModelCatalog.VerifyForGeneration(picked.Id, picked.Kind, mode, CancellationToken.None, key)
+                    ? await FalModelCatalog.VerifyForGeneration(picked.Id, picked.Kind, mode, CancellationToken.None, apiKey)
                     : await OpenRouterModelCatalog.VerifyForGeneration(picked.Id, mode, CancellationToken.None);
                 if (AssetGenPrefs.GetSelectedModel(picked.Kind, picked.Provider) == picked.Id) UpdateModelMeta(meta, verified);
             }
             catch (Exception error)
             {
-                if (AssetGenPrefs.GetSelectedModel(picked.Kind, picked.Provider) == picked.Id) meta.text = SecretRedactor.Scrub(error.Message);
+                if (AssetGenPrefs.GetSelectedModel(picked.Kind, picked.Provider) != picked.Id) return;
+                string message = "Compatibility check failed: " + SecretRedactor.Scrub(error.Message);
+                verifyErrors[key] = (picked.Id, message);
+                ShowVerifyError(meta, message);
             }
         }
 
         /// <summary>
-        /// Audio row: no enable toggle and no key field — audio reuses the single fal key owned by
-        /// the Image "fal" row. Surfaces that key's presence and a fal-audio model dropdown.
+        /// Editor dropdowns open a native GenericMenu, which reads every '/' in a model id as a
+        /// submenu separator. The menu shows a look-alike slash; the field keeps the real text.
         /// </summary>
-        private void AddAudioRow(VisualElement parent)
+        internal static string MenuItemText(string choice) => choice.Replace('/', '\u2215');
+
+        private static void ShowVerifyError(Label meta, string message)
+        {
+            meta.text = message;
+            meta.AddToClassList("warning-banner-text");
+        }
+
+        /// <summary>
+        /// fal audio / 3D row: no enable toggle and no key field — these kinds reuse the single fal
+        /// key owned by the Image "fal" row. Surfaces that key's presence and a model dropdown.
+        /// </summary>
+        private void AddSharedFalRow(VisualElement parent, string kind, string displayName)
         {
             var row = new VisualElement();
             row.style.marginBottom = 8;
@@ -558,14 +624,14 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             row.style.borderBottomWidth = 1;
             row.style.borderBottomColor = new Color(0.3f, 0.3f, 0.3f, 0.3f);
 
-            // Header: name + shared-key status inline to its right. No key field — audio reuses the
-            // fal key owned by the 2D fal row.
+            // Header: name + shared-key status inline to its right. No key field — the fal key is
+            // owned by the 2D fal row.
             var header = new VisualElement();
             header.style.flexDirection = FlexDirection.Row;
             header.style.alignItems = Align.Center;
             header.style.marginBottom = 2;
 
-            var nameLabel = new Label("fal (audio)");
+            var nameLabel = new Label(displayName);
             nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
             nameLabel.style.flexShrink = 0;
             header.Add(nameLabel);
@@ -580,15 +646,15 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
 
             row.Add(header);
 
-            AddModelDropdown(row, "audio", "fal");
+            AddModelDropdown(row, kind, "fal");
 
             parent.Add(row);
         }
 
         /// <summary>
-        /// The fal key is shared with the audio row, whose "key present" status is snapshotted at
-        /// build time. When the 2D fal key is saved/cleared, schedule a full rebuild so the audio row
-        /// reflects it without a manual Refresh. Deferred so we don't destroy the element whose
+        /// The fal key is shared with the audio and 3D rows, whose "key present" status is snapshotted at
+        /// build time. When the 2D fal key is saved/cleared, schedule a full rebuild so those rows
+        /// reflect it without a manual Refresh. Deferred so we don't destroy the element whose
         /// callback is still running.
         /// </summary>
         private void RebuildIfSharedKey(string id)
@@ -607,10 +673,13 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             // Lyria advertises a max but takes no duration input, so showing a hint would mislead.
             if (m.MaxDurationSeconds > 0f && !string.IsNullOrEmpty(m.DurationField)) parts.Add($"≤{m.MaxDurationSeconds:0}s");
             if (m.Loopable) parts.Add("loopable");
-            parts.Add(m.VerifiedAt != null ? "compatibility verified" : m.FromRefresh ? "discovered · checked before generation" : "bundled · unverified");
+            // Only live-catalog providers have a verification state; Tripo/Meshy are bundled by design.
+            if (m.Provider == "fal" || m.Provider == "openrouter")
+                parts.Add(m.VerifiedAt != null ? "compatibility verified" : m.FromRefresh ? "discovered · checked before generation" : "bundled · checked before generation");
             if (!string.IsNullOrEmpty(m.LicenseType)) parts.Add("license: " + m.LicenseType);
             label.text = string.Join(" · ", parts);
             label.tooltip = m.ModelUrl ?? m.Id;
+            label.RemoveFromClassList("warning-banner-text");
         }
 
         private static void UpdateModelCaveat(Label label, ModelEntry m)
