@@ -19,7 +19,7 @@ namespace MCPForUnityTests.Editor.Windows.Characterization
     /// Covers: MCPSetupWindow, EditorPrefsWindow, McpConnectionSection, and component patterns
     /// </summary>
     [TestFixture]
-    public class WindowsCharacterizationTests
+    public class WindowsCharacterizationTests : TransportPreferenceTestBase
     {
         #region Section 1: EditorPrefsWindow Tests (3 tests)
 
