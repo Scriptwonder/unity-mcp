@@ -11,6 +11,9 @@ import click
 from cli.utils.config import get_config
 from cli.utils.connection import handle_unity_errors, run_command
 from cli.utils.output import format_output
+from transport.blender_timeout import (
+    blender_command_timeout, SERVER_RESPONSE_GRACE, CLI_RESPONSE_GRACE,
+)
 
 
 @click.group(name="blender")
@@ -24,7 +27,9 @@ def _run(action: str, params: Optional[dict[str, Any]] = None) -> None:
     config = get_config()
     payload: dict[str, Any] = {"action": action}
     payload.update({k: v for k, v in (params or {}).items() if v is not None})
-    result = run_command("blender_bridge", payload, config)
+    timeout = max(config.timeout, blender_command_timeout(payload)
+                  + SERVER_RESPONSE_GRACE + CLI_RESPONSE_GRACE)
+    result = run_command("blender_bridge", payload, config, timeout=timeout)
     click.echo(format_output(result, config.format))
 
 

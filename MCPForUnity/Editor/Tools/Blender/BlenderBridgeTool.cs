@@ -46,7 +46,7 @@ namespace MCPForUnity.Editor.Tools.Blender
             if (@params == null) return new ErrorResponse("Parameters cannot be null.");
             var p = new ToolParams(@params);
             string action = (p.Get("action") ?? "status").Trim().ToLowerInvariant();
-            int timeout = Math.Max(5, p.GetInt("timeout_seconds", 180) ?? 180);
+            int timeout = Math.Max(5, Math.Min(3600, p.GetInt("timeout_seconds", 180) ?? 180));
 
             try
             {
@@ -686,7 +686,7 @@ print(json.dumps({'path': out, 'bytes': os.path.getsize(out), 'selection_only': 
         }
 
         /// <summary>Git and file work for check_updates; touches no Unity API so it can run on any thread.</summary>
-        private static object CheckUpdatesBlocking(string fork, string forkAddon, string installedAddon)
+        internal static object CheckUpdatesBlocking(string fork, string forkAddon, string installedAddon)
         {
             if (!TryGit(fork, "--version", out _, out string gitErr, 10000))
                 return new ErrorResponse($"git is not available: {gitErr}");
@@ -821,16 +821,25 @@ print(json.dumps({'path': out, 'bytes': os.path.getsize(out), 'selection_only': 
                 if (!proc.WaitForExit(timeoutMs))
                 {
                     try { proc.Kill(); } catch { /* already gone */ }
-                    stderr = $"git {args} timed out after {timeoutMs} ms";
+                    stderr = $"git timed out after {timeoutMs} ms";
                     return false;
                 }
-                stdout = outTask.Result;
-                stderr = errTask.Result;
-                return proc.ExitCode == 0;
+                // Git diagnostics may echo credential-bearing URLs (including redirects),
+                // helper output or bare tokens. Do not send them to MCP clients or editor logs.
+                // Drain both pipes, but only expose stdout from a successful command.
+                string output = outTask.Result;
+                _ = errTask.Result;
+                if (proc.ExitCode != 0)
+                {
+                    stderr = $"git exited with code {proc.ExitCode}. Check the checkout and remote configuration locally.";
+                    return false;
+                }
+                stdout = output;
+                return true;
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                stderr = e.Message;
+                stderr = "Unable to run git. Check that git is installed and the checkout is accessible.";
                 return false;
             }
         }

@@ -14,6 +14,7 @@ from services.registry import get_registered_tools
 
 from services.tools import blender_bridge as mod
 from services.tools.blender_bridge import blender_bridge
+from transport.plugin_hub import PluginHub
 
 
 COMMAND = "blender_bridge"
@@ -195,3 +196,79 @@ class TestBlenderCli:
         result, mock_run = cli_runner(["sync-addon", "--force"])
         assert result.exit_code == 0, result.output
         assert mock_run.call_args.args[1] == {"action": "sync_addon", "force": True}
+
+
+class TestBlenderTimeouts:
+    @pytest.mark.parametrize("requested, expected", [(None, 210), (60, 90), (300, 330)])
+    def test_mcp_import_budget_reaches_unity_and_server(self, requested, expected):
+        async def exercise():
+            websocket = MagicMock()
+            messages = []
+            waits = []
+            real_wait_for = asyncio.wait_for
+
+            async def send_json(message):
+                messages.append(message)
+                PluginHub._pending[message["id"]]["future"].set_result({"success": True})
+
+            async def wait_for(future, timeout):
+                waits.append(timeout)
+                return await real_wait_for(future, timeout)
+
+            async def route(_send, _instance, command, params):
+                return await PluginHub.send_command("test-session", command, params)
+
+            websocket.send_json = AsyncMock(side_effect=send_json)
+            with patch.object(PluginHub, "_get_connection", AsyncMock(return_value=websocket)), \
+                 patch.object(PluginHub, "_lock", asyncio.Lock()), \
+                 patch.object(PluginHub, "_pending", {}), \
+                 patch.object(mod, "get_unity_instance_from_context", AsyncMock(return_value="unity-1")), \
+                 patch.object(mod, "send_with_unity_instance", route), \
+                 patch("transport.plugin_hub.asyncio.wait_for", side_effect=wait_for):
+                result = await blender_bridge(MagicMock(), action="import_model", timeout_seconds=requested)
+            assert result["success"]
+            assert messages[0]["timeout"] == expected
+            assert waits == [expected + 5]
+            assert not PluginHub._pending
+
+        asyncio.run(exercise())
+
+    @pytest.mark.parametrize("args, config_timeout, expected", [
+        (["import-model"], 30, 220),
+        (["import-model", "--timeout", "180"], 30, 220),
+        (["import-model", "--timeout", "300"], 30, 340),
+        (["import-model", "--timeout", "60"], 600, 600),
+    ])
+    def test_cli_budget_reaches_http_client(self, args, config_timeout, expected):
+        response = MagicMock()
+        response.json.return_value = {"success": True}
+        client = MagicMock()
+        client.post = AsyncMock(return_value=response)
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        with patch("cli.commands.blender.get_config", return_value=CLIConfig(timeout=config_timeout)), \
+             patch("cli.utils.connection.httpx.AsyncClient", return_value=client):
+            result = CliRunner().invoke(blender, args)
+        assert result.exit_code == 0, result.output
+        assert client.post.call_args.kwargs["timeout"] == expected
+        assert client.post.call_args.kwargs["json"]["params"]["action"] == "import_model"
+
+    @pytest.mark.parametrize("params, expected", [
+        ({"timeoutSeconds": 0}, 35),
+        ({"timeout_seconds": 60, "timeoutSeconds": 300}, 90),
+        ({"timeout_seconds": None, "timeoutSeconds": 5}, 210),
+        ({"timeoutSeconds": 99999}, 3630),
+        ({"timeoutSeconds": "invalid"}, 210),
+        ({"timeoutSeconds": float("nan")}, 210),
+        ({"timeoutSeconds": float("inf")}, 210),
+        ({"timeoutSeconds": True}, 210),
+        ({"timeoutSeconds": "5.5"}, 210),
+        ({"timeoutSeconds": 5.5}, 210),
+        ({"timeoutSeconds": 300.0}, 330),
+        ({"timeoutSeconds": " +300 "}, 330),
+        ({"timeoutSeconds": "00000000000000300"}, 330),
+        ({"timeoutSeconds": 2**31}, 210),
+    ])
+    def test_timeout_aliases_and_bounds(self, params, expected):
+        from transport.blender_timeout import blender_command_timeout
+        assert blender_command_timeout(params) == expected
