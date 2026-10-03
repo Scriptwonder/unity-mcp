@@ -183,11 +183,12 @@ namespace MCPForUnity.Editor.Services.AssetGen
             => schema != null && ((float?)schema["minimum"] ?? 1f) <= 1f
                && ((float?)schema["maximum"] ?? 1f) >= 1f && schema["enum"] == null;
 
-        private static bool SupportsDimensions(JObject api, JToken token)
+        private static bool SupportsDimensions(JObject api, JToken token, int depth = 0)
         {
+            if (depth >= 8) return false;
             var schema = Resolve(api, token);
             if (schema == null) return false;
-            if (schema["anyOf"] is JArray options) return options.Any(option => SupportsDimensions(api, option));
+            if (schema["anyOf"] is JArray options) return options.Any(option => SupportsDimensions(api, option, depth + 1));
             return (string)Resolve(api, schema["properties"]?["width"])?["type"] == "integer"
                    && (string)Resolve(api, schema["properties"]?["height"])?["type"] == "integer";
         }
@@ -195,20 +196,23 @@ namespace MCPForUnity.Editor.Services.AssetGen
         private static bool HasFile(JObject api, JObject output, string field)
             => (string)Resolve(api, Resolve(api, output?["properties"]?[field])?["properties"]?["url"])?["type"] == "string";
 
-        private static JObject Numeric(JObject api, JToken token)
+        private static JObject Numeric(JObject api, JToken token, int depth = 0)
         {
+            if (depth >= 8) return null;
             var schema = Resolve(api, token);
             if (schema == null) return null;
             string type = (string)schema["type"];
             if (type == "integer" || type == "number") return schema;
-            return (schema["anyOf"] as JArray)?.Select(option => Numeric(api, option)).FirstOrDefault(option => option != null);
+            return (schema["anyOf"] as JArray)?.Select(option => Numeric(api, option, depth + 1)).FirstOrDefault(option => option != null);
         }
 
-        private static JObject Resolve(JObject api, JToken token)
+        private static JObject Resolve(JObject api, JToken token, int depth = 0)
         {
+            if (depth >= 8) return null;
             var schema = token as JObject;
-            for (int depth = 0; schema?["$ref"] != null && depth < 8; depth++)
+            while (schema?["$ref"] != null)
             {
+                if (++depth >= 8) return null;
                 string reference = (string)schema["$ref"];
                 const string prefix = "#/components/schemas/";
                 if (!reference.StartsWith(prefix, StringComparison.Ordinal)) return null;
@@ -217,7 +221,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
             if (schema?["anyOf"] is JArray options)
             {
                 var nonNull = options.Where(option => (string)option["type"] != "null").ToArray();
-                if (nonNull.Length == 1) return Resolve(api, nonNull[0]);
+                if (nonNull.Length == 1) return Resolve(api, nonNull[0], depth + 1);
             }
             return schema?["$ref"] == null ? schema : null;
         }

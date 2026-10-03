@@ -389,6 +389,20 @@ namespace MCPForUnityTests.Editor.AssetGen
         }
 
         [Test]
+        public void RecursiveNullableAndUnionSchemas_DoNotOverflowTheEditorStack()
+        {
+            var model = Endpoint(Music);
+            var schemas = model["openapi"]["components"]["schemas"];
+            schemas["File"] = new JObject { ["anyOf"] = new JArray(new JObject { ["$ref"] = "#/components/schemas/File" }, new JObject { ["type"] = "null" }) };
+            Assert.IsNull(FalModelSchema.Parse(model, "audio", now.ToString("O")));
+            model = Endpoint(Music);
+            schemas = model["openapi"]["components"]["schemas"];
+            schemas["Loop"] = new JObject { ["anyOf"] = new JArray(new JObject { ["$ref"] = "#/components/schemas/Loop" }, new JObject { ["type"] = "string" }) };
+            Input(model)["properties"]["duration"] = new JObject { ["$ref"] = "#/components/schemas/Loop" };
+            Assert.IsNull(FalModelSchema.Parse(model, "audio", now.ToString("O")));
+        }
+
+        [Test]
         public void ImageSchema_ChoosesImportableOutputFormat_AndRejectsVectorOnlyModels()
         {
             var model = Endpoint("test/image", "image");
