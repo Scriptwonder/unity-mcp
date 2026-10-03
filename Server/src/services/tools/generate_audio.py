@@ -22,9 +22,8 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "Generate audio (sound effects and background music) with fal.ai models and import "
         "them as AudioClips into the Unity project. Bring-your-own-key: the fal key lives in "
         "the editor's secure store (shared with image generation) and never crosses the bridge.\n\n"
-        "Use list_models to discover current compatible sound/music models, their duration "
-        "limits and catalog freshness. Omit model to use the model selected in the "
-        "MCP for Unity -> Asset Generation tab.\n\n"
+        "Use list_models for current compatible models. Omit model to use the "
+        "Asset Generation tab selection.\n\n"
         "ACTIONS:\n"
         "- generate: Submit an audio job from a text prompt. Returns { job_id }; poll with the "
         "status action. Params: provider (fal), prompt, model, duration (seconds), name, "
@@ -32,9 +31,8 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "- status: Poll an async job by job_id -> { state, progress, assetPath?, error? }.\n"
         "- cancel: Cancel an in-flight job by job_id.\n"
         "- list_providers: List configured audio providers and capabilities (no key values).\n"
-        "- list_models: List models from the editor's shared catalog; refresh stale fal data "
-        "in the background. If catalogs[].refreshing is true, call list_models again later.\n"
-        "- refresh_models: Force a background fal catalog refresh; returns the current snapshot."
+        "- list_models: List models and freshness; refresh stale fal data in the background.\n"
+        "- refresh_models: Force a fal refresh. Repeat list_models while catalogs[].refreshing is true."
     ),
     annotations=ToolAnnotations(
         title="Generate Audio",

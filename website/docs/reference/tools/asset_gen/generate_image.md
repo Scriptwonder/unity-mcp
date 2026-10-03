@@ -20,8 +20,8 @@ ACTIONS:
 - status: Poll an async job by job_id -> { state, progress, assetPath?, error? }.
 - cancel: Cancel an in-flight job by job_id.
 - list_providers: List configured image providers and capabilities (no key values).
-- list_models: List models and supported modes from the editor's shared catalog; refresh stale fal data in the background. If catalogs[].refreshing is true, call list_models again later. OpenRouter uses the bundled catalog.
-- refresh_models: Force a background fal catalog refresh; returns the current snapshot.
+- list_models: List models, modes and freshness. OpenRouter uses bundled models.
+- refresh_models: Force a fal refresh. Repeat list_models while catalogs[].refreshing is true.
 
 ## Parameters
 
@@ -51,11 +51,6 @@ A `dict` containing the Unity response. The exact shape depends on the action.
 ```json
 {"action": "list_models", "provider": "fal"}
 ```
-
-Use an ID from `data.models` and inspect its `capabilities` before choosing text or image
-mode. Image editing requires a verified editing endpoint. `refresh_models` forces a
-background fal refresh; repeat `list_models` when `data.catalogs[].refreshing` becomes false.
-OpenRouter currently returns bundled entries marked unverified.
 
 CLI: `unity-mcp asset-gen list-models --kind image --provider fal --refresh`.
 <!-- examples:end -->

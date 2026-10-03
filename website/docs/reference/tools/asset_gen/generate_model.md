@@ -19,7 +19,7 @@ ACTIONS:
 - status: Poll an async job by job_id -> { state, progress, assetPath?, error? }.
 - cancel: Cancel an in-flight job by job_id.
 - list_providers: List configured 3D providers and capabilities (no key values).
-- list_models: List bundled 3D models. Live discovery is currently limited to fal image/audio; 3D entries are marked unverified.
+- list_models: List bundled Tripo/Meshy models (unverified).
 
 ## Parameters
 
@@ -50,9 +50,6 @@ A `dict` containing the Unity response. The exact shape depends on the action.
 ```json
 {"action": "list_models", "provider": "meshy"}
 ```
-
-This version returns bundled Tripo/Meshy entries marked unverified. Live discovery is
-currently available for fal image/audio models.
 
 CLI: `unity-mcp asset-gen list-models --kind model`.
 <!-- examples:end -->

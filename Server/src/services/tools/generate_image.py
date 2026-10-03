@@ -31,10 +31,8 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "- status: Poll an async job by job_id -> { state, progress, assetPath?, error? }.\n"
         "- cancel: Cancel an in-flight job by job_id.\n"
         "- list_providers: List configured image providers and capabilities (no key values).\n"
-        "- list_models: List models and supported modes from the editor's shared catalog; "
-        "refresh stale fal data in the background. If catalogs[].refreshing is true, call "
-        "list_models again later. OpenRouter uses the bundled catalog.\n"
-        "- refresh_models: Force a background fal catalog refresh; returns the current snapshot."
+        "- list_models: List models, modes and freshness. OpenRouter uses bundled models.\n"
+        "- refresh_models: Force a fal refresh. Repeat list_models while catalogs[].refreshing is true."
     ),
     annotations=ToolAnnotations(
         title="Generate Image",

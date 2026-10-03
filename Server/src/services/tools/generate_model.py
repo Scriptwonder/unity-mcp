@@ -30,8 +30,7 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "- status: Poll an async job by job_id -> { state, progress, assetPath?, error? }.\n"
         "- cancel: Cancel an in-flight job by job_id.\n"
         "- list_providers: List configured 3D providers and capabilities (no key values).\n"
-        "- list_models: List bundled 3D models. Live discovery is currently limited to "
-        "fal image/audio; 3D entries are marked unverified."
+        "- list_models: List bundled Tripo/Meshy models (unverified)."
     ),
     annotations=ToolAnnotations(
         title="Generate Model",
