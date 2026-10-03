@@ -31,6 +31,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
     /// <summary>Request to generate a 3D model. Shared by every model provider adapter.</summary>
     public sealed class ModelGenRequest
     {
+        internal ModelEntry CatalogEntry;
         public string Provider;
         public string Mode; // text | image
         public string Prompt;

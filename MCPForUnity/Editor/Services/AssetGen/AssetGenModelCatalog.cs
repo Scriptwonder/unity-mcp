@@ -46,12 +46,16 @@ namespace MCPForUnity.Editor.Services.AssetGen
         public string VerifiedAt;
         public string OutputFormat;
         public string EditOutputFormat;
+        public string[] Modes;
+        public string ModelOutputField;
+        public string TextureField;
+        public string RouterProviderTag;
+        public Newtonsoft.Json.Linq.JObject RouterParameters;
     }
 
     /// <summary>
-    /// Shared model registry for the panel and tools. A successfully refreshed fal snapshot
-    /// replaces its bundled entries, including removals. Bundled entries bootstrap first use;
-    /// other providers remain bundled until their discovery adapters are implemented.
+    /// Shared registry for the panel and tools. Live fal and OpenRouter snapshots replace
+    /// bundled entries, including removals. Discovered entries are verified before generation.
     /// </summary>
     public static class AssetGenModelCatalog
     {
@@ -69,6 +73,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
             new ModelEntry { Id = TripoAdapter.ModelVersion, Label = "Tripo v3.1", Provider = "tripo", Kind = "model", UseCase = "Text / image -> 3D" },
             new ModelEntry { Id = "P1-20260311", Label = "Tripo P1 (premium)", Provider = "tripo", Kind = "model", UseCase = "Premium 3D" },
             new ModelEntry { Id = MeshyAdapter.DefaultModel, Label = "Meshy 6", Provider = "meshy", Kind = "model", UseCase = "Text / image -> 3D" },
+            new ModelEntry { Id = FalModelAdapter.DefaultModel, Label = "Hunyuan3D", Provider = "fal", Kind = "model", UseCase = "Text -> 3D", Modes = new[] { "text" } },
 
             // Audio — fal (order: stable-audio, cassette SFX, cassette music, lyria). DurationField
             // is the request key each endpoint expects; null (Lyria) => prompt-only, no duration knob.
@@ -89,6 +94,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
         public static IReadOnlyList<ModelEntry> ForProvider(string provider, string kind)
         {
             if (Eq(provider, "fal") && FalModelCatalog.TryGet(kind, out var entries)) return entries;
+            if (Eq(provider, "openrouter") && Eq(kind, "image") && OpenRouterModelCatalog.TryGet(out var images)) return images;
             return Bundled(provider, kind);
         }
 
@@ -106,13 +112,13 @@ namespace MCPForUnity.Editor.Services.AssetGen
         /// <summary>The first current entry for a provider+kind, or null.</summary>
         public static string DefaultModelId(string provider, string kind)
         {
-            return ForProvider(provider, kind).FirstOrDefault()?.Id;
+            return ForProvider(provider, kind).FirstOrDefault(e => e.Modes == null || e.Modes.Contains("text"))?.Id;
         }
 
         /// <summary>
         /// The model id a generate_* tool should use: an explicit <paramref name="requested"/> wins,
         /// else the GUI-selected model for this (kind, provider), else the catalog default. Missing
-        /// saved selections in a refreshed fal catalog are rejected; explicit IDs are verified at submit.
+        /// saved selections missing from a live catalog are rejected; explicit IDs are verified at submit.
         /// Single home for the
         /// empty -> GUI-selected -> catalog-default precedence shared by all three generate tools.
         /// </summary>
@@ -121,13 +127,20 @@ namespace MCPForUnity.Editor.Services.AssetGen
             string model = requested;
             if (string.IsNullOrWhiteSpace(model)) model = AssetGenPrefs.GetSelectedModel(kind, provider);
             if (string.IsNullOrWhiteSpace(model)) model = DefaultModelId(provider, kind);
-            if (Eq(provider, "fal") && string.IsNullOrWhiteSpace(requested) && FalModelCatalog.TryGet(kind, out var entries)
+            bool authoritative = Eq(provider, "fal") && FalModelCatalog.Source(kind) != "bundled"
+                || Eq(provider, "openrouter") && kind == "image" && OpenRouterModelCatalog.Source != "bundled";
+            var entries = ForProvider(provider, kind);
+            if (authoritative && string.IsNullOrWhiteSpace(requested)
                 && (string.IsNullOrWhiteSpace(model) || !entries.Any(e => Eq(e.Id, model))))
-                throw new InvalidOperationException($"Model '{model}' is not in the verified {kind} catalog. Refresh models and choose an available model; your saved selection has been preserved.");
+                throw new InvalidOperationException($"Model '{model}' is not in the current {kind} catalog. Refresh models and choose an available model; your saved selection has been preserved.");
             return string.IsNullOrWhiteSpace(model) ? null : model;
         }
 
-        internal static void ResetForTests(bool isolate = false) => FalModelCatalog.ResetForTests(isolate);
+        internal static void ResetForTests(bool isolate = false)
+        {
+            FalModelCatalog.ResetForTests(isolate);
+            OpenRouterModelCatalog.ResetForTests(isolate);
+        }
 
         private static bool Eq(string a, string b)
             => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);

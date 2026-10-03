@@ -14,7 +14,7 @@ description: "Generate audio (sound effects and background music) with fal.ai mo
 
 Generate audio (sound effects and background music) with fal.ai models and import them as AudioClips into the Unity project. Bring-your-own-key: the fal key lives in the editor's secure store (shared with image generation) and never crosses the bridge.
 
-Use list_models for current compatible models. Omit model to use the Asset Generation tab selection.
+Use list_models to discover current models; compatibility is checked before generation. Omit model to use the Asset Generation tab selection.
 
 ACTIONS:
 - generate: Submit an audio job from a text prompt. Returns { job_id }; poll with the status action. Params: provider (fal), prompt, model, duration (seconds), name, output_folder.
@@ -36,6 +36,10 @@ ACTIONS:
 | `name` | `str \| None` | — | Base name for the imported asset. |
 | `output_folder` | `str \| None` | — | Destination folder under Assets/ for the import. |
 | `job_id` | `str \| None` | — | Job id for status/cancel. |
+| `search` | `str \| None` | — | Filter list_models by name, id or use case. |
+| `mode` | `str \| None` | — | Filter list_models by input mode (text). |
+| `limit` | `int \| None` | — | Model page size (1..200; default 50). |
+| `offset` | `int \| None` | — | Model page offset (default 0). |
 
 ## Returns
 

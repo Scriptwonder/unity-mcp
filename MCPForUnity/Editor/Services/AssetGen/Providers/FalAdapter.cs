@@ -34,7 +34,8 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                          && (!string.IsNullOrEmpty(req.ImageUrl) || !string.IsNullOrEmpty(req.ImagePath));
 
             ModelEntry entry = req.CatalogEntry ?? AssetGenModelCatalog.Find(model);
-            var body = new JObject { [entry?.PromptField ?? "prompt"] = req.Prompt ?? string.Empty };
+            var body = new JObject();
+            if (entry == null || entry.PromptField != null) body[entry?.PromptField ?? "prompt"] = req.Prompt ?? string.Empty;
             if (entry == null || (image ? entry.EditSupportsNumImages : entry.SupportsNumImages)) body["num_images"] = 1;
             string outputFormat = image ? entry?.EditOutputFormat : entry?.OutputFormat;
             if (outputFormat != null) body["output_format"] = outputFormat;
@@ -61,6 +62,14 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             if (!image && req.Width > 0 && req.Height > 0)
                 body["image_size"] = new JObject { ["width"] = req.Width, ["height"] = req.Height };
 
+            return await SubmitQueueAsync(body, url.Substring(QueueBase.Length), apiKey, http, ct);
+        }
+
+        internal static async Task<string> SubmitQueueAsync(JObject body, string model, string apiKey, IHttpTransport http, CancellationToken ct)
+        {
+            if (!FalModelSchema.SafeId(model)) throw new InvalidOperationException("Invalid fal model ID.");
+            string url = QueueBase + model;
+
             ProviderHttp.RequireHost(url, QueueHost, apiKey, "fal submit");
 
             var spec = new HttpRequestSpec
@@ -84,7 +93,7 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
                     throw new Exception(SecretRedactor.Scrub("fal submit returned no request_id: " + ProviderHttp.Truncate(res?.Text), apiKey));
                 // Queue request URLs are namespaced by owner/app without the action sub-path,
                 // so build from the base model id (not `url`, which may end in /edit).
-                responseUrl = QueueBase + model + "/requests/" + requestId;
+                responseUrl = QueueBase + string.Join("/", model.Split('/'), 0, 2) + "/requests/" + Uri.EscapeDataString(requestId);
             }
             // The response_url is provider-controlled; refuse to later attach the key to any host
             // other than the fal queue.
@@ -92,7 +101,18 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             return responseUrl;
         }
 
-        public async Task<ProviderPollResult> PollAsync(string providerJobId, string apiKey, IHttpTransport http, CancellationToken ct)
+        public Task<ProviderPollResult> PollAsync(string providerJobId, string apiKey, IHttpTransport http, CancellationToken ct)
+            => PollQueueAsync(providerJobId, apiKey, http, ct, json =>
+            {
+                var file = json["images"]?[0] ?? json["image"];
+                return new ProviderPollResult
+                {
+                    DownloadUrl = ExtractImageUrl(json),
+                    ResultExt = ImageResultFormat.FromMetadata((string)file?["content_type"], (string)file?["url"]),
+                };
+            });
+
+        internal static async Task<ProviderPollResult> PollQueueAsync(string providerJobId, string apiKey, IHttpTransport http, CancellationToken ct, Func<JObject, ProviderPollResult> extract)
         {
             if (string.IsNullOrEmpty(providerJobId)) throw new ArgumentNullException(nameof(providerJobId));
             string responseUrl = providerJobId;
@@ -138,12 +158,13 @@ namespace MCPForUnity.Editor.Services.AssetGen.Providers
             HttpResult resultRes = await http.SendAsync(resultSpec, ct);
             JObject resultJson = ParseOk(resultRes, apiKey, "result");
 
+            result = extract(resultJson);
+            result.State = ProviderPollState.Succeeded;
             result.Progress = 1f;
-            result.DownloadUrl = ExtractImageUrl(resultJson);
             if (string.IsNullOrEmpty(result.DownloadUrl))
             {
                 result.State = ProviderPollState.Failed;
-                result.Error = "fal completed but no image URL was present in the result.";
+                result.Error = "fal completed but no result URL was present in the result.";
             }
             return result;
         }

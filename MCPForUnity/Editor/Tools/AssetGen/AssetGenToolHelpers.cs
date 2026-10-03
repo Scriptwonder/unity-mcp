@@ -70,35 +70,44 @@ namespace MCPForUnity.Editor.Tools.AssetGen
             string provider = p.Get("provider")?.ToLowerInvariant();
             var providers = AssetGenProviders.List().Where(info => info.Kind == kind && (string.IsNullOrEmpty(provider) || info.Id == provider)).ToList();
             if (providers.Count == 0) return new ErrorResponse($"Unknown {kind} provider '{provider}'.");
-            if (forceRefresh && !providers.Any(info => info.Id == "fal"))
-                return new ErrorResponse("Live model refresh currently supports fal image and audio. Other providers use the bundled catalog.");
+            if (forceRefresh && !providers.Any(info => info.Id == "fal" || info.Id == "openrouter" && kind == "image"))
+                return new ErrorResponse("Live refresh supports fal and OpenRouter images. Tripo and Meshy use bundled models.");
+            string search = p.Get("search") ?? "";
+            string mode = p.Get("mode");
+            int limit = p.GetInt("limit", 50) ?? 50, offset = p.GetInt("offset", 0) ?? 0;
+            if (limit < 1 || limit > 200 || offset < 0) return new ErrorResponse("Use limit=1..200 and offset>=0.");
             var models = new List<object>();
             var catalogs = new List<object>();
             foreach (var info in providers)
             {
-                bool live = info.Id == "fal" && (kind == "image" || kind == "audio");
-                if (live) _ = FalModelCatalog.RefreshAsync(kind, forceRefresh);
+                bool fal = info.Id == "fal", router = info.Id == "openrouter" && kind == "image";
+                if (fal) _ = FalModelCatalog.RefreshAsync(kind, forceRefresh);
+                if (router) _ = OpenRouterModelCatalog.RefreshAsync(forceRefresh);
                 foreach (var model in AssetGenModelCatalog.ForProvider(info.Id, kind))
+                {
+                    var modes = model.Modes ?? (kind == "audio" ? new[] { "text" } : new[] { "text", "image" });
+                    if (!string.IsNullOrEmpty(mode) && !modes.Contains(mode)) continue;
+                    if ((model.Id + " " + model.Label + " " + model.UseCase).IndexOf(search, System.StringComparison.OrdinalIgnoreCase) < 0) continue;
                     models.Add(new
                     {
                         id = model.Id, label = model.Label, provider = model.Provider, kind = model.Kind,
                         use_case = model.UseCase, verified_at = model.VerifiedAt,
-                        status = model.FromRefresh ? "verified" : "unverified",
-                        capabilities = kind == "model" ? info.Capabilities : kind == "image" && (!model.FromRefresh || !string.IsNullOrEmpty(model.EditModelId))
-                            ? new[] { "text", "image" } : new[] { "text" },
+                        status = model.VerifiedAt != null ? "verified" : model.FromRefresh ? "discovered" : "unverified",
+                        capabilities = modes,
                         max_duration_seconds = model.MaxDurationSeconds, license_type = model.LicenseType,
                     });
+                }
                 catalogs.Add(new
                 {
-                    provider = info.Id, source = live ? FalModelCatalog.Source(kind) : "bundled",
-                    last_verified = live ? FalModelCatalog.VerifiedAt(kind) : null,
-                    stale = !live || FalModelCatalog.IsStale(kind),
-                    refreshing = live && FalModelCatalog.IsRefreshing(kind),
-                    refresh_error = live ? FalModelCatalog.LastError(kind) : null,
+                    provider = info.Id, source = fal ? FalModelCatalog.Source(kind) : router ? OpenRouterModelCatalog.Source : "bundled",
+                    last_checked = fal ? FalModelCatalog.VerifiedAt(kind) : router ? OpenRouterModelCatalog.CheckedAt : null,
+                    stale = fal ? FalModelCatalog.IsStale(kind) : !router || OpenRouterModelCatalog.IsStale,
+                    refreshing = fal ? FalModelCatalog.IsRefreshing(kind) : router && OpenRouterModelCatalog.IsRefreshing,
+                    refresh_error = fal ? FalModelCatalog.LastError(kind) : router ? OpenRouterModelCatalog.LastError : null,
                 });
             }
-            return new SuccessResponse("Model catalog. If refreshing is true, call list_models again after the refresh completes. Bundled entries are unverified; fal endpoints are rechecked before generation.",
-                new { models, catalogs });
+            return new SuccessResponse("Model catalog. Repeat list_models while refreshing. Discovered models require compatibility verification; live endpoints are rechecked before generation.",
+                new { models = models.Skip(offset).Take(limit).ToList(), total = models.Count, offset, limit, has_more = offset < models.Count - limit, catalogs });
         }
     }
 }

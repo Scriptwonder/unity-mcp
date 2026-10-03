@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Security;
 using MCPForUnity.Editor.Services.AssetGen;
@@ -29,6 +30,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         {
             ("tripo", "Tripo"),
             ("meshy", "Meshy"),
+            ("fal", "fal (shared key)"),
             ("sketchfab", "Sketchfab"),
         };
 
@@ -51,6 +53,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         // recompute the glTFast notice when a toggle changes.
         private readonly List<(string Id, Toggle Toggle)> modelEnableToggles = new();
         private readonly List<(VisualElement Container, string Kind, string Provider)> modelControls = new();
+        private readonly Dictionary<string, string> searches = new();
 
         public VisualElement Root { get; private set; }
 
@@ -60,11 +63,22 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             CacheUIElements();
             InitializeUI();
             RegisterCallbacks();
-            Root.RegisterCallback<AttachToPanelEvent>(_ => { FalModelCatalog.Changed -= OnCatalogChanged; FalModelCatalog.Changed += OnCatalogChanged; });
-            Root.RegisterCallback<DetachFromPanelEvent>(_ => FalModelCatalog.Changed -= OnCatalogChanged);
-            if (Root.panel != null) FalModelCatalog.Changed += OnCatalogChanged;
+            Root.RegisterCallback<AttachToPanelEvent>(_ => SubscribeCatalogs());
+            Root.RegisterCallback<DetachFromPanelEvent>(_ => { FalModelCatalog.Changed -= OnCatalogChanged; OpenRouterModelCatalog.Changed -= OnRouterChanged; });
+            if (Root.panel != null) SubscribeCatalogs();
+            Root.schedule.Execute(() => { if (!modelControls.Any(c => FalModelCatalog.IsRefreshing(c.Kind)) && !OpenRouterModelCatalog.IsRefreshing) _ = RefreshCatalog(false); }).Every(60000);
             _ = RefreshCatalog(false);
         }
+
+        private void SubscribeCatalogs()
+        {
+            FalModelCatalog.Changed -= OnCatalogChanged;
+            FalModelCatalog.Changed += OnCatalogChanged;
+            OpenRouterModelCatalog.Changed -= OnRouterChanged;
+            OpenRouterModelCatalog.Changed += OnRouterChanged;
+        }
+
+        private void OnRouterChanged() => OnCatalogChanged("image");
 
         private void CacheUIElements()
         {
@@ -131,7 +145,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             if (refreshButton != null)
             {
                 refreshButton.tooltip =
-                    "Fetch current fal image and sound models and re-check key presence. Other providers use the bundled catalog.";
+                    "Refresh fal image, sound and 3D models, and OpenRouter images.";
                 refreshButton.clicked += OnRefreshClicked;
             }
         }
@@ -158,16 +172,17 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         private async Task RefreshCatalog(bool force)
         {
             refreshButton?.SetEnabled(false);
-            if (refreshStatusLabel != null) SetStatus(refreshStatusLabel, "Checking fal model catalog…", true);
+            if (refreshStatusLabel != null) SetStatus(refreshStatusLabel, "Checking model catalogs…", true);
             try
             {
-                await Task.WhenAll(FalModelCatalog.RefreshAsync("image", force), FalModelCatalog.RefreshAsync("audio", force));
+                await Task.WhenAll(FalModelCatalog.RefreshAsync("image", force), FalModelCatalog.RefreshAsync("audio", force),
+                    FalModelCatalog.RefreshAsync("model", force), OpenRouterModelCatalog.RefreshAsync(force));
                 // Only replace model controls: an automatic refresh must preserve unsaved API-key input.
                 OnCatalogChanged(null);
-                string error = FalModelCatalog.LastError("image") ?? FalModelCatalog.LastError("audio");
+                string error = FalModelCatalog.LastError("image") ?? FalModelCatalog.LastError("audio") ?? FalModelCatalog.LastError("model") ?? OpenRouterModelCatalog.LastError;
                 string verified = FalModelCatalog.VerifiedAt("audio") ?? FalModelCatalog.VerifiedAt("image");
                 string when = DateTime.TryParse(verified, out var time) ? time.ToLocalTime().ToString("g") : "unknown";
-                string label = error != null ? error : "fal models verified " + when + " · other providers use bundled models";
+                string label = error != null ? error : "Catalogs checked " + when + " · refreshed automatically every 24 hours";
                 if (refreshStatusLabel != null) SetStatus(refreshStatusLabel, label, error == null);
             }
             finally { refreshButton?.SetEnabled(true); }
@@ -177,7 +192,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         {
             foreach (var control in modelControls.ToArray())
             {
-                if (control.Provider != "fal" || kind != null && control.Kind != kind) continue;
+                if (control.Provider != "fal" && control.Provider != "openrouter" || kind != null && control.Kind != kind) continue;
                 control.Container.Clear();
                 PopulateModelDropdown(control.Container, control.Kind, control.Provider);
             }
@@ -424,6 +439,21 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         /// </summary>
         private void AddModelDropdown(VisualElement parent, string kind, string providerId)
         {
+            if (providerId == "fal" || providerId == "openrouter")
+            {
+                var search = new TextField("Search models") { name = "model-search-" + kind + "-" + providerId };
+                string key = kind + "/" + providerId;
+                search.SetValueWithoutNotify(searches.TryGetValue(key, out var term) ? term : "");
+                parent.Add(search);
+                search.RegisterValueChangedCallback(evt =>
+                {
+                    searches[key] = evt.newValue ?? "";
+                    var control = modelControls.FirstOrDefault(c => c.Kind == kind && c.Provider == providerId);
+                    if (control.Container == null) return;
+                    control.Container.Clear();
+                    PopulateModelDropdown(control.Container, kind, providerId);
+                });
+            }
             var container = new VisualElement();
             parent.Add(container);
             modelControls.Add((container, kind, providerId));
@@ -432,18 +462,20 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
 
         private void PopulateModelDropdown(VisualElement parent, string kind, string providerId)
         {
-            IReadOnlyList<ModelEntry> models = AssetGenModelCatalog.ForProvider(providerId, kind);
+            var all = AssetGenModelCatalog.ForProvider(providerId, kind);
+            string selectedId = AssetGenPrefs.GetSelectedModel(kind, providerId);
+            if (string.IsNullOrEmpty(selectedId)) selectedId = AssetGenModelCatalog.DefaultModelId(providerId, kind);
+            string term = searches.TryGetValue(kind + "/" + providerId, out var query) ? query : "";
+            IReadOnlyList<ModelEntry> models = all.Where(m => m.Id == selectedId || (m.Id + " " + m.Label + " " + m.UseCase).IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
             if (models.Count == 0)
             {
-                if (providerId == "fal") parent.Add(new Label("No compatible models found. Refresh the catalog to check again."));
+                parent.Add(new Label("No models found. Clear the search or refresh the catalog."));
                 return;
             }
 
             var choices = new List<string>();
             foreach (ModelEntry m in models) choices.Add(m.Label + " (" + m.Id + ")");
 
-            string selectedId = AssetGenPrefs.GetSelectedModel(kind, providerId);
-            if (string.IsNullOrEmpty(selectedId)) selectedId = AssetGenModelCatalog.DefaultModelId(providerId, kind);
             ModelEntry selected = models.FirstOrDefault(model => model.Id == selectedId);
             int selectedIndex = selected == null ? choices.Count : models.ToList().IndexOf(selected);
             if (selected == null) choices.Add("Saved model unavailable — choose another (" + selectedId + ")");
@@ -491,7 +523,27 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
                 AssetGenPrefs.SetSelectedModel(kind, providerId, picked.Id);
                 UpdateModelMeta(meta, picked);
                 UpdateModelCaveat(caveat, picked);
+                if (providerId == "fal" || providerId == "openrouter") _ = VerifySelection(picked, meta);
             });
+        }
+
+        private static async Task VerifySelection(ModelEntry picked, Label meta)
+        {
+            meta.text = "Checking compatibility…";
+            try
+            {
+                string key = null;
+                if (picked.Provider == "fal") try { SecureKeyStore.Current.TryGet("fal", out key); } catch { }
+                string mode = picked.Modes?.FirstOrDefault() ?? "text";
+                var verified = picked.Provider == "fal"
+                    ? await FalModelCatalog.VerifyForGeneration(picked.Id, picked.Kind, mode, CancellationToken.None, key)
+                    : await OpenRouterModelCatalog.VerifyForGeneration(picked.Id, mode, CancellationToken.None);
+                if (AssetGenPrefs.GetSelectedModel(picked.Kind, picked.Provider) == picked.Id) UpdateModelMeta(meta, verified);
+            }
+            catch (Exception error)
+            {
+                if (AssetGenPrefs.GetSelectedModel(picked.Kind, picked.Provider) == picked.Id) meta.text = SecretRedactor.Scrub(error.Message);
+            }
         }
 
         /// <summary>
@@ -555,7 +607,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             // Lyria advertises a max but takes no duration input, so showing a hint would mislead.
             if (m.MaxDurationSeconds > 0f && !string.IsNullOrEmpty(m.DurationField)) parts.Add($"≤{m.MaxDurationSeconds:0}s");
             if (m.Loopable) parts.Add("loopable");
-            parts.Add(m.FromRefresh ? "verified catalog" : "bundled · unverified");
+            parts.Add(m.VerifiedAt != null ? "compatibility verified" : m.FromRefresh ? "discovered · checked before generation" : "bundled · unverified");
             if (!string.IsNullOrEmpty(m.LicenseType)) parts.Add("license: " + m.LicenseType);
             label.text = string.Join(" · ", parts);
             label.tooltip = m.ModelUrl ?? m.Id;

@@ -31,8 +31,8 @@ from transport.legacy.unity_connection import async_send_command_with_retry
         "- status: Poll an async job by job_id -> { state, progress, assetPath?, error? }.\n"
         "- cancel: Cancel an in-flight job by job_id.\n"
         "- list_providers: List configured image providers and capabilities (no key values).\n"
-        "- list_models: List models, modes and freshness. OpenRouter uses bundled models.\n"
-        "- refresh_models: Force a fal refresh. Repeat list_models while catalogs[].refreshing is true."
+        "- list_models: Search/paginate live fal and OpenRouter models, modes and freshness.\n"
+        "- refresh_models: Force discovery. Repeat list_models while catalogs[].refreshing is true."
     ),
     annotations=ToolAnnotations(
         title="Generate Image",
@@ -58,6 +58,9 @@ async def generate_image(
     name: Annotated[str, "Base name for the imported asset."] | None = None,
     output_folder: Annotated[str, "Destination folder under Assets/ for the import."] | None = None,
     job_id: Annotated[str, "Job id for status/cancel."] | None = None,
+    search: Annotated[str, "Filter list_models by name, id or use case."] | None = None,
+    limit: Annotated[int, "Model page size (1..200; default 50)."] | None = None,
+    offset: Annotated[int, "Model page offset (default 0)."] | None = None,
 ) -> dict[str, Any]:
     unity_instance = await get_unity_instance_from_context(ctx)
 
@@ -75,6 +78,9 @@ async def generate_image(
         "name": name,
         "outputFolder": output_folder,
         "jobId": job_id,
+        "search": search,
+        "limit": limit,
+        "offset": offset,
     }
 
     # Remove None values

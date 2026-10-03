@@ -103,7 +103,15 @@ namespace MCPForUnity.Editor.Services.AssetGen
             var runner = new Runner
             {
                 Job = job,
-                SubmitFn = ct => adapter.SubmitAsync(req, apiKey, transport, ct),
+                SubmitFn = async ct =>
+                {
+                    if (string.Equals(provider, "fal", StringComparison.OrdinalIgnoreCase) && !SkipModelVerificationForTests)
+                    {
+                        req.Model = AssetGenModelCatalog.ResolveModel("model", provider, req.Model);
+                        req.CatalogEntry = await FalModelCatalog.VerifyForGeneration(req.Model, "model", req.Mode, ct, apiKey);
+                    }
+                    return await adapter.SubmitAsync(req, apiKey, transport, ct);
+                },
                 PollFn = (pid, ct) => adapter.PollAsync(pid, apiKey, transport, ct),
                 ImportFn = ImportOverrideForTests ?? ModelImportPipeline.ImportInto,
                 Transport = transport,
@@ -136,7 +144,15 @@ namespace MCPForUnity.Editor.Services.AssetGen
                 SubmitFn = async ct =>
                 {
                     if (!SkipModelVerificationForTests && string.Equals(provider, "fal", StringComparison.OrdinalIgnoreCase))
-                        req.CatalogEntry = await FalModelCatalog.VerifyForGeneration(string.IsNullOrEmpty(req.Model) ? FalAdapter.DefaultModel : req.Model, "image", req.Mode, ct, apiKey);
+                    {
+                        req.Model = AssetGenModelCatalog.ResolveModel("image", provider, req.Model);
+                        req.CatalogEntry = await FalModelCatalog.VerifyForGeneration(req.Model, "image", req.Mode, ct, apiKey);
+                    }
+                    if (!SkipModelVerificationForTests && string.Equals(provider, "openrouter", StringComparison.OrdinalIgnoreCase))
+                    {
+                        req.Model = AssetGenModelCatalog.ResolveModel("image", provider, req.Model);
+                        req.CatalogEntry = await OpenRouterModelCatalog.VerifyForGeneration(req.Model, req.Mode, ct);
+                    }
                     return await adapter.SubmitAsync(req, apiKey, transport, ct);
                 },
                 PollFn = (pid, ct) => adapter.PollAsync(pid, apiKey, transport, ct),
@@ -169,7 +185,10 @@ namespace MCPForUnity.Editor.Services.AssetGen
                 SubmitFn = async ct =>
                 {
                     if (!SkipModelVerificationForTests)
-                        req.CatalogEntry = await FalModelCatalog.VerifyForGeneration(string.IsNullOrEmpty(req.Model) ? FalAudioAdapter.DefaultModel : req.Model, "audio", "text", ct, apiKey);
+                    {
+                        req.Model = AssetGenModelCatalog.ResolveModel("audio", provider, req.Model);
+                        req.CatalogEntry = await FalModelCatalog.VerifyForGeneration(req.Model, "audio", "text", ct, apiKey);
+                    }
                     return await adapter.SubmitAsync(req, apiKey, transport, ct);
                 },
                 PollFn = (pid, ct) => adapter.PollAsync(pid, apiKey, transport, ct),
@@ -493,6 +512,13 @@ namespace MCPForUnity.Editor.Services.AssetGen
             string ext = string.IsNullOrEmpty(chosen) ? "bin" : chosen.TrimStart('.').ToLowerInvariant();
             if (!IsAllowedResultExtension(r.Job.Kind, ext))
                 throw new Exception($"provider returned a disallowed file type '.{ext}'");
+            if (r.Job.Kind == "image")
+            {
+                string actual = ImageResultFormat.FromBytes(bytes);
+                if (actual == "webp") throw new Exception("Provider returned WebP, which this Unity image importer does not support. Choose a PNG/JPEG model.");
+                if (actual != null) ext = actual;
+                r.Job.Format = ext;
+            }
             string requestedRoot = !string.IsNullOrEmpty(r.OutputFolder) ? r.OutputFolder
                                                                          : (AssetGenPrefs.OutputRoot + "/" + r.Subfolder);
             if (!AssetGenPaths.TryGetAssetsFolder(requestedRoot, out string root))

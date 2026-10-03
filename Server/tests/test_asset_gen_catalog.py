@@ -16,6 +16,7 @@ from cli.utils.config import CLIConfig
     ("audio", "list_models"), ("audio", "refresh_models"),
     ("image", "list_models"), ("image", "refresh_models"),
     ("model", "list_models"),
+    ("model", "refresh_models"),
 ])
 def test_discovery_actions_are_advertised_and_preserve_catalog_response(kind, action):
     module = importlib.import_module(f"services.tools.generate_{kind}")
@@ -52,12 +53,34 @@ def test_cli_lists_catalog_without_generation_or_key_parameters(kind, refresh):
 
 
 @pytest.mark.parametrize("arguments", [
-    ["list-models", "--kind", "model", "--refresh"],
-    ["list-models", "--kind", "image", "--provider", "openrouter", "--refresh"],
+    ["list-models", "--kind", "model", "--provider", "meshy", "--refresh"],
+    ["list-models", "--kind", "audio", "--provider", "openrouter", "--refresh"],
 ])
 def test_cli_rejects_unsupported_live_refresh_before_contacting_unity(arguments):
     with patch("cli.commands.asset_gen.run_command") as run:
         result = CliRunner().invoke(asset_gen, arguments)
     assert result.exit_code != 0
-    assert "currently supports fal" in result.output
+    assert "supports fal" in result.output
     run.assert_not_called()
+
+
+@pytest.mark.parametrize("kind,provider", [("model", "fal"), ("image", "openrouter")])
+def test_cli_refreshes_new_catalogs_and_forwards_search_and_paging(kind, provider):
+    config = CLIConfig(host="127.0.0.1", port=8080, timeout=30, format="json", unity_instance=None)
+    with patch("cli.commands.asset_gen.get_config", return_value=config), \
+         patch("cli.commands.asset_gen.run_command", return_value={"success": True}) as run:
+        result = CliRunner().invoke(asset_gen, ["list-models", "--kind", kind, "--provider", provider,
+            "--refresh", "--search", "flux", "--mode", "image", "--limit", "20", "--offset", "40"])
+    assert result.exit_code == 0, result.output
+    assert run.call_args.args[1] == {"action": "refresh_models", "provider": provider,
+        "search": "flux", "mode": "image", "limit": 20, "offset": 40}
+
+
+@pytest.mark.parametrize("kind", ["audio", "image", "model"])
+def test_mcp_forwards_discovery_filters(kind):
+    module = importlib.import_module(f"services.tools.generate_{kind}")
+    tool = getattr(module, f"generate_{kind}")
+    with patch.object(module, "get_unity_instance_from_context", AsyncMock(return_value="unity-1")), \
+         patch.object(module, "send_with_unity_instance", AsyncMock(return_value={"success": True})) as send:
+        asyncio.run(tool(MagicMock(), action="list_models", search="new", limit=10, offset=20))
+    assert send.call_args.args[3] == {"action": "list_models", "search": "new", "limit": 10, "offset": 20}

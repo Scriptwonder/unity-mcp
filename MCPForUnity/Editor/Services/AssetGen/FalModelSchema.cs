@@ -8,7 +8,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
     /// <summary>
     /// Conservative compatibility gate for fal's queue OpenAPI schemas. Only local references
     /// and the request/response shapes understood by our adapters are accepted. An unknown
-    /// schema stays out of the selectable catalog instead of being guessed from a model name.
+    /// schema cannot pass preflight; metadata discovery alone never authorizes a paid submit.
     /// </summary>
     internal static class FalModelSchema
     {
@@ -20,7 +20,9 @@ namespace MCPForUnity.Editor.Services.AssetGen
         internal static bool IsCandidate(JObject model, string kind)
         {
             if ((string)model?["metadata"]?["status"] != "active") return false;
-            if (kind != "audio") return (string)model?["metadata"]?["category"] == "text-to-image"
+            string category = (string)model?["metadata"]?["category"];
+            if (kind == "model") return category == "text-to-3d" || category == "image-to-3d";
+            if (kind == "image") return (category == "text-to-image" || category == "image-to-image")
                 && !((string)model?["endpoint_id"] ?? "").Contains("text-to-vector");
             return (string)model?["metadata"]?["category"] == "text-to-audio" && AudioUseCase(model) != null;
         }
@@ -32,7 +34,22 @@ namespace MCPForUnity.Editor.Services.AssetGen
             if (signals.Contains("stable-audio")) return "Music + SFX";
             if (signals.Contains("sound-effect") || signals.Contains("sfx")) return "Sound effects";
             if (signals.Contains("music") || signals.Contains("lyria")) return "Background music";
-            return null;
+            return "Audio";
+        }
+
+        internal static ModelEntry Discover(JObject model, string kind)
+        {
+            if (!IsCandidate(model, kind) || !SafeId((string)model["endpoint_id"])) return null;
+            string id = (string)model["endpoint_id"];
+            var metadata = model["metadata"];
+            return new ModelEntry
+            {
+                Id = id, Provider = "fal", Kind = kind, Label = (string)metadata["display_name"] ?? id,
+                UseCase = kind == "audio" ? AudioUseCase(model) : (string)metadata["category"],
+                FromRefresh = true, Modes = new[] { ((string)metadata["category"]).StartsWith("image-") ? "image" : "text" },
+                LicenseType = (string)metadata["license_type"], ModelUrl = "https://fal.ai/models/" + id,
+                CommercialNote = "Review the model's license and provider terms before commercial use.",
+            };
         }
 
         internal static ModelEntry Parse(JObject model, string kind, string verifiedAt, bool edit = false)
@@ -41,8 +58,8 @@ namespace MCPForUnity.Editor.Services.AssetGen
             var metadata = model?["metadata"] as JObject;
             if (!SafeId(id) || (string)metadata?["status"] != "active") return null;
             string category = (string)metadata?["category"];
-            if (category != (edit ? "image-to-image" : kind == "audio" ? "text-to-audio" : "text-to-image")) return null;
-            if (!edit && !IsCandidate(model, kind)) return null;
+            if (!IsCandidate(model, kind) || edit && category != "image-to-image") return null;
+            bool imageInputRequired = category.StartsWith("image-", StringComparison.Ordinal);
 
             var api = model["openapi"] as JObject;
             var paths = api?["paths"] as JObject;
@@ -57,7 +74,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
             if (properties == null || input["allOf"] != null || input["oneOf"] != null || input["anyOf"] != null) return null;
 
             string promptField = properties["prompt"] != null ? "prompt" : kind == "audio" && properties["text"] != null ? "text" : null;
-            if (promptField == null || !IsString(api, properties[promptField])) return null;
+            if (promptField == null && !imageInputRequired || promptField != null && !IsString(api, properties[promptField])) return null;
 
             var entry = new ModelEntry
             {
@@ -67,6 +84,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
                 LicenseType = (string)metadata["license_type"],
                 ModelUrl = "https://fal.ai/models/" + id,
                 CommercialNote = "Review the model's license and provider terms before commercial use.",
+                Modes = new[] { imageInputRequired ? "image" : "text" },
                 SupportsNumImages = (string)Resolve(api, properties["num_images"])?["type"] == "integer"
                     && AcceptsOne(Resolve(api, properties["num_images"])),
                 SupportsImageSize = SupportsDimensions(api, properties["image_size"]),
@@ -100,6 +118,14 @@ namespace MCPForUnity.Editor.Services.AssetGen
                     break;
                 }
             }
+            else if (kind == "model")
+            {
+                entry.UseCase = imageInputRequired ? "Image -> 3D" : "Text -> 3D";
+                entry.ModelOutputField = HasFile(api, output, "model_glb") ? "model_glb"
+                    : HasFile(api, Resolve(api, output?["properties"]?["model_urls"]), "glb") ? "model_urls.glb" : null;
+                if (entry.ModelOutputField == null) return null;
+                if ((string)Resolve(api, properties["texture"])?["type"] == "boolean") entry.TextureField = "texture";
+            }
             else
             {
                 entry.UseCase = edit ? "Image editing" : "General image";
@@ -115,21 +141,28 @@ namespace MCPForUnity.Editor.Services.AssetGen
                 bool imageArray = (string)images?["type"] == "array"
                     && (string)Resolve(api, Resolve(api, images["items"])?["properties"]?["url"])?["type"] == "string";
                 if (!imageArray && !HasFile(api, output, "image")) return null;
-                if (edit)
+            }
+            if (imageInputRequired)
+            {
+                string field = properties["image_urls"] != null ? "image_urls" : properties["image_url"] != null ? "image_url" : null;
+                var imageInput = Resolve(api, field == null ? null : properties[field]);
+                bool array = (string)imageInput?["type"] == "array" && (string)Resolve(api, imageInput["items"])?["type"] == "string";
+                if (field == null || (!array && (string)imageInput?["type"] != "string")
+                    || array && (((int?)imageInput["minItems"] ?? 1) > 1 || ((int?)imageInput["maxItems"] ?? 1) < 1)) return null;
+                entry.ImageInputField = field;
+                entry.ImageInputIsArray = array;
+                if (kind == "image")
                 {
-                    string field = properties["image_urls"] != null ? "image_urls" : properties["image_url"] != null ? "image_url" : null;
-                    var imageInput = Resolve(api, field == null ? null : properties[field]);
-                    bool array = (string)imageInput?["type"] == "array" && (string)Resolve(api, imageInput["items"])?["type"] == "string";
-                    if (field == null || (!array && (string)imageInput?["type"] != "string")
-                        || array && (((int?)imageInput["minItems"] ?? 1) > 1 || ((int?)imageInput["maxItems"] ?? 1) < 1)) return null;
-                    entry.ImageInputField = field;
-                    entry.ImageInputIsArray = array;
+                    entry.EditModelId = id;
+                    entry.EditSupportsNumImages = entry.SupportsNumImages;
+                    entry.EditOutputFormat = entry.OutputFormat;
                 }
             }
 
             foreach (string required in input["required"]?.Values<string>() ?? Enumerable.Empty<string>())
             {
-                if (required == promptField || required == entry.DurationField || edit && required == entry.ImageInputField) continue;
+                if (required == promptField || required == entry.DurationField || imageInputRequired && required == entry.ImageInputField) continue;
+                if (kind == "model" && required == entry.TextureField) continue;
                 if (kind == "image" && required == "num_images" && entry.SupportsNumImages) continue;
                 if (kind == "image" && required == "output_format" && entry.OutputFormat != null) continue;
                 return null;
@@ -180,6 +213,11 @@ namespace MCPForUnity.Editor.Services.AssetGen
                 const string prefix = "#/components/schemas/";
                 if (!reference.StartsWith(prefix, StringComparison.Ordinal)) return null;
                 schema = api?["components"]?["schemas"]?[reference.Substring(prefix.Length)] as JObject;
+            }
+            if (schema?["anyOf"] is JArray options)
+            {
+                var nonNull = options.Where(option => (string)option["type"] != "null").ToArray();
+                if (nonNull.Length == 1) return Resolve(api, nonNull[0]);
             }
             return schema?["$ref"] == null ? schema : null;
         }

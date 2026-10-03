@@ -20,8 +20,8 @@ ACTIONS:
 - status: Poll an async job by job_id -> { state, progress, assetPath?, error? }.
 - cancel: Cancel an in-flight job by job_id.
 - list_providers: List configured image providers and capabilities (no key values).
-- list_models: List models, modes and freshness. OpenRouter uses bundled models.
-- refresh_models: Force a fal refresh. Repeat list_models while catalogs[].refreshing is true.
+- list_models: Search/paginate live fal and OpenRouter models, modes and freshness.
+- refresh_models: Force discovery. Repeat list_models while catalogs[].refreshing is true.
 
 ## Parameters
 
@@ -40,6 +40,9 @@ ACTIONS:
 | `name` | `str \| None` | — | Base name for the imported asset. |
 | `output_folder` | `str \| None` | — | Destination folder under Assets/ for the import. |
 | `job_id` | `str \| None` | — | Job id for status/cancel. |
+| `search` | `str \| None` | — | Filter list_models by name, id or use case. |
+| `limit` | `int \| None` | — | Model page size (1..200; default 50). |
+| `offset` | `int \| None` | — | Model page offset (default 0). |
 
 ## Returns
 
@@ -49,9 +52,9 @@ A `dict` containing the Unity response. The exact shape depends on the action.
 
 <!-- examples:start -->
 ```json
-{"action": "list_models", "provider": "fal"}
+{"action": "list_models", "provider": "openrouter", "search": "flux", "limit": 20}
 ```
 
-CLI: `unity-mcp asset-gen list-models --kind image --provider fal --refresh`.
+CLI: `unity-mcp asset-gen list-models --kind image --provider openrouter --refresh`.
 <!-- examples:end -->
 

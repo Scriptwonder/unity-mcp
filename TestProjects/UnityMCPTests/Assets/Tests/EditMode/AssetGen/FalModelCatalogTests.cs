@@ -57,6 +57,7 @@ namespace MCPForUnityTests.Editor.AssetGen
             var input = new JObject { ["type"] = "object", ["properties"] = new JObject { [prompt] = new JObject { ["type"] = "string" } }, ["required"] = new JArray(prompt) };
             var output = new JObject { ["type"] = "object", ["properties"] = kind == "audio"
                 ? new JObject { ["audio"] = new JObject { ["$ref"] = "#/components/schemas/File" } }
+                : kind == "model" ? new JObject { ["model_glb"] = new JObject { ["$ref"] = "#/components/schemas/File" } }
                 : new JObject { ["images"] = new JObject { ["type"] = "array", ["items"] = new JObject { ["$ref"] = "#/components/schemas/File" } } } };
             if (edit)
             {
@@ -66,7 +67,7 @@ namespace MCPForUnityTests.Editor.AssetGen
             return new JObject
             {
                 ["endpoint_id"] = id,
-                ["metadata"] = new JObject { ["status"] = "active", ["category"] = edit ? "image-to-image" : kind == "audio" ? "text-to-audio" : "text-to-image", ["display_name"] = "Test model", ["tags"] = new JArray(kind == "audio" ? "music" : "image"), ["updated_at"] = "2026-10-01T12:00:00Z" },
+                ["metadata"] = new JObject { ["status"] = "active", ["category"] = kind == "model" ? edit ? "image-to-3d" : "text-to-3d" : edit ? "image-to-image" : kind == "audio" ? "text-to-audio" : "text-to-image", ["display_name"] = "Test model", ["tags"] = new JArray(kind == "audio" ? "music" : "image"), ["updated_at"] = "2026-10-01T12:00:00Z" },
                 ["openapi"] = new JObject
                 {
                     ["paths"] = new JObject
@@ -87,13 +88,109 @@ namespace MCPForUnityTests.Editor.AssetGen
             http.Handler = request =>
             {
                 bool details = request.Url.Contains("endpoint_id=");
-                string category = request.Url.Contains("category=text-to-image") ? "text-to-image" : "text-to-audio";
+                string category = new[] { "text-to-image", "image-to-image", "text-to-3d", "image-to-3d", "text-to-audio" }
+                    .FirstOrDefault(value => request.Url.Contains("category=" + value));
                 return Models(models.Where(model => details
                     ? request.Url.Contains("endpoint_id=" + Uri.EscapeDataString((string)model["endpoint_id"]) + "&")
                     : (string)model["metadata"]["category"] == category).ToArray());
             };
         }
         private bool Refresh(string kind = "audio", bool force = true) => FalModelCatalog.RefreshAsync(kind, force).GetAwaiter().GetResult();
+
+        [Test]
+        public void CompleteCatalog_IsNotLimitedToEagerSchemaShortlist_AndCanBeSearched()
+        {
+            var endpoints = Enumerable.Range(0, 40).Select(i => Endpoint("test/music-" + i.ToString("D2"))).ToArray();
+            Serve(endpoints);
+            Assert.IsTrue(Refresh());
+            var entries = AssetGenModelCatalog.ForProvider("fal", "audio");
+            Assert.AreEqual(40, entries.Count);
+            Assert.Less(entries.Count(e => e.VerifiedAt != null), entries.Count);
+            var discovered = entries.First(e => e.VerifiedAt == null);
+            Assert.IsTrue(discovered.FromRefresh);
+            var page = JObject.FromObject(GenerateAudio.HandleCommand(new JObject { ["action"] = "list_models", ["search"] = "music-", ["offset"] = 30, ["limit"] = 5 }));
+            Assert.AreEqual(40, (int)page["data"]["total"]);
+            Assert.AreEqual(5, page["data"]["models"].Count());
+            Assert.IsTrue((bool)page["data"]["has_more"]);
+            Assert.AreEqual("discovered", (string)page["data"]["models"][0]["status"]);
+            var verified = FalModelCatalog.VerifyForGeneration(discovered.Id, "audio", "text", CancellationToken.None).GetAwaiter().GetResult();
+            Assert.IsNotNull(verified.VerifiedAt);
+            Assert.IsNotNull(AssetGenModelCatalog.Find(discovered.Id).VerifiedAt);
+        }
+
+        [Test]
+        public void NativeImageEndpoint_DoesNotRequireAGuessedEditAlias()
+        {
+            Serve(Endpoint("test/restyle", "image", edit: true));
+            Assert.IsTrue(Refresh("image"));
+            var entry = FalModelCatalog.VerifyForGeneration("test/restyle", "image", "image", CancellationToken.None).GetAwaiter().GetResult();
+            Assert.AreEqual("test/restyle", entry.EditModelId);
+            CollectionAssert.AreEqual(new[] { "image" }, entry.Modes);
+            Assert.Throws<InvalidOperationException>(() => FalModelCatalog.VerifyForGeneration(entry.Id, "image", "text", CancellationToken.None).GetAwaiter().GetResult());
+        }
+
+        [TestCase("audio"), TestCase("image"), TestCase("model")]
+        public void DirectJobWithNoModel_ResolvesCurrentCatalogBeforePreflight(string kind)
+        {
+            string oldKey = Environment.GetEnvironmentVariable("MCPFORUNITY_FAL_API_KEY");
+            string selection = AssetGenPrefs.GetSelectedModel(kind, "fal");
+            Environment.SetEnvironmentVariable("MCPFORUNITY_FAL_API_KEY", "test-key");
+            AssetGenPrefs.SetSelectedModel(kind, "fal", "");
+            try
+            {
+                string id = "test/replacement-" + kind;
+                Serve(Endpoint(id, kind));
+                Assert.IsTrue(Refresh(kind));
+                var paid = new FakeHttpTransport { Handler = _ => Json(new JObject { ["request_id"] = "r1", ["response_url"] = "https://queue.fal.run/test/app/requests/r1" }) };
+                AssetGenJobManager.TransportOverrideForTests = paid;
+                AssetGenJob job = kind == "audio" ? AssetGenJobManager.StartAudioGeneration(new AudioGenRequest { Provider = "fal", Prompt = "rain" })
+                    : kind == "image" ? AssetGenJobManager.StartImageGeneration(new ImageGenRequest { Provider = "fal", Mode = "text", Prompt = "rain" })
+                    : AssetGenJobManager.StartModelGeneration(new ModelGenRequest { Provider = "fal", Mode = "text", Prompt = "chair" });
+                AssetGenJobManager.TryAdvanceForTests(job.JobId);
+                AssetGenJobManager.TryAdvanceForTests(job.JobId);
+                Assert.AreNotEqual(AssetGenJobState.Failed, job.State, job.Error);
+                Assert.AreEqual("https://queue.fal.run/" + id, paid.RecordedRequests.First().Url);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("MCPFORUNITY_FAL_API_KEY", oldKey);
+                AssetGenPrefs.SetSelectedModel(kind, "fal", selection);
+            }
+        }
+
+        [Test]
+        public void Batch404_DoesNotHideActiveModels_WhenAnotherModelIsRemoved()
+        {
+            const string removed = "test/music-missing";
+            http.Handler = r => !r.Url.Contains("endpoint_id=") ? Models(Endpoint(Music), Endpoint(removed))
+                : r.Url.Contains(Uri.EscapeDataString(removed)) ? new HttpResult { Status = 404, Text = "{\"error\":{\"type\":\"not_found\"}}" }
+                : Models(Endpoint(Music));
+            Assert.IsTrue(Refresh());
+            Assert.AreEqual(Music, AssetGenModelCatalog.ForProvider("fal", "audio").Single().Id);
+        }
+
+        [Test]
+        public void Fal3D_DiscoveryAndPreflight_UseNativeTextAndImageSchemas()
+        {
+            Serve(Endpoint("test/mesh-text", "model"), Endpoint("test/mesh-image", "model", edit: true));
+            Assert.IsTrue(Refresh("model"));
+            CollectionAssert.AreEquivalent(new[] { "test/mesh-text", "test/mesh-image" }, AssetGenModelCatalog.ForProvider("fal", "model").Select(e => e.Id));
+            var entry = FalModelCatalog.VerifyForGeneration("test/mesh-image", "model", "image", CancellationToken.None).GetAwaiter().GetResult();
+            Assert.AreEqual("model_glb", entry.ModelOutputField);
+            var adapter = new FalModelAdapter();
+            var submit = new FakeHttpTransport { Handler = r => r.Method == "POST" ? Json(new JObject { ["request_id"] = "r1" })
+                : r.Url.EndsWith("/status") ? Json(new JObject { ["status"] = "COMPLETED" })
+                : Json(new JObject { ["model_glb"] = new JObject { ["url"] = "https://example.com/model.glb" } }) };
+            string pid = adapter.SubmitAsync(new ModelGenRequest { Mode = "image", CatalogEntry = entry, ImageUrl = "https://example.com/ref.jpg" }, "test-key", submit, CancellationToken.None).GetAwaiter().GetResult();
+            Assert.AreEqual("https://queue.fal.run/test/mesh-image/requests/r1", pid);
+            var body = JObject.Parse(Encoding.UTF8.GetString(submit.RecordedRequests[0].Body));
+            Assert.AreEqual("https://example.com/ref.jpg", (string)body["image_url"]);
+            Assert.IsNull(body["image_urls"]);
+            var result = adapter.PollAsync(pid, "test-key", submit, CancellationToken.None).GetAwaiter().GetResult();
+            Assert.AreEqual("glb", result.ResultExt);
+            Assert.AreEqual("https://example.com/model.glb", result.DownloadUrl);
+            Assert.Throws<InvalidOperationException>(() => adapter.SubmitAsync(new ModelGenRequest { CatalogEntry = entry, Format = "fbx" }, "test-key", submit, CancellationToken.None));
+        }
 
         [Test]
         public void Refresh_DiscoversModels_WithoutKeys_AndSharesToolCatalog()
@@ -425,7 +522,7 @@ namespace MCPForUnityTests.Editor.AssetGen
             var field = root.Query<TextField>().ToList().First(candidate => candidate.isPasswordField);
             field.value = "unsaved-test-input";
             delayed.First.SetResult(Models());
-            while (FalModelCatalog.IsRefreshing("image") || FalModelCatalog.IsRefreshing("audio")) yield return null;
+            while (FalModelCatalog.IsRefreshing("image") || FalModelCatalog.IsRefreshing("audio") || FalModelCatalog.IsRefreshing("model") || OpenRouterModelCatalog.IsRefreshing) yield return null;
             yield return null;
             Assert.AreEqual("unsaved-test-input", field.value);
             Assert.IsTrue(root.Contains(field), "The automatic refresh must not replace key-entry controls.");
@@ -441,15 +538,18 @@ namespace MCPForUnityTests.Editor.AssetGen
             FalModelCatalog.UtcNow = () => DateTime.UtcNow;
             var audio = FalModelCatalog.RefreshAsync("audio", true);
             var image = FalModelCatalog.RefreshAsync("image", true);
-            while (!audio.IsCompleted || !image.IsCompleted) yield return null;
+            var model = FalModelCatalog.RefreshAsync("model", true);
+            while (!audio.IsCompleted || !image.IsCompleted || !model.IsCompleted) yield return null;
             Assert.IsTrue(audio.Result, FalModelCatalog.LastError("audio"));
             Assert.IsTrue(image.Result, FalModelCatalog.LastError("image"));
-            foreach (string kind in new[] { "audio", "image" })
+            Assert.IsTrue(model.Result, FalModelCatalog.LastError("model"));
+            foreach (string kind in new[] { "audio", "image", "model" })
             {
                 var entries = AssetGenModelCatalog.ForProvider("fal", kind);
                 Assert.IsNotEmpty(entries);
-                Assert.IsTrue(entries.All(entry => entry.FromRefresh && !string.IsNullOrEmpty(entry.VerifiedAt)));
-                TestContext.WriteLine(kind + ": " + string.Join(", ", entries.Select(entry => entry.Id)));
+                Assert.IsTrue(entries.All(entry => entry.FromRefresh));
+                Assert.IsTrue(entries.Any(entry => !string.IsNullOrEmpty(entry.VerifiedAt)));
+                TestContext.WriteLine(kind + ": " + entries.Count + " discovered; " + entries.Count(e => e.VerifiedAt != null) + " verified");
                 var verify = FalModelCatalog.VerifyForGeneration(entries[0].Id, kind, "text", CancellationToken.None);
                 while (!verify.IsCompleted) yield return null;
                 Assert.IsFalse(verify.IsFaulted, verify.Exception?.ToString());
