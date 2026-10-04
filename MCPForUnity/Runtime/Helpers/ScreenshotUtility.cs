@@ -24,12 +24,13 @@ namespace MCPForUnity.Runtime.Helpers
 
         public ScreenshotCaptureResult(string fullPath, string projectRelativePath, int superSize, bool isAsync,
             string imageBase64, int imageWidth, int imageHeight)
-            : this(fullPath, projectRelativePath, superSize, isAsync, imageBase64, imageWidth, imageHeight, fallbackReason: null)
+            : this(fullPath, projectRelativePath, superSize, isAsync, imageBase64, imageWidth, imageHeight,
+                fallbackReason: null, fallbackCameraName: null)
         {
         }
 
         public ScreenshotCaptureResult(string fullPath, string projectRelativePath, int superSize, bool isAsync,
-            string imageBase64, int imageWidth, int imageHeight, string fallbackReason)
+            string imageBase64, int imageWidth, int imageHeight, string fallbackReason, string fallbackCameraName)
         {
             FullPath = fullPath;
             ProjectRelativePath = projectRelativePath;
@@ -39,6 +40,7 @@ namespace MCPForUnity.Runtime.Helpers
             ImageWidth = imageWidth;
             ImageHeight = imageHeight;
             FallbackReason = fallbackReason;
+            FallbackCameraName = fallbackCameraName;
         }
 
         public string FullPath { get; }
@@ -55,6 +57,8 @@ namespace MCPForUnity.Runtime.Helpers
         /// render has no Screen Space - Overlay canvases or UI Toolkit panels. Null otherwise.
         /// </summary>
         public string FallbackReason { get; }
+        /// <summary>The camera that rendered the image when <see cref="FallbackReason"/> is set; null otherwise.</summary>
+        public string FallbackCameraName { get; }
     }
 
     public static class ScreenshotUtility
@@ -233,11 +237,14 @@ namespace MCPForUnity.Runtime.Helpers
             int maxResolution,
             string folderOverride)
         {
-            var prepared = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, folderOverride: folderOverride, isAsync: false);
+            // Fail fast on a bad folder, but pick the file name only when the image is written:
+            // a camera capture that runs during the wait could otherwise take the same unique
+            // name, and this write would then replace that file.
+            ResolveFolderAbsolute(folderOverride);
             var tcs = new TaskCompletionSource<ScreenshotCaptureResult>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
 
-            ScreenshotCapturer.Begin(prepared.SuperSize, (tex, timedOut) =>
+            ScreenshotCapturer.Begin(Mathf.Max(1, superSize), (tex, timedOut) =>
             {
                 Texture2D downscaled = null;
                 try
@@ -261,6 +268,7 @@ namespace MCPForUnity.Runtime.Helpers
                         return;
                     }
 
+                    var prepared = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, folderOverride: folderOverride, isAsync: false);
                     tcs.TrySetResult(EncodeAndSaveComposited(tex, prepared, includeImage, maxResolution, ref downscaled));
                 }
                 catch (Exception ex)
@@ -296,7 +304,8 @@ namespace MCPForUnity.Runtime.Helpers
             return new ScreenshotCaptureResult(r.FullPath, r.ProjectRelativePath, r.SuperSize, r.IsAsync,
                 r.ImageBase64, r.ImageWidth, r.ImageHeight,
                 $"{cause}, so this is a render of camera '{cam.name}'. A camera render does not show " +
-                "Screen Space - Overlay canvases or UI Toolkit panels.");
+                "Screen Space - Overlay canvases or UI Toolkit panels.",
+                cam.name);
         }
 
         private static ScreenshotCaptureResult EncodeAndSaveComposited(

@@ -779,7 +779,9 @@ namespace MCPForUnity.Editor.Tools
             if (ScreenshotUtility.IsUnderAssets(result.ProjectRelativePath))
                 AssetDatabase.ImportAsset(result.ProjectRelativePath, ImportAssetOptions.ForceSynchronousImport);
 
-            string cameraName = Camera.main != null ? Camera.main.name : "composited";
+            // A fallback names the camera that actually rendered, which need not be Camera.main.
+            string cameraName = result.FallbackCameraName
+                ?? (Camera.main != null ? Camera.main.name : "composited");
             string message = $"Screenshot captured to '{result.ProjectRelativePath}' (camera: {cameraName}).";
             if (result.FallbackReason != null)
                 message += " " + result.FallbackReason;

@@ -85,7 +85,9 @@ namespace MCPForUnityTests.Editor.Helpers
                 Assert.IsTrue(task.IsCompleted, "the call must not wait for an end of frame in batch mode");
                 var result = task.Result;
                 StringAssert.StartsWith("Batch mode renders no frames", result.FallbackReason);
-                StringAssert.Contains("render of camera", result.FallbackReason);
+                // The camera the response reports must be the one that rendered, as the reason says.
+                Assert.IsNotNull(result.FallbackCameraName);
+                StringAssert.Contains($"render of camera '{result.FallbackCameraName}'", result.FallbackReason);
                 Assert.IsNotNull(result.ImageBase64, "the caller still gets an image");
                 Assert.AreEqual(0, UnityEngine.Resources.FindObjectsOfTypeAll<ScreenshotCapturer>().Length,
                     "no capturer may start when no frame can come");
