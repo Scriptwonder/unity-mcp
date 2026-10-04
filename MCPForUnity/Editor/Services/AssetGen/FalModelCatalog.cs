@@ -24,6 +24,9 @@ namespace MCPForUnity.Editor.Services.AssetGen
     {
         private const string ApiUrl = "https://api.fal.ai/v1/models";
         private const int EagerVerificationLimit = 5;
+        // Guards the editor thread against a runaway cache file. The live fal catalog is ~0.6 MB
+        // (~860 bytes per model), so this leaves ~25x headroom before reloads stop using the cache.
+        internal const long MaxCacheBytes = 16 * 1024 * 1024;
         private static readonly TimeSpan Lifetime = TimeSpan.FromHours(24);
         private static readonly Dictionary<string, Snapshot> Snapshots = new();
         private static readonly Dictionary<string, Task<bool>> Refreshes = new();
@@ -201,7 +204,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
             return models;
         }
 
-        private static async Task<Dictionary<string, JObject>> Details(IEnumerable<string> ids, IHttpTransport http, CancellationToken ct, string apiKey = null)
+        private static async Task<Dictionary<string, JObject>> Details(IEnumerable<string> ids, IHttpTransport http, CancellationToken ct, string apiKey = null, bool foreground = false)
         {
             var result = new Dictionary<string, JObject>(StringComparer.Ordinal);
             string[] wanted = ids.Distinct(StringComparer.Ordinal).Where(FalModelSchema.SafeId).ToArray();
@@ -216,13 +219,13 @@ namespace MCPForUnity.Editor.Services.AssetGen
                 {
                     string url = ApiUrl + "?" + query + "&expand=openapi-3.0&limit=5";
                     if (cursor != null) url += "&cursor=" + Uri.EscapeDataString(cursor);
-                    var json = await Get(url, http, ct, apiKey, allowMissing: true);
+                    var json = await Get(url, http, ct, apiKey, allowMissing: true, foreground: foreground);
                     // fal can return a batch-level 404 when even one endpoint is missing.
                     // Check individual IDs so one retired alias cannot hide active models.
                     if (((JArray)json["models"]).Count == 0 && batch.Length > 1 && cursor == null)
                     {
                         foreach (string id in batch)
-                            foreach (var item in await Details(new[] { id }, http, ct, apiKey)) result[item.Key] = item.Value;
+                            foreach (var item in await Details(new[] { id }, http, ct, apiKey, foreground)) result[item.Key] = item.Value;
                         break;
                     }
                     foreach (JObject model in (JArray)json["models"])
@@ -242,17 +245,22 @@ namespace MCPForUnity.Editor.Services.AssetGen
             return result;
         }
 
-        private static async Task<JObject> Get(string url, IHttpTransport http, CancellationToken ct, string apiKey = null, bool allowMissing = false)
+        /// <summary>
+        /// Background refreshes take turns through <see cref="RequestGate"/>. A foreground request
+        /// (a generation or selection check) skips that queue so it never waits behind a full catalog
+        /// refresh; without a key it still keeps the public pacing interval.
+        /// </summary>
+        private static async Task<JObject> Get(string url, IHttpTransport http, CancellationToken ct, string apiKey = null, bool allowMissing = false, bool foreground = false)
         {
             ProviderHttp.RequireHost(url, "api.fal.ai", apiKey, "fal catalog");
             HttpResult response = null;
             for (int attempt = 0; attempt < 3; attempt++)
             {
-                await RequestGate.WaitAsync(ct);
+                if (!foreground) await RequestGate.WaitAsync(ct);
                 try
                 {
                     TimeSpan wait = nextRequestAt - UtcNow();
-                    if (wait > TimeSpan.Zero) await Delay(wait, ct);
+                    if (wait > TimeSpan.Zero && (!foreground || string.IsNullOrEmpty(apiKey))) await Delay(wait, ct);
                     ct.ThrowIfCancellationRequested();
                     var request = new HttpRequestSpec { Method = "GET", Url = url };
                     request.Headers["User-Agent"] = "MCPForUnity/ModelCatalog";
@@ -262,7 +270,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
                     // Keep background refreshes from exhausting it before a preflight query.
                     nextRequestAt = UtcNow().AddSeconds(string.IsNullOrEmpty(apiKey) ? 7 : 1);
                 }
-                finally { RequestGate.Release(); }
+                finally { if (!foreground) RequestGate.Release(); }
                 if (response?.Status != 429 || attempt == 2) break;
                 await Delay(TimeSpan.FromSeconds(Math.Min(10, Math.Max(1, response.RetryAfterSeconds ?? (2 << attempt)))), ct);
             }
@@ -294,7 +302,7 @@ namespace MCPForUnity.Editor.Services.AssetGen
             var known = AssetGenModelCatalog.ForProvider("fal", kind).FirstOrDefault(e => e.Id == id);
             bool directImage = known?.Modes?.SequenceEqual(new[] { "image" }) == true;
             var ids = kind == "image" && mode == "image" && !directImage ? new[] { id, id + "/edit" } : new[] { id };
-            var models = await Details(ids, TransportOverrideForTests ?? new UnityWebRequestTransport(), timeout.Token, apiKey);
+            var models = await Details(ids, TransportOverrideForTests ?? new UnityWebRequestTransport(), timeout.Token, apiKey, foreground: true);
             if (!models.TryGetValue(id, out var model)) throw new InvalidOperationException($"Model '{id}' is unavailable. Refresh models and choose another model.");
             var entry = FalModelSchema.Parse(model, kind, UtcNow().ToString("O"));
             if (entry == null) throw new InvalidOperationException($"Model '{id}' is unavailable or incompatible with this tool. Refresh models and choose another model.");
@@ -328,7 +336,12 @@ namespace MCPForUnity.Editor.Services.AssetGen
             loaded = true;
             try
             {
-                if (!File.Exists(CachePath) || new FileInfo(CachePath).Length > 2 * 1024 * 1024) return;
+                if (!File.Exists(CachePath)) return;
+                if (new FileInfo(CachePath).Length > MaxCacheBytes)
+                {
+                    McpLog.Warn($"fal model cache exceeds {MaxCacheBytes / (1024 * 1024)} MB and was ignored; models are re-fetched after each reload.");
+                    return;
+                }
                 var cache = JsonConvert.DeserializeObject<Cache>(File.ReadAllText(CachePath));
                 if (cache?.Version != 2 || cache.Snapshots == null) return;
                 foreach (var snapshot in cache.Snapshots)

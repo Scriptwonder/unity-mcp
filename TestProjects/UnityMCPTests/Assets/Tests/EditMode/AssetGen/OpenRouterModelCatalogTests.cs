@@ -89,6 +89,18 @@ namespace MCPForUnityTests.Editor.AssetGen
         }
 
         [Test]
+        public void LargeCache_AboveTheOldTwoMegabyteLimit_StillLoadsAfterReload()
+        {
+            var models = Enumerable.Range(0, 4000).Select(i => (JToken)Model("test/image-" + i.ToString("D4"))).ToArray();
+            http.Handler = _ => Json(new JObject { ["data"] = new JArray(models) });
+            Assert.IsTrue(OpenRouterModelCatalog.RefreshAsync(true).Result);
+            Assert.Greater(new FileInfo(OpenRouterModelCatalog.CachePathOverrideForTests).Length, 2 * 1024 * 1024);
+            OpenRouterModelCatalog.ReloadCacheForTests();
+            Assert.AreEqual("cache", OpenRouterModelCatalog.Source);
+            Assert.AreEqual(4000, AssetGenModelCatalog.ForProvider("openrouter", "image").Count);
+        }
+
+        [Test]
         public void EmptySuccessfulCatalog_RemovesRetiredSavedModel_WithoutSubstitution()
         {
             string old = AssetGenPrefs.GetSelectedModel("image", "openrouter");

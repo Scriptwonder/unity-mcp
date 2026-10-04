@@ -586,6 +586,33 @@ namespace MCPForUnityTests.Editor.AssetGen
         }
 
         [UnityTest]
+        public IEnumerator GenerationPreflight_DoesNotQueueBehindABackgroundRefresh()
+        {
+            var delayed = new DelayedTransport();
+            FalModelCatalog.TransportOverrideForTests = delayed;
+            var refresh = FalModelCatalog.RefreshAsync("audio", true);
+            Assert.IsTrue(FalModelCatalog.IsRefreshing("audio"), "The refresh holds the request gate on its first page.");
+            var verify = FalModelCatalog.VerifyForGeneration(Music, "audio", "text", CancellationToken.None, "test-key");
+            Assert.IsTrue(verify.IsCompleted, "A paid-generation preflight must not wait for the background refresh.");
+            Assert.IsNotNull(verify.Result.VerifiedAt);
+            Assert.IsTrue(FalModelCatalog.IsRefreshing("audio"));
+            delayed.First.SetResult(Models(Endpoint(Music)));
+            while (!refresh.IsCompleted) yield return null;
+            Assert.IsTrue(refresh.Result, FalModelCatalog.LastError("audio"));
+        }
+
+        [Test]
+        public void LargeCache_AboveTheOldTwoMegabyteLimit_StillLoadsAfterReload()
+        {
+            Serve(Enumerable.Range(0, 4000).Select(i => Endpoint("test/music-" + i.ToString("D4"))).ToArray());
+            Assert.IsTrue(Refresh());
+            Assert.Greater(new FileInfo(FalModelCatalog.CachePathOverrideForTests).Length, 2 * 1024 * 1024);
+            FalModelCatalog.ReloadCacheForTests();
+            Assert.AreEqual("cache", FalModelCatalog.Source("audio"));
+            Assert.AreEqual(4000, AssetGenModelCatalog.ForProvider("fal", "audio").Count);
+        }
+
+        [UnityTest]
         public IEnumerator BackgroundRefresh_PreservesUnsavedApiKeyInput()
         {
             var delayed = new DelayedTransport();

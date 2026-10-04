@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services.AssetGen.Http;
 using MCPForUnity.Editor.Services.AssetGen.Providers;
 using Newtonsoft.Json;
@@ -159,7 +160,12 @@ namespace MCPForUnity.Editor.Services.AssetGen
             loaded = true;
             try
             {
-                if (!File.Exists(CachePath) || new FileInfo(CachePath).Length > 2 * 1024 * 1024) return;
+                if (!File.Exists(CachePath)) return;
+                if (new FileInfo(CachePath).Length > FalModelCatalog.MaxCacheBytes)
+                {
+                    McpLog.Warn($"OpenRouter model cache exceeds {FalModelCatalog.MaxCacheBytes / (1024 * 1024)} MB and was ignored; models are re-fetched after each reload.");
+                    return;
+                }
                 var candidate = JsonConvert.DeserializeObject<Snapshot>(File.ReadAllText(CachePath));
                 if (candidate?.Version != 1 || candidate.Entries == null || candidate.CheckedAt.Kind != DateTimeKind.Utc
                     || candidate.CheckedAt > UtcNow().AddMinutes(5)
