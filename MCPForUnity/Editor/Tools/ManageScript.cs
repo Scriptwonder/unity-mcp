@@ -14,7 +14,6 @@ using System.Security.Cryptography;
 #if USE_ROSLYN
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.Formatting;
 #endif
 
 #if UNITY_EDITOR
@@ -740,16 +739,6 @@ namespace MCPForUnity.Editor.Tools
                     int endLineRos = firstLine + 5;
                     return new ErrorResponse("syntax_error", new { status = "syntax_error", diagnostics, evidenceWindow = new { startLine = startLineRos, endLine = endLineRos } });
                 }
-
-                // Optional formatting
-                try
-                {
-                    var root = tree.GetRoot();
-                    var workspace = new AdhocWorkspace();
-                    root = Microsoft.CodeAnalysis.Formatting.Formatter.Format(root, workspace);
-                    working = root.ToFullString();
-                }
-                catch { }
             }
 #endif
 
@@ -2361,7 +2350,7 @@ namespace MCPForUnity.Editor.Tools
                 bool hasErrors = false;
                 foreach (var diagnostic in diagnostics)
                 {
-                    string severity = diagnostic.Severity.ToString().ToUpper();
+                    string severity = diagnostic.Severity.ToString().ToUpperInvariant();
                     string message = $"{severity}: {diagnostic.GetMessage()}";
                     
                     if (diagnostic.Severity == DiagnosticSeverity.Error)

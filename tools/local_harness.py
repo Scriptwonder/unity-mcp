@@ -67,9 +67,10 @@ import sys
 import tempfile
 import threading
 import time
+import uuid
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 from typing import Any, Callable
 
 # ---------------------------------------------------------------------------
@@ -230,6 +231,16 @@ def editor_relpath(platform: str | None = None) -> str:
     return "Editor/Unity"  # linux + everything else
 
 
+def _pure_path(platform: str) -> type[PurePath]:
+    """Path flavour for the *target* platform, not the host.
+
+    Discovery is parameterised by platform so it can be unit-tested for every OS
+    from any OS. `Path` would silently use the host's separator, which turns
+    "/home/dev/Unity" into "\\home\\dev\\Unity" when the tests run on Windows.
+    """
+    return PureWindowsPath if platform.startswith("win") else PurePosixPath
+
+
 def hub_roots(platform: str | None = None, environ: dict[str, str] | None = None) -> list[str]:
     """Per-OS Hub Editor install roots (the directory that holds <version>/ dirs).
 
@@ -239,6 +250,7 @@ def hub_roots(platform: str | None = None, environ: dict[str, str] | None = None
     plat = platform or sys.platform
     env = environ if environ is not None else os.environ
     home = env.get("HOME") or env.get("USERPROFILE") or str(Path.home())
+    P = _pure_path(plat)
     if plat == "darwin":
         return ["/Applications/Unity/Hub/Editor"]
     if plat.startswith("win"):
@@ -246,12 +258,12 @@ def hub_roots(platform: str | None = None, environ: dict[str, str] | None = None
         for var in ("ProgramFiles", "ProgramFiles(x86)"):
             base = env.get(var)
             if base:
-                roots.append(str(Path(base) / "Unity" / "Hub" / "Editor"))
+                roots.append(str(P(base) / "Unity" / "Hub" / "Editor"))
         if not roots:
             roots.append(r"C:\Program Files\Unity\Hub\Editor")
         return roots
     # linux + everything else
-    return [str(Path(home) / "Unity" / "Hub" / "Editor")]
+    return [str(P(home) / "Unity" / "Hub" / "Editor")]
 
 
 def read_secondary_install_path(platform: str | None = None,
@@ -268,14 +280,15 @@ def read_secondary_install_path(platform: str | None = None,
     plat = platform or sys.platform
     env = environ if environ is not None else os.environ
     home = env.get("HOME") or env.get("USERPROFILE") or str(Path.home())
+    P = _pure_path(plat)
     if plat == "darwin":
-        cfg = Path(home) / "Library" / "Application Support" / "UnityHub" / "secondaryInstallPath.json"
+        cfg = P(home) / "Library" / "Application Support" / "UnityHub" / "secondaryInstallPath.json"
     elif plat.startswith("win"):
-        appdata = env.get("APPDATA") or str(Path(home) / "AppData" / "Roaming")
-        cfg = Path(appdata) / "UnityHub" / "secondaryInstallPath.json"
+        appdata = env.get("APPDATA") or str(P(home) / "AppData" / "Roaming")
+        cfg = P(appdata) / "UnityHub" / "secondaryInstallPath.json"
     else:
-        xdg = env.get("XDG_CONFIG_HOME") or str(Path(home) / ".config")
-        cfg = Path(xdg) / "UnityHub" / "secondaryInstallPath.json"
+        xdg = env.get("XDG_CONFIG_HOME") or str(P(home) / ".config")
+        cfg = P(xdg) / "UnityHub" / "secondaryInstallPath.json"
 
     reader = read_text or (lambda p: Path(p).read_text(encoding="utf-8"))
     try:
@@ -310,6 +323,7 @@ def candidate_editor_paths(version: str,
     plat = platform or sys.platform
     env = environ if environ is not None else os.environ
     relpath = editor_relpath(plat)
+    P = _pure_path(plat)
     out: list[str] = []
 
     if explicit_editor:
@@ -320,11 +334,11 @@ def candidate_editor_paths(version: str,
         out.append(env_editor)
 
     for root in hub_roots(plat, env):
-        out.append(str(Path(root) / version / relpath))
+        out.append(str(P(root) / version / relpath))
 
     sec = read_secondary_install_path(plat, env, read_text)
     if sec:
-        out.append(str(Path(sec) / version / relpath))
+        out.append(str(P(sec) / version / relpath))
 
     return out
 
@@ -392,7 +406,7 @@ def discover_editor(version: str,
             pv = parse_version(name)
             if (pv[0], pv[1]) != (target[0], target[1]):
                 continue
-            binary = str(Path(root) / name / relpath)
+            binary = str(_pure_path(plat)(root) / name / relpath)
             searched.append(binary)
             if not (_exists(binary) and _is_exec(binary)):
                 continue
@@ -490,17 +504,16 @@ _READY_RE = re.compile(
     r"(Bridge|MCP(For)?Unity|AutoConnect).*(listening|ready|started|port|bound)",
     re.IGNORECASE,
 )
-_REDACT_RE = re.compile(r"(?i)((email|serial|license|password|token)\S*)")
+_REDACT_RE = re.compile(
+    r"(?im)^.*\b(?:e-?mail|serial|license|licensing|password|token|username)\b.*$"
+)
+_EMAIL_RE = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
 _CS_ERROR_RE = re.compile(r"error CS\d")
 
 
 def redact(text: str) -> str:
-    """Redact secret-ish tokens from log echoes.
-
-    Mirrors the CI sed idiom
-    `sed -E 's/((email|serial|license|password|token)[^[:space:]]*)/[REDACTED]/Ig'`.
-    """
-    return _REDACT_RE.sub("[REDACTED]", text or "")
+    """Omit credential-related lines, including values separated from their labels."""
+    return _EMAIL_RE.sub("[REDACTED]", _REDACT_RE.sub("[REDACTED]", text or ""))
 
 
 def classify_log(text: str, license_grace_elapsed: bool = True) -> str:
@@ -881,6 +894,7 @@ class DockerLauncher:
                 "-v", f"{rt}/unity-config:/root/.config/unity3d",
                 "-v", f"{rt}/unity-local:/root/.local/share/unity3d",
                 "-v", f"{rt}/unity-cache:/root/.cache/unity3d",
+                "-v", f"{rt}/unity-machine-id:/etc/machine-id:ro",
             ]
         return [
             "docker", "run", "-d", "--name", container, "--network", "host",
@@ -926,13 +940,24 @@ class DockerLauncher:
             return False
 
     def tail_log(self, handle: Handle, n: int) -> str:
+        container = handle.container or self.CONTAINER
         try:
+            # Unity uses -logFile, so its diagnostics are not on Docker stdout.
+            if handle.log_path:
+                file_log = subprocess.run(
+                    ["docker", "exec", container, "tail", "-n", str(n), handle.log_path],
+                    capture_output=True, text=True, encoding="utf-8", errors="replace",
+                    check=False, timeout=10,
+                )
+                if file_log.returncode == 0:
+                    return file_log.stdout or ""
             out = subprocess.run(
-                ["docker", "logs", "--tail", str(n), self.CONTAINER],
-                capture_output=True, text=True, check=False,
+                ["docker", "logs", "--tail", str(n), container],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                check=False, timeout=10,
             )
             return (out.stdout or "") + (out.stderr or "")
-        except OSError:
+        except (OSError, subprocess.TimeoutExpired):
             return ""
 
     def fixup_permissions(self, status_dir: Path) -> None:
@@ -1025,6 +1050,20 @@ def _redacted_tail(launcher, handle: Handle, n: int = 200) -> None:
         print(redact(tail))
 
 
+def preserve_editor_diagnostics(launcher, handle: Handle, reports_dir: Path, stage: str) -> None:
+    """Keep a sanitized snapshot before a retry or teardown removes the Editor log."""
+    tail = redact(launcher.tail_log(handle, 200))
+    if not tail:
+        return
+    print(f"== Unity Editor diagnostics: {stage} ==", flush=True)
+    print(tail, flush=True)
+    try:
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        (reports_dir / f"unity-editor-{stage}.log").write_text(tail, encoding="utf-8")
+    except OSError:
+        print("::warning::Unable to save the Unity Editor diagnostic snapshot.", flush=True)
+
+
 def _console_entries(resp: Any) -> list[Any]:
     """Pull read_console log entries out of either envelope shape.
 
@@ -1115,6 +1154,28 @@ def run_smoke_leg(instance_id: str, junit_path: Path, max_retries: int, retry_ms
     return LegOutcome("smoke", "error", blocking=True, detail="no bridge reachable", exit_code=2)
 
 
+def prepare_ci_scene(args: argparse.Namespace, instance_id: str, *, send=None) -> bool:
+    """Name the disposable CI scene before smoke can dirty it and block UTF's save task."""
+    if not args.ci or args.reuse:
+        return True
+    if send is None:
+        _ensure_src_on_path()
+        from transport.legacy.unity_connection import send_command_with_retry as send
+    try:
+        response = send(
+            "manage_scene",
+            {"action": "save", "path": "Assets/__MCPHarness", "name": f"Scene_{uuid.uuid4().hex}"},
+            instance_id=instance_id, max_retries=args.max_retries,
+            retry_ms=args.retry_ms, retry_on_reload=True,
+        )
+        if _ok(response):
+            return True
+    except Exception:
+        pass
+    print("::error:: Could not save the disposable CI scene; UTF tests were not started.")
+    return False
+
+
 def _start_utf(send, mode: str, instance_id: str, init_timeout_ms: int | None,
                max_retries: int, retry_ms: int) -> tuple[str | None, dict[str, Any] | Any]:
     """Issue run_tests; return (job_id, raw_start_response). Gates on result.success."""
@@ -1158,7 +1219,9 @@ def _poll_utf(send, job_id: str, instance_id: str, deadline: float,
     """
     while time.time() < deadline:
         try:
-            poll = send("get_test_job", {"job_id": job_id, "includeFailedTests": True},
+            # Running jobs have no result payload. Request complete rows for the terminal
+            # response so JUnit represents passes as well as failures and ignored tests.
+            poll = send("get_test_job", {"job_id": job_id, "includeDetails": True},
                         instance_id=instance_id, max_retries=max_retries, retry_ms=retry_ms,
                         retry_on_reload=True)
         except Exception:
@@ -1193,48 +1256,62 @@ def _outcome_from_terminal(name: str, mode: str, terminal: dict[str, Any] | Any,
         return LegOutcome(name, "fail", blocking=blocking, detail="wedge (no terminal status)",
                           exit_code=1, junit_suite=suite)
 
-    if status == "succeeded":
-        result = _dig(terminal, "result") or {}
+    result = _dig(terminal, "result")
+    if status == "succeeded" or (status == "failed" and isinstance(result, dict)):
         summary = (result.get("summary") if isinstance(result, dict) else None) or {}
-        total = int(summary.get("total", 0) or 0)
-        passed = int(summary.get("passed", 0) or 0)
-        failed = int(summary.get("failed", 0) or 0)
-        skipped = int(summary.get("skipped", 0) or 0)
-        duration = float(summary.get("durationSeconds", 0.0) or 0.0)
-        rows = result.get("results") if isinstance(result, dict) else None
-        if isinstance(rows, list) and rows:
+
+        def invalid_results(detail: str) -> LegOutcome:
+            suite.cases.append(JUnitCase(name=f"{mode}.results", failure=detail))
+            return LegOutcome(name, "fail", blocking=blocking, detail=detail,
+                              exit_code=1, junit_suite=suite)
+
+        try:
+            total, passed, failed, skipped = (
+                int(summary.get(key, 0) or 0) for key in ("total", "passed", "failed", "skipped")
+            )
+            if min(total, passed, failed, skipped) < 0 or total != passed + failed + skipped:
+                return invalid_results("inconsistent Unity test summary counts")
+            rows = result.get("results") if isinstance(result, dict) else None
+            if not isinstance(rows, list) or len(rows) != total:
+                return invalid_results("Unity test result rows do not match the complete summary")
+            recorded = {"passed": 0, "failed": 0, "skipped": 0}
             for r in rows:
                 if not isinstance(r, dict):
-                    continue
+                    return invalid_results("invalid Unity test result row")
                 rname = str(r.get("fullName") or r.get("name") or f"{mode}.test")
                 rtime = float(r.get("durationSeconds", 0.0) or 0.0)
-                state = str(r.get("state") or "")
-                if state.lower() in ("failed", "error"):
+                # NUnit ResultState can include a label/site, e.g. Skipped:Ignored.
+                state = str(r.get("state") or "").lower().split(":", 1)[0].split("(", 1)[0]
+                if state in ("failed", "error"):
+                    recorded["failed"] += 1
                     fmsg = str(r.get("message") or "") + "\n" + str(r.get("stackTrace") or "")
-                    suite.cases.append(JUnitCase(name=rname, time_s=rtime, failure=fmsg.strip()))
-                elif state.lower() in ("skipped", "ignored", "inconclusive"):
+                    suite.cases.append(JUnitCase(name=rname, time_s=rtime, failure=fmsg.strip() or "test failed"))
+                elif state in ("skipped", "ignored"):
+                    recorded["skipped"] += 1
                     suite.cases.append(JUnitCase(name=rname, time_s=rtime, skipped=True))
-                else:
+                elif state == "passed":
+                    recorded["passed"] += 1
                     suite.cases.append(JUnitCase(name=rname, time_s=rtime))
-        else:
-            # No per-test rows: synthesize from the summary.
-            for i in range(passed):
-                suite.cases.append(JUnitCase(name=f"{mode}.passed.{i}"))
-            for i in range(failed):
-                suite.cases.append(JUnitCase(name=f"{mode}.failed.{i}", failure="failed (no detail)"))
-            for i in range(skipped):
-                suite.cases.append(JUnitCase(name=f"{mode}.skipped.{i}", skipped=True))
-            if not suite.cases and total == 0:
-                suite.cases.append(JUnitCase(name=f"{mode}.empty", time_s=duration))
+                else:
+                    return invalid_results(f"unsupported Unity test state for {rname}: {state or '<missing>'}")
+        except (AttributeError, TypeError, ValueError, OverflowError):
+            return invalid_results("invalid Unity test summary or duration")
+
+        if recorded != {"passed": passed, "failed": failed, "skipped": skipped}:
+            return invalid_results("Unity test result states disagree with the summary counts")
         if failed > 0:
             return LegOutcome(name, "fail", blocking=blocking,
                               detail=f"{failed}/{total} {mode} tests failed", exit_code=1,
                               junit_suite=suite)
+        if status == "failed":
+            return invalid_results(str(_dig(terminal, "error") or "test job failed"))
+        if passed == 0:
+            return invalid_results("Unity did not execute any passing tests")
         return LegOutcome(name, "pass", blocking=blocking,
                           detail=f"{passed}/{total} {mode} tests passed", exit_code=0,
                           junit_suite=suite)
 
-    # status == "failed": data.result is null; surface error + capped failures.
+    # Initialization/runtime failures may have no result: surface error + capped failures.
     error = _dig(terminal, "error") or "test job failed"
     failures = _dig(terminal, "failures_so_far") or []
     detail = str(error)
@@ -1282,7 +1359,8 @@ def _ensure_clean_editmode(send, instance_id: str, max_retries: int, retry_ms: i
 
 def run_playmode_with_retry(instance_id: str, deadline: float, max_retries: int, retry_ms: int,
                             init_timeout_ms: int, strict: bool,
-                            relaunch: Callable[[], str] | None = None) -> LegOutcome:
+                            relaunch: Callable[[], str] | None = None,
+                            before_retry: Callable[[], None] | None = None) -> LegOutcome:
     """PlayMode state machine: start, poll, classify-can-rerun, retry ONCE.
 
     Non-blocking by default; --strict-playmode promotes failure to blocking.
@@ -1312,6 +1390,9 @@ def run_playmode_with_retry(instance_id: str, deadline: float, max_retries: int,
     can_rerun = ("failed to initialize" in error_text) or ("wedge" in error_text)
     if not can_rerun:
         return first
+
+    if before_retry is not None:
+        before_retry()
 
     # A wedge may need the editor relaunched (respecting the socket-release delay).
     inst = instance_id
@@ -1405,6 +1486,23 @@ def main(argv: list[str] | None = None) -> int:
     handle: Handle | None = None
     owns_editor = not (args.reuse or args.keep_alive)
     outcomes: list[LegOutcome] = []
+
+    def capture_diagnostics(stage: str) -> None:
+        if handle is not None:
+            preserve_editor_diagnostics(launcher, handle, reports_dir, stage)
+
+    def record_outcome(outcome: LegOutcome) -> None:
+        outcomes.append(outcome)
+        if outcome.status in ("fail", "error"):
+            capture_diagnostics(outcome.name)
+
+    def record_scene_setup_failure() -> None:
+        detail = "could not prepare CI scene"
+        record_outcome(LegOutcome(
+            "setup", "error", blocking=True, detail=detail, exit_code=2,
+            junit_suite=JUnitSuite(name="setup", cases=[JUnitCase(name="setup.scene", failure=detail)]),
+        ))
+        write_reports(junit_path, reports_dir, outcomes)
 
     def do_teardown() -> None:
         # Only kill the editor we started; clean only our own status files.
@@ -1523,9 +1621,15 @@ def main(argv: list[str] | None = None) -> int:
             if not compile_ok:
                 print("::error:: project does not compile -- skipping UTF legs")
 
+        # Creating and deleting smoke objects leaves an untitled scene dirty. UTF
+        # cancels its save dialog in batch mode without firing test callbacks.
+        if wants_utf and compile_ok and not prepare_ci_scene(args, instance_id):
+            record_scene_setup_failure()
+            return 2
+
         # --- Smoke leg ---
         if "smoke" in legs:
-            outcomes.append(run_smoke_leg(instance_id, junit_path, args.max_retries,
+            record_outcome(run_smoke_leg(instance_id, junit_path, args.max_retries,
                                           args.retry_ms, deadline=deadline))
 
         # --- EditMode leg ---
@@ -1534,7 +1638,7 @@ def main(argv: list[str] | None = None) -> int:
                 outcomes.append(LegOutcome("editmode", "fail", blocking=True,
                                            detail="project does not compile", exit_code=3))
             else:
-                outcomes.append(run_utf_leg("EditMode", instance_id, blocking=True,
+                record_outcome(run_utf_leg("EditMode", instance_id, blocking=True,
                                             deadline=deadline, max_retries=args.max_retries,
                                             retry_ms=args.retry_ms))
 
@@ -1554,12 +1658,16 @@ def main(argv: list[str] | None = None) -> int:
                     ready = wait_for_ready(launcher, handle, status_dir, args.bridge_wait, time.time(), deadline)
                     instance_id = ready.instance_id
                     os.environ["UNITY_MCP_DEFAULT_INSTANCE"] = instance_id
+                    if not prepare_ci_scene(args, instance_id):
+                        record_scene_setup_failure()
+                        raise SystemExit(2)
                     return instance_id
 
                 relaunch = _relaunch if (owns_editor and not args.reuse) else None
-                outcomes.append(run_playmode_with_retry(
+                record_outcome(run_playmode_with_retry(
                     instance_id, deadline, args.max_retries, args.retry_ms,
-                    args.playmode_init_timeout, bool(args.strict_playmode), relaunch=relaunch))
+                    args.playmode_init_timeout, bool(args.strict_playmode), relaunch=relaunch,
+                    before_retry=lambda: capture_diagnostics("playmode-before-retry")))
 
         # Aggregate + write reports.
         write_reports(junit_path, reports_dir, outcomes)
