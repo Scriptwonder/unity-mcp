@@ -16,7 +16,9 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
     /// Controller for the AI Asset Generation settings tab. This tab is CONFIG ONLY:
     /// it lets users enter/clear per-provider API keys, toggle providers on/off,
     /// presence-check a key, and set non-secret generation preferences.
-    /// Generation itself is never triggered here — only via MCP tools / CLI.
+    /// Generation itself is never triggered here — only via MCP tools / CLI. The one exception is
+    /// the Blender Bridge block (<see cref="McpBlenderBridgePanel"/>): its buttons run local socket
+    /// and file operations against a Blender on this machine, never a paid provider call.
     ///
     /// Keys are written to the OS secure store (<see cref="SecureKeyStore"/>), never to
     /// EditorPrefs or the project. The stored key is never read back into the field; only
@@ -53,6 +55,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         private Toggle autoNormalizeToggle;
         private Button refreshButton;
         private Label refreshStatusLabel;
+        private McpBlenderBridgePanel blenderPanel;
 
         // Per-provider enable toggles for the GLB-capable (model) providers, used to
         // recompute the glTFast notice when a toggle changes.
@@ -103,6 +106,9 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             autoNormalizeToggle = Root.Q<Toggle>("assetgen-auto-normalize");
             refreshButton = Root.Q<Button>("assetgen-refresh");
             refreshStatusLabel = Root.Q<Label>("assetgen-refresh-status");
+
+            var blenderRoot = Root.Q<VisualElement>("blender-bridge-panel");
+            if (blenderRoot != null) blenderPanel = new McpBlenderBridgePanel(blenderRoot);
         }
 
         private void InitializeUI()
@@ -180,6 +186,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         public void Refresh()
         {
             SyncFromPrefs();
+            blenderPanel?.Refresh();
             _ = RefreshCatalog(false);
         }
 
@@ -257,8 +264,6 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
 
             var audioPanel = AddCategoryPanel("Sound (fal.ai)");
             AddSharedFalRow(audioPanel, "audio", "fal (audio)");
-
-            AddBlenderHandoffRow();
         }
 
         /// <summary>
@@ -286,42 +291,6 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
 
             providersContainer.Add(panel);
             return panel;
-        }
-
-        private void AddGroupLabel(string text)
-        {
-            var label = new Label(text);
-            label.AddToClassList("config-label");
-            providersContainer.Add(label);
-        }
-
-        /// <summary>
-        /// Informational handoff row (not a keyed provider): best-effort "is Blender installed"
-        /// status + a pointer to the blender-to-unity workflow. BlenderMCP itself runs in the AI
-        /// client and isn't detectable from Unity, so this only reports the local Blender app.
-        /// </summary>
-        private void AddBlenderHandoffRow()
-        {
-            AddGroupLabel("Blender → Unity Handoff");
-
-            var row = new VisualElement();
-            row.style.marginBottom = 8;
-
-            bool blender = BlenderDetection.IsInstalled();
-            var status = new Label(blender ? "Blender app detected ✓" : "Blender app not found on this machine");
-            status.AddToClassList("help-text");
-            status.style.color = blender ? new Color(0.4f, 0.8f, 0.4f) : new Color(0.7f, 0.7f, 0.7f);
-            row.Add(status);
-
-            var help = new Label(
-                "Pair Blender with the BlenderMCP server in your AI client, then run the blender-to-unity " +
-                "skill to export the current model — it imports via the import_model_file tool. (BlenderMCP " +
-                "is configured in your AI client and can't be detected here.)");
-            help.AddToClassList("help-text");
-            help.style.whiteSpace = WhiteSpace.Normal;
-            row.Add(help);
-
-            providersContainer.Add(row);
         }
 
         private Toggle AddProviderRow(VisualElement parent, string id, string displayName, string kind)

@@ -19,7 +19,7 @@ namespace MCPForUnityTests.Editor.Windows.Characterization
     /// Covers: MCPSetupWindow, EditorPrefsWindow, McpConnectionSection, and component patterns
     /// </summary>
     [TestFixture]
-    public class WindowsCharacterizationTests
+    public class WindowsCharacterizationTests : TransportPreferenceTestBase
     {
         #region Section 1: EditorPrefsWindow Tests (3 tests)
 
@@ -135,7 +135,11 @@ namespace MCPForUnityTests.Editor.Windows.Characterization
         public void MCPSetupWindow_ModifiesClassListForStatus_ValidInvalidPattern()
         {
             var type = typeof(MCPSetupWindow);
-            var method = type.GetMethod("UpdateDependencyStatus", BindingFlags.NonPublic | BindingFlags.Instance);
+            // Static as well as Instance: the method takes every element it touches as an argument,
+            // so it carries no instance state and is declared static. Looking it up with Instance
+            // alone returned null and failed this test rather than reporting a behaviour change.
+            var method = type.GetMethod("UpdateDependencyStatus",
+                BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance);
 
             Assert.IsNotNull(method, "Should have UpdateDependencyStatus method");
 
