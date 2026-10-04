@@ -24,6 +24,12 @@ namespace MCPForUnity.Runtime.Helpers
 
         public ScreenshotCaptureResult(string fullPath, string projectRelativePath, int superSize, bool isAsync,
             string imageBase64, int imageWidth, int imageHeight)
+            : this(fullPath, projectRelativePath, superSize, isAsync, imageBase64, imageWidth, imageHeight, fallbackReason: null)
+        {
+        }
+
+        public ScreenshotCaptureResult(string fullPath, string projectRelativePath, int superSize, bool isAsync,
+            string imageBase64, int imageWidth, int imageHeight, string fallbackReason)
         {
             FullPath = fullPath;
             ProjectRelativePath = projectRelativePath;
@@ -32,6 +38,7 @@ namespace MCPForUnity.Runtime.Helpers
             ImageBase64 = imageBase64;
             ImageWidth = imageWidth;
             ImageHeight = imageHeight;
+            FallbackReason = fallbackReason;
         }
 
         public string FullPath { get; }
@@ -43,6 +50,11 @@ namespace MCPForUnity.Runtime.Helpers
         public string ImageBase64 { get; }
         public int ImageWidth { get; }
         public int ImageHeight { get; }
+        /// <summary>
+        /// Set when a composited capture was replaced by a camera render, and says why. A camera
+        /// render has no Screen Space - Overlay canvases or UI Toolkit panels. Null otherwise.
+        /// </summary>
+        public string FallbackReason { get; }
     }
 
     public static class ScreenshotUtility
@@ -171,47 +183,12 @@ namespace MCPForUnity.Runtime.Helpers
         }
 
         /// <summary>
-        /// Captures a screenshot using ScreenCapture.CaptureScreenshotAsTexture, which captures the
-        /// final composited frame including UI Toolkit overlays, post-processing, etc.
-        /// Falls back to camera-based capture if ScreenCapture returns null at runtime.
-        /// </summary>
-        public static ScreenshotCaptureResult CaptureComposited(
-            string fileName = null,
-            int superSize = 1,
-            bool ensureUniqueFileName = true,
-            bool includeImage = false,
-            int maxResolution = 0,
-            string folderOverride = null)
-        {
-            ScreenshotCaptureResult result = PrepareCaptureResult(fileName, superSize, ensureUniqueFileName, folderOverride: folderOverride, isAsync: false);
-            Texture2D tex = null;
-            Texture2D downscaled = null;
-            try
-            {
-                // Direct capture is safe in edit mode. Play-mode MCP callers must use
-                // CaptureCompositedAsync so WaitForEndOfFrame can run without
-                // EditorApplication.Step re-entering the PlayerLoop.
-                tex = ScreenCapture.CaptureScreenshotAsTexture(result.SuperSize);
-                if (tex == null)
-                {
-                    return CaptureCompositedOrCameraFallback(
-                        fileName, superSize, ensureUniqueFileName, includeImage, maxResolution, folderOverride);
-                }
-
-                return EncodeAndSaveComposited(tex, result, includeImage, maxResolution, ref downscaled);
-            }
-            finally
-            {
-                DestroyTexture(tex);
-                DestroyTexture(downscaled);
-            }
-        }
-
-        /// <summary>
         /// Play-mode composited capture that waits for end-of-frame without pumping
         /// <c>EditorApplication.Step</c>. MCP commands run inside
         /// <c>UnitySynchronizationContext.ExecuteTasks</c>, so a synchronous Step()
         /// re-enters the PlayerLoop and can flood Editor.log until the Editor dies.
+        /// When no end of frame can arrive, this returns a camera render instead and sets
+        /// <see cref="ScreenshotCaptureResult.FallbackReason"/>.
         /// </summary>
         public static async Task<ScreenshotCaptureResult> CaptureCompositedAsync(
             string fileName = null,
@@ -221,6 +198,14 @@ namespace MCPForUnity.Runtime.Helpers
             int maxResolution = 0,
             string folderOverride = null)
         {
+            // Batch mode renders no frames, so WaitForEndOfFrame never resumes there and every
+            // capture would sit out the timeout before falling back.
+            if (Application.isBatchMode)
+            {
+                return CaptureWithCameraInstead(fileName, superSize, ensureUniqueFileName, includeImage,
+                    maxResolution, folderOverride, "Batch mode renders no frames");
+            }
+
             if (!await CompositedCaptureGate
                     .WaitAsync(TimeSpan.FromSeconds(ScreenshotCapturer.DefaultTimeoutSeconds * 4))
                     .ConfigureAwait(true))
@@ -257,17 +242,22 @@ namespace MCPForUnity.Runtime.Helpers
                 Texture2D downscaled = null;
                 try
                 {
+                    // Not an error: the caller still gets an image, and the result says it is a
+                    // camera render rather than the composited Game view.
                     if (timedOut)
                     {
-                        tcs.TrySetException(new TimeoutException(
-                            "Play-mode screenshot timed out waiting for end of frame. Keep the Game view visible and the editor unpaused."));
+                        tcs.TrySetResult(CaptureWithCameraInstead(
+                            fileName, superSize, ensureUniqueFileName, includeImage, maxResolution, folderOverride,
+                            $"No frame was rendered within {ScreenshotCapturer.DefaultTimeoutSeconds:0.#} s " +
+                            "(for example, the game is paused or the Editor is not rendering while unfocused)"));
                         return;
                     }
 
                     if (tex == null)
                     {
-                        tcs.TrySetResult(CaptureCompositedOrCameraFallback(
-                            fileName, superSize, ensureUniqueFileName, includeImage, maxResolution, folderOverride));
+                        tcs.TrySetResult(CaptureWithCameraInstead(
+                            fileName, superSize, ensureUniqueFileName, includeImage, maxResolution, folderOverride,
+                            "ScreenCapture returned no image"));
                         return;
                     }
 
@@ -287,23 +277,26 @@ namespace MCPForUnity.Runtime.Helpers
             return tcs.Task;
         }
 
-        private static ScreenshotCaptureResult CaptureCompositedOrCameraFallback(
+        /// <summary>Renders a scene camera in place of a composited capture; <paramref name="cause"/> says why.</summary>
+        private static ScreenshotCaptureResult CaptureWithCameraInstead(
             string fileName,
             int superSize,
             bool ensureUniqueFileName,
             bool includeImage,
             int maxResolution,
-            string folderOverride)
+            string folderOverride,
+            string cause)
         {
             var cam = FindAvailableCamera();
-            if (cam != null)
-            {
-                return CaptureFromCameraToProjectFolder(cam, fileName, superSize, ensureUniqueFileName,
-                    includeImage, maxResolution, folderOverride: folderOverride);
-            }
+            if (cam == null)
+                throw new InvalidOperationException(cause + ", and there is no camera to render instead.");
 
-            throw new InvalidOperationException(
-                "ScreenCapture.CaptureScreenshotAsTexture returned null and no fallback camera available.");
+            var r = CaptureFromCameraToProjectFolder(cam, fileName, superSize, ensureUniqueFileName,
+                includeImage, maxResolution, folderOverride: folderOverride);
+            return new ScreenshotCaptureResult(r.FullPath, r.ProjectRelativePath, r.SuperSize, r.IsAsync,
+                r.ImageBase64, r.ImageWidth, r.ImageHeight,
+                $"{cause}, so this is a render of camera '{cam.name}'. A camera render does not show " +
+                "Screen Space - Overlay canvases or UI Toolkit panels.");
         }
 
         private static ScreenshotCaptureResult EncodeAndSaveComposited(
@@ -927,7 +920,10 @@ namespace MCPForUnity.Runtime.Helpers
             }
             finally
             {
-                if (!_destroying)
+                // `this == null` once something else destroyed the capturer: outside play mode
+                // Unity sends it no OnDestroy, so _destroying stays false, and touching
+                // gameObject then throws MissingReferenceException.
+                if (!_destroying && this != null)
                 {
 #if UNITY_EDITOR
                     DestroyImmediate(gameObject);

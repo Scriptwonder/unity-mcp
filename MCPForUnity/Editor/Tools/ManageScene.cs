@@ -612,6 +612,8 @@ namespace MCPForUnity.Editor.Tools
                 if (includeImage && Application.isPlaying)
                 {
                     if (!Application.isBatchMode) EnsureGameView();
+                    // A Task, not a response: the capture waits for the end of the frame, and
+                    // CommandRegistry awaits a Task that a synchronous handler returns.
                     return CaptureCompositedScreenshotAsync(cmd, fileName, resolvedSuperSize, maxResolution);
                 }
 
@@ -741,6 +743,12 @@ namespace MCPForUnity.Editor.Tools
                 data["imageHeight"] = result.ImageHeight;
             }
 
+            if (result.FallbackReason != null)
+            {
+                data["captureSource"] = "camera_fallback";
+                data["fallbackReason"] = result.FallbackReason;
+            }
+
             return data;
         }
 
@@ -773,6 +781,8 @@ namespace MCPForUnity.Editor.Tools
 
             string cameraName = Camera.main != null ? Camera.main.name : "composited";
             string message = $"Screenshot captured to '{result.ProjectRelativePath}' (camera: {cameraName}).";
+            if (result.FallbackReason != null)
+                message += " " + result.FallbackReason;
             return new SuccessResponse(message, BuildScreenshotResponseData(result, cameraName, includeImage: true));
         }
 
