@@ -143,6 +143,20 @@ namespace MCPForUnityTests.Editor.Tools
                 .OrderBy(s => int.Parse(s.name.Split('_').Last()))
                 .ToArray();
 
+        /// <summary>
+        /// Lowers Max Size until the import is smaller than the file, the case where the
+        /// imported texture size and the source pixels that sprite rects use stop agreeing.
+        /// </summary>
+        private static void ShrinkImport(string path, int maxSize, int expectedImportedWidth)
+        {
+            var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+            importer.maxTextureSize = maxSize;
+            EditorUtility.SetDirty(importer);
+            importer.SaveAndReimport();
+            Assert.AreEqual(expectedImportedWidth, AssetDatabase.LoadAssetAtPath<Texture2D>(path).width,
+                "fixture: Max Size must make the import smaller than the source");
+        }
+
         /// <summary>Every importer field slice_sheet writes, as one comparable string.</summary>
         private static string ImportState(string path)
         {
@@ -210,6 +224,21 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.IsTrue(result.Value<bool>("success"));
             Assert.AreEqual(4 * Cell, result.Value<int>("width"));
             Assert.AreEqual(2 * Cell, result.Value<int>("height"));
+        }
+
+        [Test]
+        public void GetInfo_SheetLargerThanMaxSize_ReportsTheSourceSize()
+        {
+            // A caller sizes its grid from these numbers and slice_sheet cuts in source
+            // pixels, so reporting the shrunken import would hand it the wrong frame size.
+            string path = CreateSheet("maxsize_info", 8, 1);
+            ShrinkImport(path, 32, 32);
+
+            var result = Run(new JObject { ["action"] = "get_info", ["path"] = path });
+
+            Assert.IsTrue(result.Value<bool>("success"));
+            Assert.AreEqual(8 * Cell, result.Value<int>("width"));
+            Assert.AreEqual(Cell, result.Value<int>("height"));
         }
 
         [Test]
@@ -596,6 +625,30 @@ namespace MCPForUnityTests.Editor.Tools
             var result = Slice(path, 6, 1);
             Assert.IsTrue(result.Value<bool>("success"));
             Assert.AreEqual(6, SpritesOf(path).Length, "no frame may be dropped");
+        }
+
+        [Test]
+        public void SliceSheet_SheetLargerThanMaxSize_CutsTheGridInSourcePixels()
+        {
+            // A 128x16 sheet imported at Max Size 32 is a 32x4 texture, but Unity reads
+            // sprite rects in source pixels. A grid cut from the imported size gave 4px
+            // cells over the left quarter of the sheet and still reported success.
+            string path = CreateSheet("maxsize", 8, 1);
+            ShrinkImport(path, 32, 32);
+
+            var result = Slice(path, 8, 1);
+
+            Assert.IsTrue(result.Value<bool>("success"), ErrorText(result));
+            Assert.AreEqual(Cell, result.Value<int>("frame_width"));
+            Assert.AreEqual(Cell, result.Value<int>("frame_height"));
+            var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+#pragma warning disable CS0618 // same API the tool writes through
+            var rects = importer.spritesheet.Select(m => m.rect).ToArray();
+#pragma warning restore CS0618
+            for (int i = 0; i < rects.Length; i++)
+                Assert.AreEqual(new Rect(i * Cell, 0, Cell, Cell), rects[i], $"frame {i}");
+            // The frames must cover the whole sheet, read on the imported texture.
+            Assert.AreEqual(32f, SpritesOf(path).Last().rect.xMax, "the last frame must reach the right edge");
         }
 
         [Test]
@@ -1651,6 +1704,40 @@ namespace MCPForUnityTests.Editor.Tools
             else
                 Assert.IsNotEmpty(result.Value<string>("image_omitted_reason") ?? "",
                     "an omitted image must say why");
+        }
+
+        [Test]
+        public void GetInfo_SourceThatIsNotPngOrJpeg_IsNotSentAsAnImage()
+        {
+            // The inline image is the source file's bytes. A TGA used to go out labelled
+            // image/png, which a client that checks the image refuses.
+            var tex = new Texture2D(4 * Cell, 2 * Cell, TextureFormat.RGBA32, false);
+            string path = $"{TempRoot}/targa.tga";
+            File.WriteAllBytes(Path.Combine(Directory.GetParent(Application.dataPath).FullName, path),
+                tex.EncodeToTGA());
+            Object.DestroyImmediate(tex);
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+
+            var result = Run(new JObject { ["action"] = "get_info", ["path"] = path });
+
+            Assert.IsTrue(result.Value<bool>("success"), "the call still answers");
+            Assert.IsNull(result.Value<string>("image_base64"));
+            Assert.That(result.Value<string>("image_omitted_reason"), Does.Contain(".tga"));
+        }
+
+        [Test]
+        public void GetInfo_SourceOver8000PixelsOnASide_IsNotSentAsAnImage()
+        {
+            // Small on disk, so the byte limit lets it through; image inputs commonly refuse
+            // anything over 8000 px on a side, and that refusal fails the whole request.
+            string path = CreateSheetOfSize("wide", 8192, Cell);
+
+            var result = Run(new JObject { ["action"] = "get_info", ["path"] = path });
+
+            Assert.IsTrue(result.Value<bool>("success"), "the call still answers");
+            Assert.IsNull(result.Value<string>("image_base64"));
+            Assert.That(result.Value<string>("image_omitted_reason"), Does.Contain("8000"));
+            Assert.AreEqual(8192, result.Value<int>("width"), "the source width, not the import");
         }
 
     }

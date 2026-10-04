@@ -23,9 +23,11 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             if (importer == null)
                 return diagnostics.Fail("NOT_FOUND", $"No TextureImporter found at '{path}'. Is it a texture/sprite?");
 
-            var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
-            int w = texture != null ? texture.width  : 0;
-            int h = texture != null ? texture.height : 0;
+            // Source pixels, not texture.width/height: slice_sheet cuts its grid in source
+            // pixels, and the inline image below is the source file. Max Size, or NPOT
+            // scaling on a Default-type import, makes the imported texture smaller than
+            // the file, so its size would not match either.
+            importer.GetSourceTextureWidthAndHeight(out int w, out int h);
 
             // Paged because this reads what is already on the asset: the 4096 ceiling
             // slice_sheet applies when WRITING never bounded a sheet sliced by hand.
@@ -66,6 +68,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             // is on the ENCODED length - base64 emits 4 chars per 3 bytes, and bounding the
             // source instead let a measured 3.67 MB sheet through as a 4.89 MB payload.
             const int MaxInlinePayloadBytes = 4 * 1024 * 1024;
+            const int MaxInlineSide = 8000;
             string imageBase64 = null;
             string imageOmittedReason = null;
             if (cursor > 0)
@@ -96,21 +99,43 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                     }
                     else
                     {
+                        // Only bytes a client can decode as labelled: a PSD, TGA, GIF, BMP or
+                        // TIFF source used to go out as image/png, and a client that checks
+                        // the image fails the whole request rather than this one block.
                         string ext = Path.GetExtension(path).ToLowerInvariant();
-                        string mime = (ext == ".jpg" || ext == ".jpeg") ? "image/jpeg" : "image/png";
-                        string prefix = $"data:{mime};base64,";
-                        long size = new FileInfo(fullPath).Length;
-                        long encoded = 4L * ((size + 2) / 3) + prefix.Length;
-                        if (encoded > MaxInlinePayloadBytes)
+                        string mime = ext == ".png" ? "image/png"
+                                    : (ext == ".jpg" || ext == ".jpeg") ? "image/jpeg"
+                                    : null;
+                        if (mime == null)
                         {
                             imageOmittedReason =
-                                $"The {size}-byte source encodes to {encoded} base64 bytes, above the " +
-                                $"{MaxInlinePayloadBytes}-byte inline limit. Read the file directly if the " +
-                                "image itself is needed.";
+                                $"The source is a '{ext}' file; only PNG and JPEG sources are sent inline. " +
+                                "Read the file directly if the image itself is needed.";
+                        }
+                        // Image inputs commonly refuse anything over 8000 px on a side, and the
+                        // inline image is the source file, so this is checked on source pixels.
+                        else if (w > MaxInlineSide || h > MaxInlineSide)
+                        {
+                            imageOmittedReason =
+                                $"The {w}x{h} source is over {MaxInlineSide} px on a side, which image " +
+                                "inputs commonly refuse. Read the file directly if the image itself is needed.";
                         }
                         else
                         {
-                            imageBase64 = prefix + Convert.ToBase64String(File.ReadAllBytes(fullPath));
+                            string prefix = $"data:{mime};base64,";
+                            long size = new FileInfo(fullPath).Length;
+                            long encoded = 4L * ((size + 2) / 3) + prefix.Length;
+                            if (encoded > MaxInlinePayloadBytes)
+                            {
+                                imageOmittedReason =
+                                    $"The {size}-byte source encodes to {encoded} base64 bytes, above the " +
+                                    $"{MaxInlinePayloadBytes}-byte inline limit. Read the file directly if the " +
+                                    "image itself is needed.";
+                            }
+                            else
+                            {
+                                imageBase64 = prefix + Convert.ToBase64String(File.ReadAllBytes(fullPath));
+                            }
                         }
                     }
                 }
@@ -254,8 +279,11 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 return diagnostics.Fail("NOT_FOUND", $"Could not load texture at '{path}'.");
             }
 
-            int texW = texture.width;
-            int texH = texture.height;
+            // Sprite rects are in source pixels; texture.width/height is the imported size,
+            // which Max Size shrinks. Measured on 6000.6.4f1: a 4096x256 sheet at the default
+            // Max Size of 2048 imported at 2048x128, and an 8-column grid cut from that size
+            // gave 8 sprites over the left half of the sheet, each half a frame, as a success.
+            importer.GetSourceTextureWidthAndHeight(out int texW, out int texH);
 
             if (frameW <= 0) frameW = texW / cols;
             if (frameH <= 0) frameH = texH / rows;
