@@ -612,8 +612,8 @@ namespace MCPForUnity.Editor.Tools
                 if (includeImage && Application.isPlaying)
                 {
                     if (!Application.isBatchMode) EnsureGameView();
-                    // A Task, not a response: the capture waits for the end of the frame, and
-                    // CommandRegistry awaits a Task that a synchronous handler returns.
+                    // A Task<object>, not a response: the capture waits for the end of the frame,
+                    // and CommandRegistry awaits a Task<object> that a synchronous handler returns.
                     return CaptureCompositedScreenshotAsync(cmd, fileName, resolvedSuperSize, maxResolution);
                 }
 
