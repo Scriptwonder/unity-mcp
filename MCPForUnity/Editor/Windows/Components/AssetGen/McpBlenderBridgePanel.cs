@@ -34,11 +34,12 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         private Label statusLabel;
         private Label actionStatusLabel;
         private VisualElement statusDot;
-        private VisualElement notConfiguredBanner;
         private Button syncButton;
         private Button updatesButton;
         private Button importButton;
         private bool busy;
+        private bool probing;
+        private bool probeQueued;
 
         public VisualElement Root { get; }
 
@@ -48,6 +49,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             CacheUIElements();
             InitializeUI();
             RegisterCallbacks();
+            ProbeConnection();
         }
 
         /// <summary>Looks up the UXML elements by name.</summary>
@@ -66,7 +68,6 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             statusLabel = Root.Q<Label>("blender-status-label");
             actionStatusLabel = Root.Q<Label>("blender-action-status");
             statusDot = Root.Q<VisualElement>("blender-status-dot");
-            notConfiguredBanner = Root.Q<VisualElement>("blender-not-configured");
             syncButton = Root.Q<Button>("blender-sync-button");
             updatesButton = Root.Q<Button>("blender-updates-button");
             importButton = Root.Q<Button>("blender-import-button");
@@ -77,14 +78,17 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         {
             if (hostField != null) hostField.tooltip = "Host the BlenderMCP addon socket listens on (Blender's N panel > BlenderMCP).";
             if (portField != null) portField.tooltip = $"Addon socket port. Default {BlenderBridgePrefs.DefaultPort}.";
-            if (testButton != null) testButton.tooltip = "Send get_scene_info to the addon socket. Blender must be running with the addon connected.";
+            if (testButton != null)
+                testButton.tooltip = "Check the addon socket again now (the panel also checks it when it opens). Blender must be running with the addon connected.";
             if (forkField != null)
                 forkField.tooltip = "Folder of your blender-mcp checkout (the one containing addon.py). Enables Sync Addon and Check Updates.";
             if (addonsField != null)
                 addonsField.tooltip = "Blender's user addons folder. Leave empty to auto-detect the newest Blender version's scripts/addons.";
             if (syncButton != null) syncButton.tooltip = "Copy the checkout's addon.py into Blender's addons folder (backs up the old file).";
             if (updatesButton != null) updatesButton.tooltip = "git fetch the checkout and report how far behind its remotes it is.";
-            if (importButton != null) importButton.tooltip = "Export what is selected in Blender as GLB, import it and place it in the open scene.";
+            if (importButton != null)
+                importButton.tooltip = "Export the objects selected in Blender as GLB, import them under Assets/ and place them in the open scene. " +
+                                       "Needs Blender running with the BlenderMCP addon connected; with nothing selected in Blender it reports an error.";
 
             SyncFromPrefs();
         }
@@ -94,9 +98,10 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
         {
             hostField?.RegisterCallback<FocusOutEvent>(_ =>
             {
+                string before = BlenderBridgePrefs.Host;
                 BlenderBridgePrefs.Host = hostField.text;
                 hostField.SetValueWithoutNotify(BlenderBridgePrefs.Host);
-                SetConnectionStatus(null, "Unknown — press Test Connection");
+                if (BlenderBridgePrefs.Host != before) ProbeConnection();
             });
 
             // A TextField rather than IntegerField: the latter is editor-only (UnityEditor.UIElements) on the
@@ -104,9 +109,10 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             // control that resolves identically across the supported range.
             portField?.RegisterCallback<FocusOutEvent>(_ =>
             {
+                int before = BlenderBridgePrefs.Port;
                 if (int.TryParse(portField.text?.Trim(), out int port)) BlenderBridgePrefs.Port = port;
                 portField.SetValueWithoutNotify(BlenderBridgePrefs.Port.ToString());
-                SetConnectionStatus(null, "Unknown — press Test Connection");
+                if (BlenderBridgePrefs.Port != before) ProbeConnection();
             });
 
             forkField?.RegisterCallback<FocusOutEvent>(_ => SetForkPath(forkField.text));
@@ -117,7 +123,7 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             if (addonsSelectButton != null) addonsSelectButton.clicked += OnSelectAddonsDir;
             if (addonsClearButton != null) addonsClearButton.clicked += () => SetAddonsDir(string.Empty);
 
-            if (testButton != null) testButton.clicked += OnTestConnection;
+            if (testButton != null) testButton.clicked += ProbeConnection;
             if (syncButton != null) syncButton.clicked += async () =>
             {
                 await RunActionAsync(new JObject { ["action"] = "sync_addon" });
@@ -129,10 +135,14 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
                 await RunActionAsync(new JObject { ["action"] = "import_model", ["selection_only"] = true, ["format"] = "glb" });
         }
 
-        /// <summary>Re-reads prefs and the on-disk addon state. Never touches the socket.</summary>
-        public void Refresh() => SyncFromPrefs();
+        /// <summary>Re-reads prefs and the on-disk addon state, then re-checks the socket in the background.</summary>
+        public void Refresh()
+        {
+            SyncFromPrefs();
+            ProbeConnection();
+        }
 
-        /// <summary>Reflects prefs into the fields, banner, button states and addon status line.</summary>
+        /// <summary>Reflects prefs into the fields, button states and addon status line.</summary>
         private void SyncFromPrefs()
         {
             hostField?.SetValueWithoutNotify(BlenderBridgePrefs.Host);
@@ -140,12 +150,8 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             forkField?.SetValueWithoutNotify(BlenderBridgePrefs.ForkPath);
             addonsField?.SetValueWithoutNotify(BlenderBridgePrefs.AddonsDirOverride);
 
-            notConfiguredBanner?.EnableInClassList("visible", !BlenderBridgePrefs.IsForkConfigured);
             UpdateButtonStates();
             UpdateAddonStatus();
-            SetConnectionStatus(null, BlenderDetection.IsInstalled()
-                ? "Blender app detected — press Test Connection"
-                : "Blender app not found on this machine — press Test Connection if it runs elsewhere");
         }
 
         /// <summary>Validates and persists the checkout folder; rejects folders without addon.py.</summary>
@@ -193,29 +199,40 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             if (!string.IsNullOrEmpty(picked)) SetAddonsDir(picked);
         }
 
-        /// <summary>Shows the resolved addons folder and whether the installed addon matches the checkout.</summary>
+        /// <summary>
+        /// Shows the resolved addons folder, whether it exists, whether the BlenderMCP addon is installed
+        /// there and, with a checkout set, whether it matches the checkout. Green only when all hold.
+        /// </summary>
         private void UpdateAddonStatus()
         {
             if (addonsResolvedLabel == null) return;
 
             string dir = BlenderBridgePrefs.ResolveAddonsDir();
-            string text = string.IsNullOrEmpty(dir) ? "Addons folder: not found" : $"Addons folder: {dir}";
-            bool ok = !string.IsNullOrEmpty(dir);
+            bool configured = BlenderBridgePrefs.IsForkConfigured;
+            string notInstalled = configured ? "BlenderMCP addon: not installed (Sync Addon)" : "BlenderMCP addon: not installed";
+            string text;
+            bool ok = false;
 
-            if (BlenderBridgePrefs.IsForkConfigured && ok)
+            if (string.IsNullOrEmpty(dir)) text = $"Addons folder: not found · {notInstalled}";
+            else if (!Directory.Exists(dir)) text = $"Addons folder: {dir} (not created yet) · {notInstalled}";
+            else if (!File.Exists(BlenderBridgePrefs.InstalledAddonPath)) text = $"Addons folder: {dir} · {notInstalled}";
+            else
             {
-                string src = BlenderBridgePrefs.ForkAddonPath;
-                string dst = BlenderBridgePrefs.InstalledAddonPath;
-                try
+                text = $"Addons folder: {dir} · BlenderMCP addon: installed";
+                ok = true;
+                if (configured)
                 {
-                    if (!File.Exists(dst)) { text += " · addon not installed (Sync Addon)"; ok = false; }
-                    else if (BlenderBridgeTool.FileMd5(src) == BlenderBridgeTool.FileMd5(dst)) text += " · addon in sync ✓";
-                    else { text += " · addon differs from checkout (Sync Addon)"; ok = false; }
-                }
-                catch (Exception e)
-                {
-                    text += $" · could not compare addon files: {e.Message}";
-                    ok = false;
+                    try
+                    {
+                        if (BlenderBridgeTool.FileMd5(BlenderBridgePrefs.ForkAddonPath) == BlenderBridgeTool.FileMd5(BlenderBridgePrefs.InstalledAddonPath))
+                            text += " · in sync with checkout ✓";
+                        else { text += " · differs from checkout (Sync Addon)"; ok = false; }
+                    }
+                    catch (Exception e)
+                    {
+                        text += $" · could not compare addon files: {e.Message}";
+                        ok = false;
+                    }
                 }
             }
 
@@ -223,32 +240,49 @@ namespace MCPForUnity.Editor.Windows.Components.AssetGen
             addonsResolvedLabel.style.color = ok ? new Color(0.4f, 0.8f, 0.4f) : new Color(0.7f, 0.7f, 0.7f);
         }
 
-        /// <summary>Probes the addon socket off the editor thread and shows the result on the status dot.</summary>
-        private async void OnTestConnection()
+        /// <summary>
+        /// Probes the addon socket off the editor thread and shows the result on the status dot. Runs when
+        /// the panel opens, on Refresh, after a host/port change and from Test Connection. Only one probe
+        /// runs at a time; a request during a probe re-runs it afterwards, so the shown result always
+        /// belongs to the current endpoint. It never disables the action buttons.
+        /// </summary>
+        private async void ProbeConnection()
         {
-            if (busy) return;
-            BlenderEndpoint endpoint = BlenderBridgePrefs.Endpoint;
-            SetBusy(true);
-            SetConnectionStatus(null, $"Testing {endpoint}…");
+            if (probing)
+            {
+                probeQueued = true;
+                return;
+            }
+
+            probing = true;
             try
             {
-                var (ok, error) = await BlenderSocketClient.ProbeAsync(endpoint);
-                SetConnectionStatus(ok, ok ? $"Blender reachable at {endpoint}" : Truncate(error, 160));
-            }
-            catch (Exception e)
-            {
-                SetConnectionStatus(false, Truncate(e.Message, 160));
+                do
+                {
+                    probeQueued = false;
+                    BlenderEndpoint endpoint = BlenderBridgePrefs.Endpoint;
+                    SetConnectionStatus(null, $"Checking Blender at {endpoint}…");
+                    var (ok, error) = await BlenderSocketClient.ProbeAsync(endpoint);
+                    if (probeQueued) continue;
+                    if (ok) SetConnectionStatus(true, $"Blender reachable at {endpoint}");
+                    // The actionable socket error leads; detection can miss portable installs, so it is only a hint.
+                    else SetConnectionStatus(false, BlenderDetection.IsInstalled() ? error : error + " (Blender app not detected on this machine.)");
+                } while (probeQueued);
             }
             finally
             {
-                SetBusy(false);
+                probing = false;
             }
         }
 
         /// <summary>Colours the status dot: green for reachable, red for failed, amber for unknown.</summary>
         private void SetConnectionStatus(bool? ok, string text)
         {
-            if (statusLabel != null) statusLabel.text = text;
+            if (statusLabel != null)
+            {
+                statusLabel.text = Truncate(text, 240);
+                statusLabel.tooltip = text;
+            }
             if (statusDot == null) return;
             statusDot.RemoveFromClassList("valid");
             statusDot.RemoveFromClassList("invalid");
