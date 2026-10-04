@@ -1,6 +1,9 @@
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using MCPForUnity.Editor.Helpers;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace MCPForUnityTests.Editor.AssetGen
 {
@@ -35,6 +38,45 @@ namespace MCPForUnityTests.Editor.AssetGen
         public void CandidatePaths_AreNonEmpty()
         {
             CollectionAssert.IsNotEmpty(new List<string>(BlenderDetection.CandidatePaths()));
+        }
+
+        [Test]
+        public void CandidatePaths_IncludeTheDefaultSteamLibrary()
+        {
+            var paths = BlenderDetection.CandidatePaths().Select(p => p.Replace('\\', '/')).ToList();
+            string exe = Application.platform == RuntimePlatform.WindowsEditor ? "blender.exe"
+                : Application.platform == RuntimePlatform.OSXEditor ? "Blender.app/Contents/MacOS/Blender"
+                : "blender";
+            Assert.IsTrue(paths.Any(p => p.EndsWith("steamapps/common/Blender/" + exe)), string.Join("\n", paths));
+            if (Application.platform == RuntimePlatform.LinuxEditor)
+                Assert.IsTrue(paths.Any(p => p.EndsWith(".local/share/flatpak/exports/bin/org.blender.Blender")),
+                    "per-user flatpak export should be a candidate on Linux");
+        }
+
+        [Test]
+        public void HasStorePackage_MatchesTheBlenderPackageFamily()
+        {
+            const string root = "C:/Users/u/AppData/Local/Packages";
+            var dirs = new List<string> { root + "/Microsoft.WindowsCalculator_8wekyb3d8bbwe", root + "/BlenderFoundation.Blender_ppwjx1n5r4v9t" };
+            Assert.IsTrue(BlenderDetection.HasStorePackage(root, r => r == root ? dirs : new List<string>()));
+        }
+
+        [Test]
+        public void HasStorePackage_IgnoresOtherPackages()
+        {
+            const string root = "C:/Users/u/AppData/Local/Packages";
+            var dirs = new List<string> { root + "/BlenderFoundation.Other_x", root + "/Microsoft.Foo_8wekyb3d8bbwe", root + "/Blender_ppwjx1n5r4v9t" };
+            Assert.IsFalse(BlenderDetection.HasStorePackage(root, _ => dirs));
+        }
+
+        [Test]
+        public void HasStorePackage_ReturnsFalse_ForMissingOrUnreadableRoot()
+        {
+            Assert.IsFalse(BlenderDetection.HasStorePackage(null, _ => new List<string> { "BlenderFoundation.Blender_x" }));
+            Assert.IsFalse(BlenderDetection.HasStorePackage("", _ => new List<string> { "BlenderFoundation.Blender_x" }));
+            Assert.IsFalse(BlenderDetection.HasStorePackage("C:/missing/Packages", _ => throw new DirectoryNotFoundException()));
+            Assert.IsFalse(BlenderDetection.HasStorePackage("C:/Packages", null));
+            Assert.IsFalse(BlenderDetection.HasStorePackage("C:/Packages", _ => null));
         }
 
         [Test]
