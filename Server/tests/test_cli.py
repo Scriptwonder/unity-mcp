@@ -997,6 +997,21 @@ class TestGlobalOptions:
                 result = runner.invoke(cli, ["--timeout", "60", "status"])
                 assert result.exit_code == 0
 
+    def test_verbose_prints_request_and_response(self, runner, mock_unity_response):
+        """Test -v prints the command sent to Unity and the raw response to stderr."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = json.dumps(mock_unity_response)
+        mock_response.json.return_value = mock_unity_response
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
+            result = runner.invoke(cli, ["-v", "scene", "active"])
+        assert result.exit_code == 0
+        assert '{"type": "manage_scene", "params": {"action": "get_active"}}' in result.stderr
+        assert '"message": "Operation successful"' in result.stderr
+
 
 # =============================================================================
 # Error Handling Tests

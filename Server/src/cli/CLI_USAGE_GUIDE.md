@@ -150,7 +150,7 @@ Global options come **BEFORE** the command group:
 | `--format` | `-f` | Output format: `text`, `json`, `table` | `text` |
 | `--timeout` | `-t` | Command timeout in seconds | `30` |
 | `--instance` | `-i` | Target Unity instance (hash or Name@hash) | auto |
-| `--verbose` | `-v` | Enable verbose output | `false` |
+| `--verbose` | `-v` | Print each command sent to Unity and its raw response to stderr | `false` |
 
 **✅ Correct:**
 ```bash
@@ -1000,7 +1000,7 @@ unity-mcp [GLOBAL_OPTIONS] command subcommand [ARGS] [OPTIONS]
    unity-mcp gameobject modify --help
    ```
 
-2. **Use verbose mode** to see what's happening:
+2. **Use verbose mode** to see each command sent to Unity and its raw response (on stderr):
 
    ```bash
    unity-mcp -v scene hierarchy
