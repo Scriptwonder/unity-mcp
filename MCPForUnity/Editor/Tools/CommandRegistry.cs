@@ -236,6 +236,11 @@ namespace MCPForUnity.Editor.Tools
         }
 
         /// <summary>
+        /// True when a tool or resource handler is registered under this name.
+        /// </summary>
+        public static bool HasHandler(string commandName) => _handlers.ContainsKey(commandName);
+
+        /// <summary>
         /// Get a command handler by name
         /// </summary>
         private static HandlerInfo GetHandlerInfo(string commandName)

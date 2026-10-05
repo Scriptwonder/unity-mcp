@@ -66,6 +66,10 @@ jobs:
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
         if: always()
+        # fail_ci_if_error: false does not cover a failed download: v4 crashes on the https
+        # error before it reads that input. This job gates both release pipelines, and a
+        # Codecov outage must not stop a release.
+        continue-on-error: true
         with:
           files: ./Server/coverage.xml
           flags: python
