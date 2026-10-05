@@ -44,7 +44,7 @@ def _sprite_image_result(result: dict[str, Any], image_base64: str) -> ToolResul
         "slice_sheet: apply grid slicing to a sprite sheet. "
         "setup_clips: create AnimationClips from sliced sprites. "
         "setup_controller: build AnimatorController with smart complexity (1D blend tree for locomotion, "
-        "trigger states for combat, simple state for single animations). "
+        "combat trigger states that fire from any state, simple state for single animations). "
         "full_setup: one command — slice → clips → controller."
     ),
     annotations=ToolAnnotations(

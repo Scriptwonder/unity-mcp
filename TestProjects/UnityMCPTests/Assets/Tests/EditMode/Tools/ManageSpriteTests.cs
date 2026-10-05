@@ -1240,6 +1240,41 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
+        public void SetupController_TriggersFireFromAnyStateWithoutBlending_AndAnUnknownNameWarns()
+        {
+            // Trigger transitions used to come only from states that already existed, so
+            // 'attack' could not interrupt 'hurt', which is built after it.
+            var result = SetupController(BuildClips("anystate", "idle", "walk", "attack", "hurt", "taunt"));
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+
+            var sm = AssetDatabase.LoadAssetAtPath<AnimatorController>($"{TempRoot}/Hero.controller").layers[0].stateMachine;
+            foreach (var (state, trigger) in new[] { ("attack", "Attack"), ("hurt", "Hurt") })
+                Assert.IsTrue(sm.anyStateTransitions.Any(t =>
+                        t.destinationState != null && t.destinationState.name == state &&
+                        t.conditions.Any(c => c.mode == AnimatorConditionMode.If && c.parameter == trigger)),
+                    $"'{state}' needs an Any State transition on '{trigger}'; without one, states built " +
+                    "after it cannot be interrupted by it ('attack' could not interrupt 'hurt')");
+
+            var blended = sm.states
+                .SelectMany(s => s.state.transitions.Select(t => (source: s.state.name, t)))
+                .Concat(sm.anyStateTransitions.Select(t => (source: "Any State", t)))
+                .Where(x => x.t.duration != 0f)
+                .Select(x => $"{x.source} -> {x.t.destinationState?.name} ({x.t.duration})")
+                .ToArray();
+            Assert.That(blended, Is.Empty,
+                "sprite keys cannot blend, so any blend time only delays the frame change");
+
+            var unreachable = result["diagnostics"]
+                .Where(d => d.Value<string>("code") == "STATE_UNREACHABLE")
+                .Select(d => d.Value<string>("message"))
+                .ToArray();
+            Assert.AreEqual(1, unreachable.Length,
+                "'taunt' matches no action word, so no transition leads to its state and the response " +
+                "must say so; diagnostics were " + result["diagnostics"]);
+            Assert.That(unreachable[0], Does.Contain("'taunt'"), "the warning must name the clip it is about");
+        }
+
+        [Test]
         public void SetupController_WalkAndRun_BuildsASpeedDrivenBlendTree()
         {
             var result = SetupController(BuildClips("blend", "idle", "walk", "run"));

@@ -12,7 +12,7 @@ description: "2D sprite animation tool. get_info: read sprite import settings an
 
 ## Description
 
-2D sprite animation tool. get_info: read sprite import settings and return the sheet as an image block for vision analysis; the slice list is paged (page_size / cursor). slice_sheet: apply grid slicing to a sprite sheet. setup_clips: create AnimationClips from sliced sprites. setup_controller: build AnimatorController with smart complexity (1D blend tree for locomotion, trigger states for combat, simple state for single animations). full_setup: one command — slice → clips → controller.
+2D sprite animation tool. get_info: read sprite import settings and return the sheet as an image block for vision analysis; the slice list is paged (page_size / cursor). slice_sheet: apply grid slicing to a sprite sheet. setup_clips: create AnimationClips from sliced sprites. setup_controller: build AnimatorController with smart complexity (1D blend tree for locomotion, combat trigger states that fire from any state, simple state for single animations). full_setup: one command — slice → clips → controller.
 
 ## Parameters
 
@@ -84,9 +84,14 @@ only, since it is the same picture on every one.
 ```
 
 Clip names decide the controller's shape: `idle` becomes the default state, `walk` and
-`run` collapse into a `Speed`-driven 1D blend tree, and `attack` gets an `Attack` trigger.
+`run` collapse into a `Speed`-driven 1D blend tree, and `attack` gets an `Attack` trigger
+that fires from any state. Every transition is instant, since sprite frames cannot blend.
 Looping follows from the same names — locomotion and idle loop, a one-shot does not — and
 an explicit `"loop"` on a clip overrides that.
+
+A clip whose name holds no action word (such as idle, walk, run, jump, attack or hurt) gets
+a state that no transition leads to. Unless it is the default state, it plays only from a
+script, and the response warns `STATE_UNREACHABLE`.
 
 ### Slicing on its own
 
