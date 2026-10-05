@@ -471,6 +471,16 @@ unity-mcp texture delete "Assets/Textures/Old.png" [--force]
 # Patterns: checkerboard, stripes, stripes_h, stripes_v, stripes_diag, dots, grid, brick
 ```
 
+### Sprite Animation
+
+```bash
+unity-mcp sprite info "Assets/Sprites/Hero.png"                      # Size, import settings, slices
+unity-mcp sprite slice "Assets/Sprites/Hero.png" --cols 6 --rows 4   # Or --frame-width/--frame-height
+unity-mcp sprite setup-clips "Assets/Sprites/Hero.png" --clips '[{"name": "walk", "start_frame": 0, "end_frame": 5}]'
+unity-mcp sprite setup-controller "Assets/Animators/Hero.controller" --clips '[{"name": "walk", "path": "Assets/Sprites/walk.anim"}]'
+unity-mcp sprite full-setup "Assets/Sprites/Coin.png" --cols 8 --animation-name spin
+```
+
 ### Build Operations
 
 ```bash
@@ -576,6 +586,7 @@ unity-mcp raw manage_packages '{"action": "list_packages"}'
 | `scene` | `active`, `build-settings`, `close`, `create`, `hierarchy`, `load`, `loaded`, `move-to`, `open-additive`, `save`, `set-active`, `validate` |
 | `script` | `create`, `delete`, `edit`, `read`, `validate` |
 | `shader` | `create`, `delete`, `read`, `update` |
+| `sprite` | `full-setup`, `info`, `setup-clips`, `setup-controller`, `slice` |
 | `texture` | `create`, `delete`, `modify`, `set-import-settings`, `sprite` |
 | `tool` | `list` |
 | `ui` | `create-button`, `create-canvas`, `create-image`, `create-text` |

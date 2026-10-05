@@ -64,6 +64,7 @@ The CLI mirrors the MCP tool catalog. Each command group wraps one or more `mana
 | `mcp-for-unity physics` | 3D + 2D physics, joints, queries | [`manage_physics`](/reference/tools/core/manage_physics) |
 | `mcp-for-unity audio` | Audio operations | (subset of asset) |
 | `mcp-for-unity animation` | Animator + AnimationClip | [`manage_animation`](/reference/tools/animation/manage_animation) |
+| `mcp-for-unity sprite` | Sprite sheet slicing → clips → Animator controller | [`manage_sprite`](/reference/tools/animation/manage_sprite) |
 | `mcp-for-unity ui` | UI Toolkit — UXML/USS/UIDocument | [`manage_ui`](/reference/tools/ui/manage_ui) |
 | `mcp-for-unity build` | Player builds across platforms | [`manage_build`](/reference/tools/core/manage_build) |
 | `mcp-for-unity editor` | Editor state, play mode, undo/redo | [`manage_editor`](/reference/tools/core/manage_editor) |
