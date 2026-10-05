@@ -606,11 +606,16 @@ unity-mcp audio volume "MusicPlayer" 0.5
 ### Animation Commands
 
 ```bash
-# Control Animator (target must have Animator component)
-unity-mcp animation play "Character" "Walk"
-unity-mcp animation set-parameter "Character" "Speed" 1.5 --type float
-unity-mcp animation set-parameter "Character" "IsRunning" true --type bool
-unity-mcp animation set-parameter "Character" "Jump" "" --type trigger
+# Control Animator (target or one of its children must have an Animator component)
+unity-mcp animation animator play "Character" "Walk"
+unity-mcp animation animator set-parameter "Character" "Speed" 1.5 --type float
+unity-mcp animation animator set-parameter "Character" "IsRunning" true --type bool
+unity-mcp animation animator set-parameter "Character" "Jump" "" --type trigger
+
+# Clips and controllers
+unity-mcp animation clip create "Assets/Animations/Bounce.anim" --length 2.0 --loop
+unity-mcp animation clip info "Assets/Animations/Walk.anim"
+unity-mcp animation controller info "Assets/Animations/Player.controller"
 ```
 
 ### Camera Commands
@@ -813,6 +818,62 @@ unity-mcp code read "Assets/Scripts/Player.cs" --start-line 10 --line-count 20
 unity-mcp code search "class.*Player" "Assets/Scripts/Player.cs"
 unity-mcp code search "TODO|FIXME" "Assets/Scripts/Utils.cs"
 unity-mcp code search "void Update" "Assets/Scripts/Game.cs" --max-results 20
+```
+
+### Build Commands
+
+```bash
+unity-mcp build platform                       # Read the active platform
+unity-mcp build platform android               # Switch platform
+unity-mcp build scenes                         # Read the build scene list
+unity-mcp build run --target windows64 --development
+unity-mcp build batch --targets windows64,linux64,webgl
+unity-mcp build status                         # Last build report
+unity-mcp build settings product_name --value "My Game"
+```
+
+### Physics Commands
+
+```bash
+unity-mcp physics ping                         # Physics system status
+unity-mcp physics get-settings
+unity-mcp physics raycast --origin "0,5,0" --direction "0,-1,0" --max-distance 10
+unity-mcp physics overlap --shape sphere --position "0,0,0" --size 2
+unity-mcp physics get-rigidbody "Player"
+unity-mcp physics simulate --steps 10          # Step physics in edit mode
+unity-mcp physics validate                     # Check the scene for common mistakes
+```
+
+### Profiler Commands
+
+```bash
+unity-mcp profiler start                       # Optionally --log-file to record a .raw
+unity-mcp profiler status
+unity-mcp profiler frame-timing
+unity-mcp profiler get-counters --category Render
+unity-mcp profiler memory-snapshot             # Requires com.unity.memoryprofiler
+unity-mcp profiler stop
+```
+
+### Reflection and Docs Commands
+
+```bash
+unity-mcp reflect search NavMesh               # Find Unity types by name
+unity-mcp reflect type NavMeshAgent            # Member summary
+unity-mcp reflect member Physics Raycast       # One member in detail
+unity-mcp docs get Physics Raycast             # Unity documentation page
+```
+
+### Asset Generation and Blender Commands
+
+```bash
+unity-mcp asset-gen list-models --kind image
+unity-mcp asset-gen generate-image --provider fal --prompt "a stone texture"
+unity-mcp asset-gen generate-model --provider tripo --mode text --prompt "a red chair"
+unity-mcp asset-gen status --job-id abc123
+unity-mcp asset-gen import-model-file --source-path "C:/exports/house.fbx" --output-folder Assets/Models
+unity-mcp blender status                       # Is Blender reachable?
+unity-mcp blender import-model --selection-only --target-size 2
 ```
 
 ### Raw Commands
