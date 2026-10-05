@@ -154,6 +154,10 @@
       "description": "Work with Unity shaders"
     },
     {
+      "name": "manage_sprite",
+      "description": "Slice 2D sprite sheets and build AnimationClips and an AnimatorController from the frames"
+    },
+    {
       "name": "manage_texture",
       "description": "Create and modify textures with patterns, gradients, and noise"
     },

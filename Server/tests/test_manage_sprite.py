@@ -1,20 +1,23 @@
-"""Tests for the manage_sprite tool.
+"""Tests for the manage_sprite tool and its CLI commands.
 
-These cover the Python side only: the action list and the argument checks that run
-before anything is sent to Unity. The behaviour of the slicing, clip and controller
-builders is covered by the EditMode tests in TestProjects, because it only means
-anything against a real AssetDatabase.
+These cover the Python side only: the action list, the argument checks that run
+before anything is sent to Unity, and the parameters each CLI command sends. The
+behaviour of the slicing, clip and controller builders is covered by the EditMode
+tests in TestProjects, because it only means anything against a real AssetDatabase.
 """
 import asyncio
 import inspect
 import json
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
+from click.testing import CliRunner
 from fastmcp.server.server import ToolResult
 from mcp.types import ImageContent, TextContent
 
+from cli.commands.sprite import sprite
+from cli.utils.config import CLIConfig
 from services.tools.manage_sprite import VALID_ACTIONS, manage_sprite
 
 
@@ -260,3 +263,110 @@ class TestParameterForwarding:
         # and replaced the caller's value; membership alone stayed green for it.
         changed = {n: (sample[n], forwarded[n]) for n in optional if forwarded[n] != sample[n]}
         assert not changed, f"forwarded under a different value than the caller sent: {changed}"
+
+
+# =============================================================================
+# CLI commands
+# =============================================================================
+
+@pytest.fixture
+def run_cli():
+    """Invoke a sprite CLI command against a mocked Unity reply.
+
+    Returns (result, mock_run); the format is json so a test can read the output back.
+    """
+    config = CLIConfig(host="127.0.0.1", port=8080, timeout=30, format="json", unity_instance=None)
+
+    def _invoke(args, reply=None):
+        with patch("cli.commands.sprite.get_config", return_value=config):
+            with patch("cli.commands.sprite.run_command", return_value=reply or {"success": True}) as mock_run:
+                return CliRunner().invoke(sprite, args), mock_run
+    return _invoke
+
+
+class TestSpriteCLICommands:
+    @pytest.mark.parametrize("args, expected", [
+        (["info", "Assets/hero.png"],
+         {"action": "get_info", "path": "Assets/hero.png"}),
+        (["info", "Assets/atlas.png", "--page-size", "100", "--cursor", "200"],
+         {"action": "get_info", "path": "Assets/atlas.png", "page_size": 100, "cursor": 200}),
+        (["slice", "Assets/hero.png", "--cols", "4"],
+         {"action": "slice_sheet", "path": "Assets/hero.png", "cols": 4}),
+        (["slice", "Assets/hero.png", "--frame-width", "32", "--frame-height", "16", "--base-name", "hero"],
+         {"action": "slice_sheet", "path": "Assets/hero.png", "frame_width": 32, "frame_height": 16,
+          "base_name": "hero"}),
+        (["setup-clips", "Assets/hero.png", "--clips", '[{"name": "walk", "start_frame": 0, "end_frame": 5}]'],
+         {"action": "setup_clips", "path": "Assets/hero.png",
+          "clips": [{"name": "walk", "start_frame": 0, "end_frame": 5}]}),
+        (["setup-clips", "Assets/hero.png", "--clips", "[]", "--output-dir", "Assets/Anim", "--overwrite"],
+         {"action": "setup_clips", "path": "Assets/hero.png", "clips": [], "output_dir": "Assets/Anim",
+          "overwrite": True}),
+        (["setup-controller", "Assets/Hero.controller", "--clips", '[{"name": "idle", "path": "Assets/idle.anim"}]'],
+         {"action": "setup_controller", "controller_path": "Assets/Hero.controller",
+          "clips": [{"name": "idle", "path": "Assets/idle.anim"}]}),
+        (["full-setup", "Assets/coin.png", "--cols", "8", "--animation-name", "spin"],
+         {"action": "full_setup", "path": "Assets/coin.png", "cols": 8, "animation_name": "spin"}),
+    ])
+    def test_each_command_sends_its_action_and_only_the_options_given(self, run_cli, args, expected):
+        result, mock_run = run_cli(args)
+
+        assert result.exit_code == 0, result.output
+        mock_run.assert_called_once()
+        assert mock_run.call_args.args[0] == "manage_sprite"
+        assert mock_run.call_args.args[1] == expected
+
+    def test_every_tool_parameter_can_be_sent_from_the_cli(self, run_cli):
+        """A parameter added to the MCP tool and not to the CLI is a CLI that cannot do it."""
+        sent = set()
+        for args in (
+            ["info", "Assets/a.png", "--page-size", "1", "--cursor", "1"],
+            ["setup-controller", "Assets/a.controller", "--clips", "[]", "--overwrite"],
+            ["full-setup", "Assets/a.png", "--cols", "1", "--rows", "1", "--frame-width", "1",
+             "--frame-height", "1", "--base-name", "b", "--clips", "[]", "--animation-name", "walk",
+             "--output-dir", "Assets/out", "--controller-path", "Assets/a.controller", "--overwrite",
+             "--add-to-scene", "--scene-target", "Hero"],
+        ):
+            result, mock_run = run_cli(args)
+            assert result.exit_code == 0, result.output
+            sent |= set(mock_run.call_args.args[1])
+
+        fn = getattr(manage_sprite, "fn", manage_sprite)
+        assert sent == set(inspect.signature(fn).parameters) - {"ctx"}
+
+    # /api/command hands back the reply as Unity sent it: TransportCommandDispatcher wraps
+    # the tool's own object in {"status", "result"}, and nothing on the CLI path unwraps it.
+    def test_info_leaves_the_image_out_and_says_where_it_is(self, run_cli):
+        reply = {"status": "success", "result": {
+            "success": True, "path": "Assets/hero.png", "width": 128, "height": 64,
+            "image_base64": "data:image/png;base64,c3ByaXRl", "image_omitted_reason": None}}
+
+        result, _ = run_cli(["info", "Assets/hero.png"], reply=reply)
+
+        assert result.exit_code == 0, result.output
+        assert "c3ByaXRl" not in result.output
+        shown = json.loads(result.output)["result"]
+        assert shown["image_base64"] is None
+        assert "Assets/hero.png" in shown["image_omitted_reason"]
+        assert shown["width"] == 128 and shown["height"] == 64
+
+    def test_info_keeps_the_reason_unity_gave_for_sending_no_image(self, run_cli):
+        reply = {"status": "success", "result": {
+            "success": True, "path": "Assets/hero.tga", "image_base64": None,
+            "image_omitted_reason": "The source is a '.tga' file; only PNG and JPEG sources are sent inline."}}
+        expected = json.loads(json.dumps(reply))
+
+        result, _ = run_cli(["info", "Assets/hero.tga"], reply=reply)
+
+        assert json.loads(result.output) == expected
+
+    @pytest.mark.parametrize("clips", ["{not json", '{"name": "walk"}'])
+    def test_clips_that_are_not_a_json_list_stop_before_unity(self, run_cli, clips):
+        result, mock_run = run_cli(["setup-clips", "Assets/hero.png", "--clips", clips])
+
+        assert result.exit_code != 0
+        mock_run.assert_not_called()
+
+    def test_sprite_group_is_registered_on_the_root_cli(self):
+        from cli.main import cli
+
+        assert "sprite" in cli.commands
