@@ -184,6 +184,9 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 filterMode       = importer.filterMode;
             }
 
+            /// <summary>The frame names the sheet had before this call, in sheet order.</summary>
+            public string[] FrameNames => spritesheet.Select(s => s.name).ToArray();
+
             public void Restore(TextureImporter importer)
             {
                 bool changed = false;
@@ -378,6 +381,24 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                     $"Unity accepted a {cols}x{rows} grid but generated {generated} of {totalFrames} sprites for '{path}'.",
                     "Check the Unity console for the import error",
                     "Confirm the texture's import settings allow sprite generation");
+            }
+
+            // A sprite's ID follows its name, so a re-slice keeps only the frames whose names the
+            // new grid reuses. Measured on 2021.3.45f2: a clip of all eight frames of a 4x2 sheet
+            // had six of them missing after a 2x1 re-slice, and the response said nothing;
+            // slicing 4x2 again brought all eight back. After the generation check, because a
+            // refusal restores the old frames and the warning would then be false.
+            string[] before = snapshot.FrameNames;
+            string[] removed = before.Except(metas.Select(m => m.name)).ToArray();
+            if (removed.Length > 0)
+            {
+                const int MaxNamesListed = 10;
+                string names = string.Join(", ", removed.Take(MaxNamesListed))
+                             + (removed.Length > MaxNamesListed ? $" and {removed.Length - MaxNamesListed} more" : "");
+                diagnostics.AddWarning("SLICE_REMOVED_FRAMES",
+                    $"This slice removed {removed.Length} of the {before.Length} frames the sheet had ({names}); animation clips that used them lose those frames.",
+                    "If the frames are still needed, slice again with the previous grid and base_name; clips pick them up again by name",
+                    "Otherwise rebuild the clips that used them: setup_clips or full_setup, with overwrite=true");
             }
 
             return new

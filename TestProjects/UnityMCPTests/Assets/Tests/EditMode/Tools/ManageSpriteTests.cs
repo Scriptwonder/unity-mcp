@@ -810,7 +810,7 @@ namespace MCPForUnityTests.Editor.Tools
             Slice(path, 4, 2);
             Assert.AreEqual(8, SpritesOf(path).Length);
 
-            Slice(path, 2, 1);
+            var smaller = Slice(path, 2, 1);
             var after = SpritesOf(path).Select(s => s.name).ToArray();
 #pragma warning disable CS0618 // same API the tool writes through
             int configured = ((TextureImporter)AssetImporter.GetAtPath(path)).spritesheet.Length;
@@ -818,6 +818,11 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.AreEqual(2, after.Length,
                 $"stale frames must not survive a reslice; importer holds {configured}, " +
                 "project holds: " + string.Join(", ", after));
+            // A clip that played reslice_2..7 loses those frames, so the slice has to name them.
+            Assert.That(smaller["diagnostics"].ToString(),
+                Does.Contain("SLICE_REMOVED_FRAMES").And.Contain("reslice_7").And.Not.Contain("reslice_1"));
+            Assert.That(Slice(path, 2, 1)["diagnostics"].ToString(), Does.Not.Contain("SLICE_REMOVED_FRAMES"),
+                "the same grid again removes nothing");
         }
 
         // =====================================================================
