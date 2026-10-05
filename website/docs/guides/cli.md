@@ -476,6 +476,7 @@ unity-mcp texture delete "Assets/Textures/Old.png" [--force]
 ```bash
 unity-mcp sprite info "Assets/Sprites/Hero.png"                      # Size, import settings, slices
 unity-mcp sprite slice "Assets/Sprites/Hero.png" --cols 6 --rows 4   # Or --frame-width/--frame-height
+unity-mcp sprite slice "Assets/Sprites/Painted.png" --cols 8 --filter-mode bilinear   # Default point, for pixel art
 unity-mcp sprite setup-clips "Assets/Sprites/Hero.png" --clips '[{"name": "walk", "start_frame": 0, "end_frame": 5}]'
 unity-mcp sprite setup-controller "Assets/Animators/Hero.controller" --clips '[{"name": "walk", "path": "Assets/Sprites/walk.anim"}]'
 unity-mcp sprite full-setup "Assets/Sprites/Coin.png" --cols 8 --animation-name spin

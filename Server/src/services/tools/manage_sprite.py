@@ -79,6 +79,11 @@ async def manage_sprite(
         str | None,
         "Base name for sliced sprite frames (default: texture filename).",
     ] = None,
+    filter_mode: Annotated[
+        Literal["point", "bilinear", "trilinear"] | None,
+        "slice_sheet and full_setup: texture filter the sliced sheet is imported with. "
+        "Default: point, which keeps pixel art sharp; bilinear or trilinear suits high-resolution art.",
+    ] = None,
     clips: Annotated[
         list[dict[str, Any]] | None,
         "Clip definitions: [{name, start_frame, end_frame, fps (default 12), loop (auto-detect if omitted)}]. "
@@ -151,7 +156,7 @@ async def manage_sprite(
     optional = {
         "path": path, "cols": cols, "rows": rows,
         "frame_width": frame_width, "frame_height": frame_height,
-        "base_name": base_name, "clips": clips,
+        "base_name": base_name, "filter_mode": filter_mode, "clips": clips,
         "animation_name": animation_name, "output_dir": output_dir,
         "controller_path": controller_path, "page_size": page_size,
         "cursor": cursor, "scene_target": scene_target,

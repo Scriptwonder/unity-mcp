@@ -816,6 +816,9 @@ unity-mcp sprite info "Assets/Sprites/Hero.png"
 # Slice into a grid: --cols/--rows, or --frame-width/--frame-height
 unity-mcp sprite slice "Assets/Sprites/Hero.png" --cols 6 --rows 4
 
+# High-resolution art: --filter-mode bilinear or trilinear (the default, point, suits pixel art)
+unity-mcp sprite slice "Assets/Sprites/Painted.png" --cols 8 --filter-mode bilinear
+
 # Clips from the slices, then a controller from the clips
 unity-mcp sprite setup-clips "Assets/Sprites/Hero.png" --clips '[{"name": "walk", "start_frame": 0, "end_frame": 5}]'
 unity-mcp sprite setup-controller "Assets/Animators/Hero.controller" --clips '[{"name": "walk", "path": "Assets/Sprites/walk.anim"}]'

@@ -237,6 +237,24 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             if (!rowsGiven && frameH <= 0)
                 rows = 1;
 
+            // Point unless asked: it keeps pixel art sharp, and it was the only filter slice_sheet
+            // set before this was a parameter. A switch rather than Enum.TryParse, which would
+            // also take "7" or "Bilinear,Trilinear", neither of them a filter.
+            FilterMode filterMode = FilterMode.Point;
+            JToken filterToken = @params["filter_mode"];
+            if (filterToken != null && filterToken.Type != JTokenType.Null)
+            {
+                switch (filterToken.ToString().ToLowerInvariant())
+                {
+                    case "point":     filterMode = FilterMode.Point; break;
+                    case "bilinear":  filterMode = FilterMode.Bilinear; break;
+                    case "trilinear": filterMode = FilterMode.Trilinear; break;
+                    default:
+                        return diagnostics.Fail("BAD_PARAM",
+                            $"'filter_mode' must be point, bilinear or trilinear; got '{filterToken}'.");
+                }
+            }
+
             // Measure only once imported as a sprite sheet: a Default-type import rescales a
             // non-power-of-two sheet (96px to 128px) and the trailing frames then land outside
             // the real texture, where Unity drops them silently - measured on 6000.4.4f1, a
@@ -260,7 +278,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                     EditorUtility.SetDirty(importer);
                     importer.SaveAndReimport();
                 }
-                return SliceConverted(@params, diagnostics, path, importer, snapshot, cols, rows, frameW, frameH);
+                return SliceConverted(@params, diagnostics, path, importer, snapshot, cols, rows, frameW, frameH, filterMode);
             }
             catch
             {
@@ -273,7 +291,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
         private static object SliceConverted(JObject @params, SpriteDiagnosticBuilder diagnostics, string path,
                                              TextureImporter importer, ImporterSnapshot snapshot,
-                                             int cols, int rows, int frameW, int frameH)
+                                             int cols, int rows, int frameW, int frameH, FilterMode filterMode)
         {
             var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
             if (texture == null)
@@ -360,7 +378,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
             importer.spriteImportMode = SpriteImportMode.Multiple;
             importer.spritesheet      = metas;
-            importer.filterMode       = FilterMode.Point; // pixel-perfect default
+            importer.filterMode       = filterMode;
             // Assigning spritesheet on an already-Multiple importer does not mark it dirty, so
             // SaveAndReimport would restore the old grid - measured, a second slice did nothing.
             EditorUtility.SetDirty(importer);

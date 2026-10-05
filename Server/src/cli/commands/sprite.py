@@ -58,9 +58,11 @@ def info(path: str, page_size: Optional[int], cursor: Optional[int]):
 @click.option("--frame-width", type=int, default=None, help="Frame width in pixels; alternative to --cols.")
 @click.option("--frame-height", type=int, default=None, help="Frame height in pixels; alternative to --rows.")
 @click.option("--base-name", default=None, help="Base name for the frames (default: texture file name).")
+@click.option("--filter-mode", type=click.Choice(["point", "bilinear", "trilinear"]), default=None,
+              help="Texture filter for the sheet (default point, for pixel art).")
 @handle_unity_errors
 def slice_sheet(path: str, cols: Optional[int], rows: Optional[int], frame_width: Optional[int],
-                frame_height: Optional[int], base_name: Optional[str]):
+                frame_height: Optional[int], base_name: Optional[str], filter_mode: Optional[str]):
     """Slice a sprite sheet into a grid of frames.
 
     \b
@@ -71,7 +73,7 @@ def slice_sheet(path: str, cols: Optional[int], rows: Optional[int], frame_width
     config = get_config()
     result = run_command("manage_sprite", _params(
         "slice_sheet", path=path, cols=cols, rows=rows, frame_width=frame_width,
-        frame_height=frame_height, base_name=base_name), config)
+        frame_height=frame_height, base_name=base_name, filter_mode=filter_mode), config)
     click.echo(format_output(result, config.format))
 
 
@@ -125,6 +127,8 @@ def setup_controller(controller_path: str, clips: str, overwrite: bool):
 @click.option("--frame-width", type=int, default=None, help="Frame width in pixels; alternative to --cols.")
 @click.option("--frame-height", type=int, default=None, help="Frame height in pixels; alternative to --rows.")
 @click.option("--base-name", default=None, help="Base name for the frames (default: texture file name).")
+@click.option("--filter-mode", type=click.Choice(["point", "bilinear", "trilinear"]), default=None,
+              help="Texture filter for the sheet (default point, for pixel art).")
 @click.option("--clips", "clips", default=None,
               help='JSON list: [{"name","start_frame","end_frame","fps","loop"}].')
 @click.option("--animation-name", default=None, help="Name of the single clip made when --clips is not given.")
@@ -137,7 +141,7 @@ def setup_controller(controller_path: str, clips: str, overwrite: bool):
 def full_setup(path: str, cols: Optional[int], rows: Optional[int], frame_width: Optional[int],
                frame_height: Optional[int], base_name: Optional[str], clips: Optional[str],
                animation_name: Optional[str], output_dir: Optional[str], controller_path: Optional[str],
-               overwrite: bool, add_to_scene: bool, scene_target: Optional[str]):
+               overwrite: bool, add_to_scene: bool, scene_target: Optional[str], filter_mode: Optional[str]):
     """Slice a sheet, then build its clips and controller in one step.
 
     \b
@@ -150,7 +154,7 @@ def full_setup(path: str, cols: Optional[int], rows: Optional[int], frame_width:
     config = get_config()
     result = run_command("manage_sprite", _params(
         "full_setup", path=path, cols=cols, rows=rows, frame_width=frame_width,
-        frame_height=frame_height, base_name=base_name, clips=_clips(clips),
+        frame_height=frame_height, base_name=base_name, filter_mode=filter_mode, clips=_clips(clips),
         animation_name=animation_name, output_dir=output_dir, controller_path=controller_path,
         overwrite=overwrite or None, add_to_scene=add_to_scene or None,
         scene_target=scene_target), config)

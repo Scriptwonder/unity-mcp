@@ -25,6 +25,7 @@ description: "2D sprite animation tool. get_info: read sprite import settings an
 | `frame_width` | `int \| None` | — | Frame width in pixels. Alternative to cols. |
 | `frame_height` | `int \| None` | — | Frame height in pixels. Alternative to rows. |
 | `base_name` | `str \| None` | — | Base name for sliced sprite frames (default: texture filename). |
+| `filter_mode` | `Literal['point', 'bilinear', 'trilinear'] \| None` | — | slice_sheet and full_setup: texture filter the sliced sheet is imported with. Default: point, which keeps pixel art sharp; bilinear or trilinear suits high-resolution art. |
 | `clips` | `list[dict[str, Any]] \| None` | — | Clip definitions: [{name, start_frame, end_frame, fps (default 12), loop (auto-detect if omitted)}]. For setup_controller: [{name, path}] where path is the .anim asset path. |
 | `animation_name` | `str \| None` | — | Animation name for full_setup when clips are not specified (all frames = one clip). |
 | `output_dir` | `str \| None` | — | Output directory for .anim and .controller assets (default: same folder as sprite). |
@@ -102,6 +103,8 @@ script, and the response warns `STATE_UNREACHABLE`.
 `frame_width`/`frame_height` are the alternative to `cols`/`rows`; supply either pair. A
 grid that does not fit inside the texture is refused rather than silently dropping the
 frames that fall outside it.
+The sheet is imported with point filtering, which keeps pixel art sharp; pass
+`"filter_mode": "bilinear"` (or `"trilinear"`) for high-resolution art.
 
 ### Replacing what is already there
 

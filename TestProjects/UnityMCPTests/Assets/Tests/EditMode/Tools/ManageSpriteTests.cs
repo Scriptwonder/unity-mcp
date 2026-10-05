@@ -697,6 +697,25 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.AreEqual(16, SpritesOf(path).Length);
         }
 
+        [TestCase("slice_sheet", null, FilterMode.Point)]
+        [TestCase("slice_sheet", "bilinear", FilterMode.Bilinear)]
+        // Mixed case, and through full_setup, which hands its own params to the slice step.
+        [TestCase("full_setup", "Trilinear", FilterMode.Trilinear)]
+        public void FilterMode_IsWhatTheSliceSets_PointUnlessAsked(string action, string filterMode, FilterMode expected)
+        {
+            string path = CreateSheet("filter", 4, 1);
+            Assert.AreEqual(FilterMode.Bilinear, ((TextureImporter)AssetImporter.GetAtPath(path)).filterMode,
+                "fixture: a sheet that starts as Point would let the Point case pass without the slice setting it");
+            var request = new JObject { ["action"] = action, ["path"] = path, ["cols"] = 4 };
+            if (filterMode != null)
+                request["filter_mode"] = filterMode;
+
+            var result = Run(request);
+
+            Assert.AreEqual(expected, ((TextureImporter)AssetImporter.GetAtPath(path)).filterMode,
+                result.ToString(Newtonsoft.Json.Formatting.None));
+        }
+
         private static IEnumerable<TestCaseData> RefusedGrids()
         {
             TestCaseData Case(int sheetCols, int sheetRows, JObject grid, string code) =>
@@ -723,6 +742,8 @@ namespace MCPForUnityTests.Editor.Tools
             yield return Case(8, 8, new JObject { ["cols"] = 128, ["rows"] = 128 }, "SLICE_TOO_MANY_FRAMES");
             // A negative alternative used to be silently replaced by the value derived from cols.
             yield return Case(2, 1, new JObject { ["cols"] = 2, ["frame_width"] = -1 }, "BAD_PARAM");
+            // "nearest" is another engine's name for Point: refused like a bad grid value, not mapped.
+            yield return Case(2, 1, new JObject { ["cols"] = 2, ["filter_mode"] = "nearest" }, "BAD_PARAM");
         }
 
         [TestCaseSource(nameof(RefusedGrids))]

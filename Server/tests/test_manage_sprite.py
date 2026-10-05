@@ -239,7 +239,7 @@ class TestParameterForwarding:
         # dropped branch and this guard would cry wolf.
         sample = {
             "path": "Assets/a.png", "cols": 1, "rows": 1, "frame_width": 1,
-            "frame_height": 1, "base_name": "b", "clips": [{"name": "walk"}],
+            "frame_height": 1, "base_name": "b", "filter_mode": "bilinear", "clips": [{"name": "walk"}],
             "animation_name": "walk", "output_dir": "Assets/out",
             "controller_path": "Assets/a.controller", "overwrite": True,
             "add_to_scene": True, "scene_target": "Hero", "page_size": 1, "cursor": 1,
@@ -292,9 +292,10 @@ class TestSpriteCLICommands:
          {"action": "get_info", "path": "Assets/atlas.png", "page_size": 100, "cursor": 200}),
         (["slice", "Assets/hero.png", "--cols", "4"],
          {"action": "slice_sheet", "path": "Assets/hero.png", "cols": 4}),
-        (["slice", "Assets/hero.png", "--frame-width", "32", "--frame-height", "16", "--base-name", "hero"],
+        (["slice", "Assets/hero.png", "--frame-width", "32", "--frame-height", "16", "--base-name", "hero",
+          "--filter-mode", "bilinear"],
          {"action": "slice_sheet", "path": "Assets/hero.png", "frame_width": 32, "frame_height": 16,
-          "base_name": "hero"}),
+          "base_name": "hero", "filter_mode": "bilinear"}),
         (["setup-clips", "Assets/hero.png", "--clips", '[{"name": "walk", "start_frame": 0, "end_frame": 5}]'],
          {"action": "setup_clips", "path": "Assets/hero.png",
           "clips": [{"name": "walk", "start_frame": 0, "end_frame": 5}]}),
@@ -324,7 +325,7 @@ class TestSpriteCLICommands:
             ["full-setup", "Assets/a.png", "--cols", "1", "--rows", "1", "--frame-width", "1",
              "--frame-height", "1", "--base-name", "b", "--clips", "[]", "--animation-name", "walk",
              "--output-dir", "Assets/out", "--controller-path", "Assets/a.controller", "--overwrite",
-             "--add-to-scene", "--scene-target", "Hero"],
+             "--add-to-scene", "--scene-target", "Hero", "--filter-mode", "point"],
         ):
             result, mock_run = run_cli(args)
             assert result.exit_code == 0, result.output
