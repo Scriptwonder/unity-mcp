@@ -13,9 +13,9 @@ description: Auto-generated catalog of every MCP for Unity tool, grouped by doma
 Every tool MCP for Unity exposes, generated directly from the Python `@mcp_for_unity_tool` registry under `Server/src/services/tools/`.
 
 ## `animation` &nbsp; (2 tools)
-Animator control & AnimationClip creation
+Animator control, AnimationClip creation & 2D sprite-sheet animation
 - **[`manage_animation`](./animation/manage_animation.md)** — Manage Unity animation: Animator control and AnimationClip creation.
-- **[`manage_sprite`](./animation/manage_sprite.md)** — 2D sprite animation tool. get_info: read sprite import settings and return the sheet as an image block for vision analysis; the slice list is paged (page_size / cursor). slice_sheet: apply grid slicing to a sprite sheet. setup_clips: cre…
+- **[`manage_sprite`](./animation/manage_sprite.md)** — Slice 2D sprite sheets and build AnimationClips and an AnimatorController from the frames.
 
 ## `asset_gen` &nbsp; (6 tools)
 AI asset generation – 3D model gen/import, 2D image gen & audio gen (bring-your-own-key)
