@@ -235,6 +235,48 @@ unity-mcp batch inline '[{"tool": "manage_scene", "params": {...}}]'
 unity-mcp batch template > commands.json
 ```
 
+**Animation**
+```bash
+unity-mcp animation animator play "Player" "Run"
+unity-mcp animation animator set-parameter "Player" "Speed" 1.5
+unity-mcp animation clip create "Assets/Animations/Bounce.anim" --length 2.0 --loop
+unity-mcp animation controller info "Assets/Animations/Player.controller"
+```
+
+**Build**
+```bash
+unity-mcp build platform [android]                          # Read or switch platform
+unity-mcp build run --target windows64 --development
+unity-mcp build status
+```
+
+**Physics**
+```bash
+unity-mcp physics raycast --origin "0,5,0" --direction "0,-1,0"
+unity-mcp physics simulate --steps 10
+unity-mcp physics validate
+```
+
+**Profiler**
+```bash
+unity-mcp profiler start
+unity-mcp profiler get-counters --category Render
+unity-mcp profiler stop
+```
+
+**Reflection & Docs**
+```bash
+unity-mcp reflect type NavMeshAgent
+unity-mcp docs get Physics Raycast
+```
+
+**Asset Generation & Blender**
+```bash
+unity-mcp asset-gen generate-image --provider fal --prompt "a stone texture"
+unity-mcp asset-gen status --job-id abc123
+unity-mcp blender import-model --selection-only --target-size 2
+```
+
 **Raw Access (Any Tool)**
 ```bash
 unity-mcp raw tool_name 'JSON_params'

@@ -326,12 +326,16 @@ unity-mcp asset move "Assets/Old.mat" "Assets/Materials/"
 ### Animation Operations
 
 ```bash
-# Play animation state
-unity-mcp animation play "Player" "Run"
+# Animator on a GameObject
+unity-mcp animation animator info "Player"
+unity-mcp animation animator play "Player" "Run"
+unity-mcp animation animator set-parameter "Player" "Speed" 1.5
+unity-mcp animation animator set-parameter "Player" "IsRunning" true --type bool
 
-# Set animator parameter
-unity-mcp animation set-parameter "Player" Speed 1.5
-unity-mcp animation set-parameter "Player" IsRunning true
+# Clips and controllers
+unity-mcp animation clip create "Assets/Animations/Bounce.anim" --length 2.0 --loop
+unity-mcp animation clip info "Assets/Animations/Walk.anim"
+unity-mcp animation controller info "Assets/Animations/Player.controller"
 ```
 
 ### Audio Operations
@@ -467,6 +471,62 @@ unity-mcp texture delete "Assets/Textures/Old.png" [--force]
 # Patterns: checkerboard, stripes, stripes_h, stripes_v, stripes_diag, dots, grid, brick
 ```
 
+### Build Operations
+
+```bash
+unity-mcp build platform                                    # Read the active platform
+unity-mcp build platform android                            # Switch platform
+unity-mcp build scenes                                      # Read the build scene list
+unity-mcp build run --target windows64 --development
+unity-mcp build batch --targets windows64,linux64,webgl
+unity-mcp build status                                      # Last build report
+unity-mcp build settings product_name --value "My Game"
+```
+
+### Physics Operations
+
+```bash
+unity-mcp physics ping                                      # Physics system status
+unity-mcp physics get-settings
+unity-mcp physics raycast --origin "0,5,0" --direction "0,-1,0" --max-distance 10
+unity-mcp physics overlap --shape sphere --position "0,0,0" --size 2
+unity-mcp physics get-rigidbody "Player"
+unity-mcp physics simulate --steps 10                       # Step physics in edit mode
+unity-mcp physics validate                                  # Check the scene for common mistakes
+```
+
+### Profiler Operations
+
+```bash
+unity-mcp profiler start                                    # Optionally --log-file to record a .raw
+unity-mcp profiler status
+unity-mcp profiler frame-timing
+unity-mcp profiler get-counters --category Render
+unity-mcp profiler memory-snapshot                          # Requires com.unity.memoryprofiler
+unity-mcp profiler stop
+```
+
+### Reflection and Docs
+
+```bash
+unity-mcp reflect search NavMesh                            # Find Unity types by name
+unity-mcp reflect type NavMeshAgent                         # Member summary
+unity-mcp reflect member Physics Raycast                    # One member in detail
+unity-mcp docs get Physics Raycast                          # Unity documentation page
+```
+
+### Asset Generation and Blender
+
+```bash
+unity-mcp asset-gen list-models --kind image
+unity-mcp asset-gen generate-image --provider fal --prompt "a stone texture"
+unity-mcp asset-gen generate-model --provider tripo --mode text --prompt "a red chair"
+unity-mcp asset-gen status --job-id abc123
+unity-mcp asset-gen import-model-file --source-path "C:/exports/house.fbx" --output-folder Assets/Models
+unity-mcp blender status                                    # Is Blender reachable?
+unity-mcp blender import-model --selection-only --target-size 2
+```
+
 ### Raw Commands
 
 For any MCP tool not covered by dedicated commands:
@@ -485,33 +545,44 @@ unity-mcp raw manage_packages '{"action": "list_packages"}'
 
 | Group | Subcommands |
 |-------|-------------|
-| `instance` | `list`, `set`, `current` |
-| `scene` | `hierarchy`, `active`, `load`, `save`, `create`, `build-settings` |
-| `code` | `read`, `search` |
-| `gameobject` | `find`, `create`, `modify`, `delete`, `duplicate`, `move` |
-| `component` | `add`, `remove`, `set`, `modify` |
-| `script` | `create`, `read`, `delete`, `edit`, `validate` |
-| `shader` | `create`, `read`, `update`, `delete` |
-| `editor` | `play`, `pause`, `stop`, `refresh`, `console`, `menu`, `tool`, `add-tag`, `remove-tag`, `add-layer`, `remove-layer`, `tests`, `poll-test`, `custom-tool` |
-| `asset` | `search`, `info`, `create`, `delete`, `duplicate`, `move`, `rename`, `import`, `mkdir` |
-| `prefab` | `open`, `close`, `save`, `create`, `modify` |
-| `material` | `info`, `create`, `set-color`, `set-property`, `assign`, `set-renderer-color` |
-| `camera` | `ping`, `list`, `create`, `set-target`, `set-lens`, `set-priority`, `set-body`, `set-aim`, `set-noise`, `add-extension`, `remove-extension`, `ensure-brain`, `brain-status`, `set-blend`, `force`, `release`, `screenshot`, `screenshot-multiview` |
-| `graphics` | `ping`, `volume-create`, `volume-add-effect`, `volume-set-effect`, `volume-remove-effect`, `volume-info`, `volume-set-properties`, `volume-list-effects`, `volume-create-profile`, `pipeline-info`, `pipeline-settings`, `pipeline-set-quality`, `pipeline-set-settings`, `bake-start`, `bake-cancel`, `bake-status`, `bake-clear`, `bake-settings`, `bake-set-settings`, `bake-reflection-probe`, `bake-create-probes`, `bake-create-reflection`, `stats`, `stats-memory`, `stats-debug-mode`, `feature-list`, `feature-add`, `feature-remove`, `feature-configure`, `feature-reorder`, `feature-toggle`, `skybox-info`, `skybox-set-material`, `skybox-set-properties`, `skybox-set-ambient`, `skybox-set-fog`, `skybox-set-reflection`, `skybox-set-sun` |
-| `packages` | `ping`, `list`, `search`, `info`, `add`, `remove`, `embed`, `resolve`, `status`, `list-registries`, `add-registry`, `remove-registry` |
-| `texture` | `create`, `sprite`, `modify`, `delete` |
-| `vfx particle` | `info`, `play`, `stop`, `pause`, `restart`, `clear` |
-| `vfx line` | `info`, `set-positions`, `create-line`, `create-circle`, `clear` |
-| `vfx trail` | `info`, `set-time`, `clear` |
-| `vfx` | `raw` (access all 60+ actions) |
-| `probuilder` | `create-shape`, `create-poly`, `info`, `raw` (access all 35+ actions) |
-| `batch` | `run`, `inline`, `template` |
-| `animation` | `play`, `set-parameter` |
+| (top level) | `instances`, `raw`, `status` |
+| `animation` | `raw` |
+| `animation animator` | `crossfade`, `get-parameter`, `info`, `play`, `set-enabled`, `set-parameter`, `set-speed` |
+| `animation clip` | `add-curve`, `add-event`, `assign`, `create`, `create-preset`, `info`, `remove-event`, `set-curve`, `set-vector-curve` |
+| `animation controller` | `add-blend-tree-child`, `add-layer`, `add-parameter`, `add-state`, `add-transition`, `assign`, `create`, `create-blend-tree-1d`, `create-blend-tree-2d`, `info`, `remove-layer`, `set-layer-weight` |
+| `asset` | `create`, `delete`, `duplicate`, `import`, `info`, `mkdir`, `move`, `rename`, `search` |
+| `asset-gen` | `generate-audio`, `generate-image`, `generate-model`, `import-model`, `import-model-file`, `list-models`, `status` |
 | `audio` | `play`, `stop`, `volume` |
-| `lighting` | `create` |
-| `tool` | `list` |
+| `batch` | `inline`, `run`, `template` |
+| `blender` | `check-updates`, `compare-screenshot`, `import-model`, `object-info`, `run-python`, `scene-info`, `screenshot`, `setup-bloom`, `status`, `sync-addon` |
+| `build` | `batch`, `cancel`, `platform`, `profiles`, `run`, `scenes`, `settings`, `status` |
+| `camera` | `add-extension`, `brain-status`, `create`, `ensure-brain`, `force`, `list`, `ping`, `release`, `remove-extension`, `screenshot`, `screenshot-multiview`, `set-aim`, `set-blend`, `set-body`, `set-lens`, `set-noise`, `set-priority`, `set-target` |
+| `code` | `clear-history`, `execute`, `history`, `read`, `replay`, `search` |
+| `component` | `add`, `modify`, `remove`, `set` |
 | `custom_tool` | `list` |
-| `ui` | `create-canvas`, `create-text`, `create-button`, `create-image` |
+| `docs` | `get` |
+| `editor` | `add-layer`, `add-tag`, `console`, `custom-tool`, `deploy`, `menu`, `pause`, `play`, `poll-test`, `redo`, `refresh`, `remove-layer`, `remove-tag`, `restore`, `stop`, `tests`, `tool`, `undo` |
+| `gameobject` | `create`, `delete`, `duplicate`, `find`, `modify`, `move` |
+| `graphics` | `bake-cancel`, `bake-clear`, `bake-create-probes`, `bake-create-reflection`, `bake-reflection-probe`, `bake-set-settings`, `bake-settings`, `bake-start`, `bake-status`, `feature-add`, `feature-configure`, `feature-list`, `feature-remove`, `feature-reorder`, `feature-toggle`, `ping`, `pipeline-info`, `pipeline-set-quality`, `pipeline-set-settings`, `pipeline-settings`, `skybox-info`, `skybox-set-ambient`, `skybox-set-fog`, `skybox-set-material`, `skybox-set-properties`, `skybox-set-reflection`, `skybox-set-sun`, `stats`, `stats-debug-mode`, `stats-memory`, `volume-add-effect`, `volume-create`, `volume-create-profile`, `volume-info`, `volume-list-effects`, `volume-remove-effect`, `volume-set-effect`, `volume-set-properties` |
+| `instance` | `current`, `list`, `set` |
+| `lighting` | `create` |
+| `material` | `assign`, `create`, `info`, `set-color`, `set-property`, `set-renderer-color` |
+| `packages` | `add`, `add-registry`, `embed`, `info`, `list`, `list-registries`, `ping`, `remove`, `remove-registry`, `resolve`, `search`, `status` |
+| `physics` | `add-joint`, `apply-force`, `assign-material`, `configure-joint`, `configure-material`, `configure-rigidbody`, `create-material`, `get-collision-matrix`, `get-rigidbody`, `get-settings`, `linecast`, `overlap`, `ping`, `raycast`, `raycast-all`, `remove-joint`, `set-collision-matrix`, `set-settings`, `shapecast`, `simulate`, `validate` |
+| `prefab` | `close`, `create`, `hierarchy`, `info`, `modify`, `open`, `save` |
+| `probuilder` | `auto-smooth`, `bevel-edges`, `center-pivot`, `create-poly`, `create-shape`, `delete-faces`, `extrude-edges`, `extrude-faces`, `freeze-transform`, `info`, `move-vertices`, `raw`, `repair`, `select-faces`, `set-material`, `set-pivot`, `set-smoothing`, `subdivide`, `validate`, `weld-vertices` |
+| `profiler` | `frame-debugger-disable`, `frame-debugger-enable`, `frame-debugger-events`, `frame-timing`, `get-counters`, `memory-compare`, `memory-list`, `memory-snapshot`, `object-memory`, `set-areas`, `start`, `status`, `stop` |
+| `reflect` | `member`, `search`, `type` |
+| `scene` | `active`, `build-settings`, `close`, `create`, `hierarchy`, `load`, `loaded`, `move-to`, `open-additive`, `save`, `set-active`, `validate` |
+| `script` | `create`, `delete`, `edit`, `read`, `validate` |
+| `shader` | `create`, `delete`, `read`, `update` |
+| `texture` | `create`, `delete`, `modify`, `set-import-settings`, `sprite` |
+| `tool` | `list` |
+| `ui` | `create-button`, `create-canvas`, `create-image`, `create-text` |
+| `vfx` | `raw` |
+| `vfx line` | `clear`, `create-circle`, `create-line`, `info`, `set-positions` |
+| `vfx particle` | `clear`, `info`, `pause`, `play`, `restart`, `stop` |
+| `vfx trail` | `clear`, `info`, `set-time` |
 
 ---
 

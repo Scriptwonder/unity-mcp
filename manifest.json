@@ -38,6 +38,10 @@
       "description": "Execute multiple Unity operations in a single batch"
     },
     {
+      "name": "blender_bridge",
+      "description": "Drive a running Blender through the BlenderMCP addon and bring its results into Unity"
+    },
+    {
       "name": "create_script",
       "description": "Create new C# scripts"
     },
@@ -70,12 +74,32 @@
       "description": "Search for content within Unity project files"
     },
     {
+      "name": "generate_audio",
+      "description": "Generate sound effects and music with AI models and import them as AudioClips"
+    },
+    {
+      "name": "generate_image",
+      "description": "Generate 2D images with AI providers and import them as textures or sprites"
+    },
+    {
+      "name": "generate_model",
+      "description": "Generate 3D models with AI providers and import them into the project"
+    },
+    {
       "name": "get_sha",
       "description": "Get SHA hash of script content"
     },
     {
       "name": "get_test_job",
       "description": "Get status of async test job"
+    },
+    {
+      "name": "import_model",
+      "description": "Import 3D models from the Sketchfab marketplace into the project"
+    },
+    {
+      "name": "import_model_file",
+      "description": "Import a 3D model file that is already on disk (FBX, OBJ, glTF) into the project"
     },
     {
       "name": "manage_animation",
