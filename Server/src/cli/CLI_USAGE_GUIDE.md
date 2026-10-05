@@ -807,6 +807,23 @@ unity-mcp texture delete "Assets/Textures/Old.png"
 unity-mcp texture delete "Assets/Textures/Old.png" --force
 ```
 
+### Sprite Commands
+
+```bash
+# Read a sheet's size, import settings and slices (the image itself is the file)
+unity-mcp sprite info "Assets/Sprites/Hero.png"
+
+# Slice into a grid: --cols/--rows, or --frame-width/--frame-height
+unity-mcp sprite slice "Assets/Sprites/Hero.png" --cols 6 --rows 4
+
+# Clips from the slices, then a controller from the clips
+unity-mcp sprite setup-clips "Assets/Sprites/Hero.png" --clips '[{"name": "walk", "start_frame": 0, "end_frame": 5}]'
+unity-mcp sprite setup-controller "Assets/Animators/Hero.controller" --clips '[{"name": "walk", "path": "Assets/Sprites/walk.anim"}]'
+
+# All of it in one step (--add-to-scene needs --scene-target, an existing GameObject)
+unity-mcp sprite full-setup "Assets/Sprites/Hero.png" --cols 6 --rows 4 --clips '[{"name": "idle", "start_frame": 0, "end_frame": 5}, {"name": "walk", "start_frame": 6, "end_frame": 11}]' --controller-path "Assets/Animators/Hero.controller" --add-to-scene --scene-target Hero
+```
+
 ### Code Commands
 
 ```bash
