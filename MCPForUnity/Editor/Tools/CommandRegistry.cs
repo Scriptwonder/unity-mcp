@@ -292,7 +292,21 @@ namespace MCPForUnity.Editor.Tools
                 throw new InvalidOperationException($"Handler for '{commandName}' does not provide a synchronous implementation");
             }
 
-            return handlerInfo.SyncHandler(@params);
+            object result = handlerInfo.SyncHandler(@params);
+            // A synchronous handler may return a Task<object> to answer later, as manage_scene's
+            // play-mode screenshot does. Only Task<object> is awaited here: a handler that needs
+            // another Task type should be declared async, which registration handles.
+            if (result is Task<object> returnedTask)
+            {
+                ExecuteAsyncHandler(
+                    new HandlerInfo(commandName, null, _ => returnedTask),
+                    @params,
+                    commandName,
+                    tcs);
+                return null;
+            }
+
+            return result;
         }
 
         /// <summary>
@@ -322,6 +336,12 @@ namespace MCPForUnity.Editor.Tools
             }
 
             object result = handlerInfo.SyncHandler(payload);
+            // Same contract as ExecuteCommand: a returned Task<object> is the answer to await.
+            if (result is Task<object> returnedTask)
+            {
+                return returnedTask;
+            }
+
             return Task.FromResult(result);
         }
 
