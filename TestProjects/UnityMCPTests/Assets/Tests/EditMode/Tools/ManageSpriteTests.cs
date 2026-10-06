@@ -1280,6 +1280,9 @@ namespace MCPForUnityTests.Editor.Tools
                         t.conditions.Any(c => c.mode == AnimatorConditionMode.If && c.parameter == trigger)),
                     $"'{state}' needs an Any State transition on '{trigger}'; without one, states built " +
                     "after it cannot be interrupted by it ('attack' could not interrupt 'hurt')");
+            Assert.That(sm.anyStateTransitions.Where(t => !t.canTransitionToSelf).Select(t => t.destinationState?.name),
+                Is.Empty, "a repeated trigger must restart its clip; with canTransitionToSelf off, Unity keeps " +
+                "the trigger set and replays the state after it ends");
 
             var blended = sm.states
                 .SelectMany(s => s.state.transitions.Select(t => (source: s.state.name, t)))

@@ -43,9 +43,9 @@ def _sprite_image_result(result: dict[str, Any], image_base64: str) -> ToolResul
         "and, for a PNG or JPEG source, the sheet as an image block for vision analysis; "
         "slice_sheet applies a grid, replacing the sheet's existing slices; "
         "setup_clips creates AnimationClips from the slices; "
-        "setup_controller builds a controller from clip names (idle = default state, walk/run = "
-        "Speed-driven 1D blend tree, jump/attack/hurt-type names = trigger states that fire from any "
-        "state, other names = plain states); "
+        "setup_controller builds a controller from clip names (idle = default state, one walk/run "
+        "clip = a plain state and two or more = a Speed-driven 1D blend tree, jump/attack/hurt-type "
+        "names = trigger states that fire from any state, other names = plain states); "
         "full_setup runs slice → clips → controller in one call."
     ),
     annotations=ToolAnnotations(

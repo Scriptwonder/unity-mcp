@@ -12,7 +12,7 @@ description: "Slice 2D sprite sheets and build AnimationClips and an AnimatorCon
 
 ## Description
 
-Slice 2D sprite sheets and build AnimationClips and an AnimatorController from the frames. Actions: get_info returns a sheet's import settings and slices (paged with page_size / cursor) and, for a PNG or JPEG source, the sheet as an image block for vision analysis; slice_sheet applies a grid, replacing the sheet's existing slices; setup_clips creates AnimationClips from the slices; setup_controller builds a controller from clip names (idle = default state, walk/run = Speed-driven 1D blend tree, jump/attack/hurt-type names = trigger states that fire from any state, other names = plain states); full_setup runs slice → clips → controller in one call.
+Slice 2D sprite sheets and build AnimationClips and an AnimatorController from the frames. Actions: get_info returns a sheet's import settings and slices (paged with page_size / cursor) and, for a PNG or JPEG source, the sheet as an image block for vision analysis; slice_sheet applies a grid, replacing the sheet's existing slices; setup_clips creates AnimationClips from the slices; setup_controller builds a controller from clip names (idle = default state, one walk/run clip = a plain state and two or more = a Speed-driven 1D blend tree, jump/attack/hurt-type names = trigger states that fire from any state, other names = plain states); full_setup runs slice → clips → controller in one call.
 
 ## Parameters
 
