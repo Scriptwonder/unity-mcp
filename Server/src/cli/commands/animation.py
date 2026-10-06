@@ -58,7 +58,7 @@ def animator_info(target: str, search_method: Optional[str]):
     \b
     Examples:
         unity-mcp animation animator info "Player"
-        unity-mcp animation animator info "-12345" --search-method by_id
+        unity-mcp animation animator info --search-method by_id -- -12345
     """
     config = get_config()
     params: dict[str, Any] = {"action": "animator_get_info", "target": target}

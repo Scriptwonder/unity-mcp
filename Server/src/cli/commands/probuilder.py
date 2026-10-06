@@ -470,7 +470,7 @@ def mesh_info(target: str, include: str, search_method: Optional[str]):
     Examples:
         unity-mcp probuilder info "MyCube"
         unity-mcp probuilder info "MyCube" --include faces
-        unity-mcp probuilder info "-12345" --search-method by_id --include all
+        unity-mcp probuilder info --search-method by_id --include all -- -12345
     """
     config = get_config()
     request: dict[str, Any] = {"action": "get_mesh_info", "target": target, "include": include}

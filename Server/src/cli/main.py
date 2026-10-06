@@ -107,7 +107,7 @@ def cli(ctx: Context, host: str, port: int, timeout: int, format: str, instance:
     Examples:
         unity-mcp status
         unity-mcp gameobject find "Player"
-        unity-mcp scene hierarchy --format json
+        unity-mcp --format json scene hierarchy
         unity-mcp editor play
 
     \b

@@ -60,7 +60,7 @@ def particle_info(target: str, search_method: Optional[str], component_index: Op
     \\b
     Examples:
         unity-mcp vfx particle info "Fire"
-        unity-mcp vfx particle info "-12345" --search-method by_id
+        unity-mcp vfx particle info --search-method by_id -- -12345
         unity-mcp vfx particle info "Effects" --component-index 1
     """
     config = get_config()
