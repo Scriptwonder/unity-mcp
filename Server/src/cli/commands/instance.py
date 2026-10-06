@@ -19,7 +19,7 @@ def instance():
 def list_instances():
     """List available Unity instances.
 
-    \\b
+    \b
     Examples:
         unity-mcp instance list
     """
@@ -55,7 +55,7 @@ def set_instance(instance_id: str):
 
     INSTANCE_ID can be Name@hash or just a hash prefix.
 
-    \\b
+    \b
     Examples:
         unity-mcp instance set "MyProject@abc123"
         unity-mcp instance set abc123
@@ -76,7 +76,7 @@ def set_instance(instance_id: str):
 def current_instance():
     """Show the currently selected Unity instance.
 
-    \\b
+    \b
     Examples:
         unity-mcp instance current
     """
