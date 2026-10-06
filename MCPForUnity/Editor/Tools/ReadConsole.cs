@@ -716,7 +716,13 @@ namespace MCPForUnity.Editor.Tools
             while (i < line.Length && Uri.IsHexDigit(line[i]))
                 i++;
 
-            return i > 2 && string.CompareOrdinal(line, i, " (", 0, 2) == 0;
+            // A pointer-width address, a "(Module)" label and a symbol after it.
+            int digits = i - 2;
+            if ((digits != 8 && digits != 16) || string.CompareOrdinal(line, i, " (", 0, 2) != 0)
+                return false;
+
+            int close = line.IndexOf(") ", i + 2, StringComparison.Ordinal);
+            return close > i + 2 && close + 2 < line.Length;
         }
 
         /* LogEntry.mode bits exploration (based on Unity decompilation/observation):

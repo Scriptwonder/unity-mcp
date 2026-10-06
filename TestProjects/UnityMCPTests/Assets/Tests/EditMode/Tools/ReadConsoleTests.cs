@@ -136,7 +136,7 @@ namespace MCPForUnityTests.Editor.Tools
         [Test]
         public void SplitMessageAndStackTrace_KeepsBodyLineStartingWithHex()
         {
-            string message = "Packet dump\n0x1F is the header byte\nend of dump";
+            string message = "Packet dump\n0x1F is the header byte\n0x1F (header byte) then payload\nend of dump";
 
             var (body, stackTrace) = ReadConsole.SplitMessageAndStackTrace(message);
 
