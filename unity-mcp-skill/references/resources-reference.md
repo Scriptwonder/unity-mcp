@@ -506,7 +506,7 @@ Assets/Prefabs/Player.prefab → Assets%2FPrefabs%2FPlayer.prefab
 
 **Purpose:** Custom tools available in the active Unity project.
 
-**Returns:**
+**Returns** (abbreviated: one of the 3 tools is shown):
 ```json
 {
   "project_id": "MyProject",
@@ -529,7 +529,7 @@ Assets/Prefabs/Player.prefab → Assets%2FPrefabs%2FPlayer.prefab
 
 **Purpose:** Every tool group, whether it is on by default, and its tools. Enable or hide a group for the session with `manage_tools`.
 
-**Returns:**
+**Returns** (abbreviated: `groups` has one entry per group, in name order; one is shown):
 ```json
 {
   "groups": [

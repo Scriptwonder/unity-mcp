@@ -30,5 +30,4 @@ def test_skill_copies_are_identical():
                  for name in sorted(installed.keys() - public.keys())]
     problems += [f"differs between the copies: {name}"
                  for name in sorted(public.keys() & installed.keys()) if public[name] != installed[name]]
-    # .gitignore ignores /.claude, so a file new to the installed copy needs `git add -f`.
     assert not problems, "\n".join(problems)

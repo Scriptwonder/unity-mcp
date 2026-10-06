@@ -928,8 +928,9 @@ class TestScriptCommands:
     # validate_script and apply_text_edits are server-side MCP tools: Unity has no
     # command by either name, so the CLI must call manage_script's actions itself.
     def test_script_validate_calls_manage_script_validate(self, runner, mock_unity_response):
+        # A Windows path splits into the same name and folder as a forward-slash one.
         with patch("cli.commands.script.run_command", return_value=mock_unity_response) as mock_run:
-            result = runner.invoke(cli, ["script", "validate", "Assets/Scripts/Player.cs", "--level", "standard"])
+            result = runner.invoke(cli, ["script", "validate", "Assets\\Scripts\\Player.cs", "--level", "standard"])
             assert result.exit_code == 0, result.output
             assert mock_run.call_args[0][:2] == ("manage_script", {
                 "action": "validate", "name": "Player", "path": "Assets/Scripts", "level": "standard"})
@@ -947,6 +948,14 @@ class TestScriptCommands:
                 {"action": "apply_text_edits", "name": "Player", "path": "Assets/Scripts",
                  "edits": edits, "precondition_sha256": "abc123"},
             ]
+
+    def test_script_edit_exits_with_an_error_when_the_sha_lookup_fails(self, runner):
+        missing = {"status": "error", "error": "Script 'Player.cs' not found."}
+        with patch("cli.commands.script.run_command", return_value=missing) as mock_run:
+            result = runner.invoke(cli, ["script", "edit", "Assets/Scripts/Player.cs", "--edits", "[]"])
+            assert result.exit_code == 1, result.output
+            assert "not found" in result.output
+            assert mock_run.call_count == 1
 
     def test_script_create(self, runner, mock_unity_response):
         """Test script create command."""

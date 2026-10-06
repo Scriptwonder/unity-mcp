@@ -20,7 +20,7 @@ I've just changed MCP tools or resources in this MCP for Unity repository. Pleas
    Do not hand-edit them, except for usage examples between `<!-- examples:start -->` and `<!-- examples:end -->`, which the generator keeps.
 
 3. **Update the hand-maintained files**:
-   - **manifest.json**: the `tools` array must list exactly the registered tools as `{"name", "description"}` entries; put new ones in alphabetical position. Resources are not listed. `Server/tests/test_manifest_tools.py` fails on any difference.
+   - **manifest.json**: the `tools` array must list exactly the registered tools as `{"name", "description"}` entries; put new ones in alphabetical position. Resources are not listed. `Server/tests/test_manifest_tools.py` fails when a tool is missing, extra or listed twice, but it compares names only: when a tool's purpose changes, check its one-line description by hand.
    - **Tool groups**: if a tool adds a group or changes what a group covers, update the group's blurb in `TOOL_GROUPS` (`Server/src/services/registry/tool_registry.py`; it feeds the generated group pages, the `tool_groups` resource and `manage_tools`) and the group lists in `website/docs/guides/tool-groups.md` and `website/docs/contributing/dev-setup.md`.
    - **Tool count**: `README.md`, `docs/i18n/README-zh.md` and `website/docs/guides/tool-groups.md` state how many tools ship. Update the number if it changed.
    - **CLI docs**: the group table in `website/docs/reference/cli.md` and the "Complete Command Reference" table in `website/docs/guides/cli.md` must match the Click command tree (`cd Server && uv run unity-mcp --help`, then `--help` on each group).

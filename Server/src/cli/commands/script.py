@@ -14,7 +14,7 @@ from cli.utils.confirmation import confirm_destructive_action
 
 def _name_and_folder(path: str) -> tuple[str, str]:
     """Split 'Assets/Scripts/Player.cs' into ('Player', 'Assets/Scripts'), the form manage_script takes."""
-    parts = path.rsplit("/", 1)
+    parts = path.replace("\\", "/").rsplit("/", 1)
     filename = parts[-1]
     directory = parts[0] if len(parts) > 1 else "Assets"
     return (filename[:-3] if filename.endswith(".cs") else filename), directory
@@ -190,7 +190,7 @@ def edit(path: str, edits: str):
     sha = (sha_result.get("result", sha_result).get("data") or {}).get("sha256")
     if not sha:
         click.echo(format_output(sha_result, config.format))
-        return
+        sys.exit(1)
 
     result = run_command("manage_script", {
         "action": "apply_text_edits",
