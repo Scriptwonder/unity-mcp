@@ -38,6 +38,7 @@ unity-mcp gameobject find "Player"
 | `-t, --timeout` | `UNITY_MCP_TIMEOUT` | Timeout in seconds (default: 30) |
 | `-f, --format` | `UNITY_MCP_FORMAT` | Output format: text, json, table |
 | `-i, --instance` | `UNITY_MCP_INSTANCE` | Target Unity instance |
+| `-v, --verbose` | — | Print each command sent to Unity and its raw response to stderr |
 
 ## Command Reference
 
@@ -59,7 +60,7 @@ unity-mcp instance current
 ```bash
 # Get scene hierarchy
 unity-mcp scene hierarchy
-unity-mcp scene hierarchy --limit 20 --depth 3
+unity-mcp scene hierarchy --limit 20 --max-depth 3
 
 # Get active scene info
 unity-mcp scene active
@@ -180,26 +181,6 @@ unity-mcp tool list
 unity-mcp custom_tool list
 ```
 
-#### Screenshot Parameters
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `--filename, -f` | string | Output filename (default: timestamp-based) |
-| `--supersize, -s` | int | Resolution multiplier 1–4 for file-saved screenshots |
-| `--camera-ref` | string | Camera name/path/ID (default: Camera.main) |
-| `--include-image` | flag | Return base64 PNG inline in the response |
-| `--max-resolution, -r` | int | Max longest-edge pixels (default 640) |
-| `--batch, -b` | string | `surround` (6 angles) or `orbit` (configurable grid) |
-| `--capture-source` | string | `game_view` (default) or `scene_view` (editor viewport) |
-| `--view-target` | string | Target to focus on: GO name/path/ID, or `x,y,z`. Aims camera (game_view) or frames viewport (scene_view) |
-| `--view-position` | string | Camera position as `x,y,z` (positioned screenshot, game_view only) |
-| `--view-rotation` | string | Camera euler rotation as `x,y,z` (positioned screenshot, game_view only) |
-| `--orbit-angles` | int | Number of azimuth steps around target (default 8) |
-| `--orbit-elevations` | string | Vertical angles as JSON array, e.g. `[0,30,-15]` (default `[0, 30, -15]`) |
-| `--orbit-distance` | float | Camera distance from target in world units (auto-fit if omitted) |
-| `--orbit-fov` | float | Camera FOV in degrees (default 60) |
-| `--output-dir, -o` | string | Save directory (default: Unity project's `Assets/Screenshots/`) |
-
 ### Testing
 
 ```bash
@@ -297,7 +278,7 @@ unity-mcp prefab save
 unity-mcp prefab close
 
 # Create from GameObject
-unity-mcp prefab create "Player" --path "Assets/Prefabs"
+unity-mcp prefab create "Player" "Assets/Prefabs/Player.prefab"
 
 # Modify prefab contents (headless, no UI)
 unity-mcp prefab modify "Assets/Prefabs/Player.prefab" --target Weapon --position "0,1,2"
@@ -311,7 +292,7 @@ unity-mcp prefab modify "Assets/Prefabs/Player.prefab" --create-child '{"name":"
 
 ```bash
 # Search assets
-unity-mcp asset search --pattern "*.mat" --path "Assets/Materials"
+unity-mcp asset search "*.mat" --path "Assets/Materials"
 
 # Get asset info
 unity-mcp asset info "Assets/Materials/Red.mat"
@@ -397,6 +378,24 @@ unity-mcp camera screenshot --batch orbit --view-target "Player" --max-resolutio
 unity-mcp camera screenshot --capture-source scene_view --view-target "Canvas" --include-image
 unity-mcp camera screenshot-multiview --view-target "Player" --max-resolution 480
 ```
+
+#### Screenshot Options
+
+`unity-mcp camera screenshot` options (from `--help`):
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `--camera-ref` | string | Camera name/path/ID. Omit to capture through the ScreenCapture API |
+| `--file-name` | string | Output file name (default: timestamp-based) |
+| `--super-size` | int | Resolution multiplier for the saved file |
+| `--include-image / --no-include-image` | flag | Also return the PNG inline as base64 |
+| `--max-resolution` | int | Longest edge of the inline image in pixels (default 640; 480 per tile with `--batch`) |
+| `--capture-source` | string | `game_view` (default) or `scene_view` (editor viewport) |
+| `--batch` | string | `surround` (6 angles) or `orbit` (grid around the target) |
+| `--view-target` | string | GameObject name/path/ID. Aims the camera (game_view) or frames the Scene View (scene_view) |
+| `--output-folder` | string | Save folder, project-relative or absolute inside the project (default: Editor preference, then `Assets/Screenshots`) |
+
+`camera screenshot-multiview` takes `--max-resolution`, `--view-target` and `--output-folder`. `--view-target` is sent as a string, so it cannot carry a `[x,y,z]` position; that, and the MCP tool's `view_position`, `view_rotation` and `orbit_*` settings, need `unity-mcp raw manage_camera '{"action": "screenshot", ...}'`.
 
 ### Graphics Operations
 

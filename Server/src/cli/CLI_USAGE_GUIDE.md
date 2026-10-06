@@ -288,14 +288,15 @@ When targeting GameObjects, specify how to search:
 # By name (default)
 unity-mcp gameobject modify "Player" --position 0 0 0
 
-# By instance ID (use --search-method)
-unity-mcp gameobject modify "-81840" --search-method by_id --position 0 0 0
+# By instance ID (use --search-method). IDs are often negative, and a bare -81840
+# reads as an option ("No such option: -8"): put options first, then -- before the ID
+unity-mcp gameobject modify --search-method by_id --position 0 0 0 -- -81840
 
 # By path
 unity-mcp gameobject modify "/Canvas/Panel/Button" --search-method by_path --active
 
-# By tag
-unity-mcp gameobject find "Player" --search-method by_tag
+# By tag (gameobject find takes --method, not --search-method)
+unity-mcp gameobject find "Player" --method by_tag
 ```
 
 ---
@@ -378,7 +379,7 @@ unity-mcp camera screenshot --file-name "my_screenshot" --super-size 2
 # Find GameObjects
 unity-mcp gameobject find "Player"
 unity-mcp gameobject find "Enemy" --method by_tag
-unity-mcp gameobject find "-81840" --method by_id
+unity-mcp gameobject find --method by_id -- -81840  # -- before a negative ID
 unity-mcp gameobject find "Rigidbody" --method by_component
 
 # Create GameObject
@@ -511,7 +512,7 @@ unity-mcp editor stop
 unity-mcp editor console                    # Read console
 unity-mcp editor console --count 20         # Last 20 entries
 unity-mcp editor console --clear            # Clear console
-unity-mcp editor console --types error,warning  # Filter by type
+unity-mcp editor console --type error --type warning  # Filter: error, warning, log or all
 
 # Menu items
 unity-mcp editor menu "Edit/Preferences"

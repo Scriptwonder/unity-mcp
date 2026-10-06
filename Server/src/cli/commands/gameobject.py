@@ -291,7 +291,7 @@ def modify(
     Examples:
         unity-mcp gameobject modify "Player" --position 0 5 0
         unity-mcp gameobject modify "Enemy" --name "Boss" --tag "Boss"
-        unity-mcp gameobject modify "-81840" --search-method by_id --active
+        unity-mcp gameobject modify --search-method by_id --active -- -81840
         unity-mcp gameobject modify "/Canvas/Panel" --search-method by_path --inactive
         unity-mcp gameobject modify "Cube" --add-components "Rigidbody,BoxCollider"
         unity-mcp gameobject modify "Ground" --static
