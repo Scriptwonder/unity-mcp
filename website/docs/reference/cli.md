@@ -52,11 +52,11 @@ The CLI mirrors the MCP tool catalog. Each command sends one or more MCP tool ca
 | `unity-mcp status` | Check the server connection and list Unity instances | — (server `/health`, `/api/instances`) |
 | `unity-mcp instances` | List connected Unity instances | — (server `/api/instances`) |
 | `unity-mcp raw` | Send any tool by name with JSON params | The named tool |
-| `unity-mcp instance` | List instances, set the active one, show the configured one | [`set_active_instance`](/reference/tools/core/set_active_instance) (`set`) |
+| `unity-mcp instance` | List instances, show the one this shell targets (`--instance` / `UNITY_MCP_INSTANCE`) | — (server `/api/instances`) |
 | `unity-mcp scene` | Load/save/query/edit scenes | [`manage_scene`](/reference/tools/core/manage_scene) |
 | `unity-mcp gameobject` | Find/create/modify/move/duplicate/delete GameObjects | [`manage_gameobject`](/reference/tools/core/manage_gameobject), [`find_gameobjects`](/reference/tools/core/find_gameobjects) (`find`), [`manage_components`](/reference/tools/core/manage_components) (`create --components`) |
 | `unity-mcp component` | Add/remove/configure components | [`manage_components`](/reference/tools/core/manage_components) |
-| `unity-mcp script` | Create/read/edit/validate/delete C# scripts | [`manage_script`](/reference/tools/core/manage_script), [`apply_text_edits`](/reference/tools/core/apply_text_edits) (`edit`), [`validate_script`](/reference/tools/core/validate_script) (`validate`) |
+| `unity-mcp script` | Create/read/edit/validate/delete C# scripts | [`manage_script`](/reference/tools/core/manage_script) |
 | `unity-mcp asset` | Asset import/create/modify/search | [`manage_asset`](/reference/tools/core/manage_asset) |
 | `unity-mcp asset-gen` | Generate images, 3D models and audio; import models | [`generate_image`](/reference/tools/asset_gen/generate_image), [`generate_model`](/reference/tools/asset_gen/generate_model), [`generate_audio`](/reference/tools/asset_gen/generate_audio), [`import_model`](/reference/tools/asset_gen/import_model), [`import_model_file`](/reference/tools/asset_gen/import_model_file) |
 | `unity-mcp blender` | Talk to a running Blender through the Blender Bridge | [`blender_bridge`](/reference/tools/asset_gen/blender_bridge) |

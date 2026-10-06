@@ -354,8 +354,8 @@ unity-mcp instances
 # List connected Unity instances
 unity-mcp instance list
 
-# Set active instance
-unity-mcp instance set "ProjectName@abc123"
+# Target one instance: per call with --instance, or for a whole shell with UNITY_MCP_INSTANCE
+unity-mcp --instance "ProjectName@abc123" editor play
 
 # Show current instance
 unity-mcp instance current
@@ -1026,7 +1026,7 @@ unity-mcp raw manage_packages '{"action": "list_packages"}'
 | `editor` | `add-layer`, `add-tag`, `console`, `custom-tool`, `deploy`, `menu`, `pause`, `play`, `poll-test`, `redo`, `refresh`, `remove-layer`, `remove-tag`, `restore`, `stop`, `tests`, `tool`, `undo` |
 | `gameobject` | `create`, `delete`, `duplicate`, `find`, `modify`, `move` |
 | `graphics` | `bake-cancel`, `bake-clear`, `bake-create-probes`, `bake-create-reflection`, `bake-reflection-probe`, `bake-set-settings`, `bake-settings`, `bake-start`, `bake-status`, `feature-add`, `feature-configure`, `feature-list`, `feature-remove`, `feature-reorder`, `feature-toggle`, `ping`, `pipeline-info`, `pipeline-set-quality`, `pipeline-set-settings`, `pipeline-settings`, `skybox-info`, `skybox-set-ambient`, `skybox-set-fog`, `skybox-set-material`, `skybox-set-properties`, `skybox-set-reflection`, `skybox-set-sun`, `stats`, `stats-debug-mode`, `stats-memory`, `volume-add-effect`, `volume-create`, `volume-create-profile`, `volume-info`, `volume-list-effects`, `volume-remove-effect`, `volume-set-effect`, `volume-set-properties` |
-| `instance` | `current`, `list`, `set` |
+| `instance` | `current`, `list` |
 | `lighting` | `create` |
 | `material` | `assign`, `create`, `info`, `set-color`, `set-property`, `set-renderer-color` |
 | `packages` | `add`, `add-registry`, `embed`, `info`, `list`, `list-registries`, `ping`, `remove`, `remove-registry`, `resolve`, `search`, `status` |

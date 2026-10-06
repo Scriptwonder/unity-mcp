@@ -45,7 +45,7 @@ unity-mcp status                           # Check server + Unity connection
 **Instance Management**
 ```bash
 unity-mcp instance list                    # List connected Unity instances
-unity-mcp instance set "ProjectName@abc"   # Set active instance
+unity-mcp --instance "ProjectName@abc" editor play   # Target one instance for one call
 unity-mcp instance current                 # Show current instance
 ```
 
