@@ -1456,8 +1456,13 @@ namespace MCPForUnityTests.Editor.Tools
         // full_setup
         // =====================================================================
 
-        [Test]
-        public void FullSetup_ControllerRefusal_StopsBeforeTouchingTheScene()
+        // A second run without overwrite. Given the same clip, every clip exists: it used to reach
+        // the controller step and fail there with "No valid clips loaded.". Given a new clip, the
+        // clip is written and the existing controller refuses. `fixes`: what the refusal must offer.
+        [TestCase(null, "setup_clips", "ALL_CLIPS_EXIST", "overwrite=true", "setup_controller")]
+        [TestCase("s5_new", "setup_controller", "CONTROLLER_EXISTS", "overwrite=true")]
+        public void FullSetup_RerunWithoutOverwrite_StopsAtTheRefusingStepBeforeTouchingTheScene(
+            string secondClip, string step, string code, params string[] fixes)
         {
             string path = CreateSheet("s5", 4, 1);
             var go = new GameObject("SpriteTest_S5");
@@ -1467,17 +1472,23 @@ namespace MCPForUnityTests.Editor.Tools
                 Run(new JObject { ["action"] = "full_setup", ["path"] = path, ["cols"] = 4,
                                   ["output_dir"] = TempRoot, ["controller_path"] = ctrl });
 
-                // Second run: the controller exists and overwrite is not set, so the
-                // controller step fails - and a failed step must not fall through.
-                var result = Run(new JObject { ["action"] = "full_setup", ["path"] = path, ["cols"] = 4,
-                                  ["output_dir"] = TempRoot, ["controller_path"] = ctrl,
-                                  ["add_to_scene"] = true, ["scene_target"] = "SpriteTest_S5" });
+                var rerun = new JObject { ["action"] = "full_setup", ["path"] = path, ["cols"] = 4,
+                                          ["output_dir"] = TempRoot, ["controller_path"] = ctrl,
+                                          ["add_to_scene"] = true, ["scene_target"] = "SpriteTest_S5" };
+                if (secondClip != null) rerun["animation_name"] = secondClip;
+                var result = Run(rerun);
 
                 Assert.IsFalse(result.Value<bool>("success"));
-                Assert.AreEqual("setup_controller", result.Value<string>("step"),
-                    "the response must name the step that failed");
+                Assert.AreEqual(step, result.Value<string>("step"),
+                    "the response must name the step that refused; it was " + result);
+                var refusal = result["diagnostics"].FirstOrDefault(d => d.Value<string>("code") == code);
+                Assert.IsNotNull(refusal, "diagnostics were " + result["diagnostics"]);
+                Assert.AreEqual("error", refusal.Value<string>("severity"));
+                string offered = string.Join(" ", refusal["fix_options"].Values<string>());
+                foreach (string fix in fixes)
+                    Assert.That(offered, Does.Contain(fix));
                 Assert.IsNull(go.GetComponent<Animator>(),
-                    "a refused controller step must not go on to modify the scene");
+                    "a refused step must not go on to modify the scene");
             }
             finally { Object.DestroyImmediate(go); }
         }

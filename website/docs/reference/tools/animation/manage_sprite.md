@@ -125,13 +125,19 @@ The sheet is imported with point filtering, which keeps pixel art sharp; pass
 
 `overwrite` covers the `.anim` and `.controller` files, not the sheet. Without it, an
 existing clip is skipped with a `CLIP_EXISTS` warning and an existing controller stops the
-call with `CONTROLLER_EXISTS`, so repeating a `full_setup` ends with `success: false` at
-`step: "setup_controller"` (`No valid clips loaded.` when every clip already existed):
+call with `CONTROLLER_EXISTS`. Repeating a `full_setup` therefore ends with
+`success: false`: at `step: "setup_clips"` with `ALL_CLIPS_EXIST` when every clip already
+exists, or at `step: "setup_controller"` with `CONTROLLER_EXISTS` once the new clips are
+written. To replace what exists, pass `"overwrite": true`:
 
 ```json
 { "action": "setup_clips", "path": "Assets/Sprites/hero.png",
   "clips": [{ "name": "walk", "start_frame": 0, "end_frame": 5 }], "overwrite": true }
 ```
+
+To keep the clips and only rebuild the controller, call `setup_controller` with their
+`.anim` paths, which the `CLIP_EXISTS` warnings name, and `"overwrite": true` if the
+controller already exists.
 
 Slicing has no such guard: every `slice_sheet` and `full_setup` replaces the sheet's slices
 and sets its filter to `filter_mode` (point unless given), so a filter set by hand does not
