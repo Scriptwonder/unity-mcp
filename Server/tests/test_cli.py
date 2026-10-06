@@ -476,6 +476,13 @@ class TestCameraCommands:
             assert params["viewTarget"] == "Canvas"
             assert params["includeImage"] is True
 
+    def test_camera_screenshot_position_view_target_reaches_unity_as_an_array(self, runner, mock_unity_response):
+        # Unity reads a JSON array as a position; the text "[0, 1, 2]" would be looked up as a GameObject name.
+        with patch("cli.commands.camera.run_command", return_value=mock_unity_response) as mock_run:
+            result = runner.invoke(cli, ["camera", "screenshot", "--view-target", "[0, 1, 2]"])
+            assert result.exit_code == 0, result.output
+            assert mock_run.call_args[0][1]["viewTarget"] == [0, 1, 2]
+
     def test_camera_ping_prints_output(self, runner, mock_unity_response):
         """The camera group must actually emit its result.
 

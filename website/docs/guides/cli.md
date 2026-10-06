@@ -392,10 +392,10 @@ unity-mcp camera screenshot-multiview --view-target "Player" --max-resolution 48
 | `--max-resolution` | int | Longest edge of the inline image in pixels (default 640; 480 per tile with `--batch`) |
 | `--capture-source` | string | `game_view` (default) or `scene_view` (editor viewport) |
 | `--batch` | string | `surround` (6 angles) or `orbit` (grid around the target) |
-| `--view-target` | string | GameObject name/path/ID. Aims the camera (game_view) or frames the Scene View (scene_view) |
+| `--view-target` | string | GameObject name/path/ID, or a `[x,y,z]` position. Aims the camera (game_view) or frames the Scene View (scene_view) |
 | `--output-folder` | string | Save folder, project-relative or absolute inside the project (default: Editor preference, then `Assets/Screenshots`) |
 
-`camera screenshot-multiview` takes `--max-resolution`, `--view-target` and `--output-folder`. `--view-target` is sent as a string, so it cannot carry a `[x,y,z]` position; that, and the MCP tool's `view_position`, `view_rotation` and `orbit_*` settings, need `unity-mcp raw manage_camera '{"action": "screenshot", ...}'`.
+`camera screenshot-multiview` takes `--max-resolution`, `--view-target` and `--output-folder`. The MCP tool's `view_position`, `view_rotation` and `orbit_*` settings need `unity-mcp raw manage_camera '{"action": "screenshot", ...}'`.
 
 ### Graphics Operations
 
