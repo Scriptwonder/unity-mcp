@@ -96,14 +96,17 @@ split into words (on `_`, `-`, spaces, camelCase and digits, so `heroAttack2` re
 
 | Words in the clip name | State | Loops by default |
 |---|---|---|
-| `idle`, `stand` | `Idle`, the default state. Only the first such clip gets a state. | yes |
+| `idle`, `stand` | `Idle`, the default state. Only the first such clip is used: each later one gets no state, and the response warns `IDLE_CLIP_UNUSED`. | yes |
 | `walk`; `run`, `sprint` | One clip: a state of that name. Two or more: a `Locomotion` state with a 1D blend tree on `Speed` (walk at 1, run at 2). Idle switches to it when `Speed` rises above 0.1 and back when it drops below 0.1. | yes |
-| `jump`, `fall`, `land`; `attack`, `slash`, `punch`, `combo`, `cast`, `shoot`; `open`, `close`, `activate`, `die`, `death`, `hurt`, `hit` | A state entered from any state by a trigger named after the first of these words it contains (`heroAttack` → `Attack`); the trigger also restarts it. A non-looping one returns to Idle, else Locomotion, when it ends. | no |
+| `jump`, `fall`, `land`; `attack`, `slash`, `punch`, `combo`, `cast`, `shoot`; `open`, `close`, `activate`, `die`, `death`, `hurt`, `hit` | A state entered from any state by a trigger named after the first of these words it contains (`heroAttack` → `Attack`); the trigger also restarts it. A non-looping one returns to Idle, else Locomotion, when it ends; a death, whose name has `die` or `death` in it, stays on its last frame instead. | no |
 | anything else | A state no transition leads to. Unless it is the default state, it plays only from a script, and the response warns `STATE_UNREACHABLE`. | no |
 
-Every transition is instant, since sprite frames cannot blend. Clips that share a word share
-its trigger, so give each one-shot its own action word. An explicit `"loop"` on a clip
-overrides the default.
+Every transition is instant, since sprite frames cannot blend. Each trigger enters one state:
+when clips share a word, the first of them takes the trigger, and each later one gets a state
+that no transition leads to, with a `TRIGGER_SHARED` warning, so give each one-shot its own
+action word. A death has no exit of its own, but triggers fire from any state: one set after
+the death, `Hurt` included, still takes the Animator out of it, so stop setting them once the
+character is dead. An explicit `"loop"` on a clip overrides the default.
 
 ### Slicing on its own
 

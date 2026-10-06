@@ -1266,11 +1266,11 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
-        public void SetupController_TriggersFireFromAnyStateWithoutBlending_AndAnUnknownNameWarns()
+        public void SetupController_TriggersFireFromAnyStateWithoutBlending()
         {
             // Trigger transitions used to come only from states that already existed, so
             // 'attack' could not interrupt 'hurt', which is built after it.
-            var result = SetupController(BuildClips("anystate", "idle", "walk", "attack", "hurt", "taunt"));
+            var result = SetupController(BuildClips("anystate", "idle", "walk", "attack", "hurt"));
             Assert.IsTrue(result.Value<bool>("success"), result.ToString());
 
             var sm = AssetDatabase.LoadAssetAtPath<AnimatorController>($"{TempRoot}/Hero.controller").layers[0].stateMachine;
@@ -1289,15 +1289,36 @@ namespace MCPForUnityTests.Editor.Tools
                 .ToArray();
             Assert.That(blended, Is.Empty,
                 "sprite keys cannot blend, so any blend time only delays the frame change");
+        }
 
-            var unreachable = result["diagnostics"]
-                .Where(d => d.Value<string>("code") == "STATE_UNREACHABLE")
+        // Each case leaves one clip that no transition plays, so only a warning tells the caller.
+        // `named`: what the warning must name, the clip it is about first.
+        [TestCase("STATE_UNREACHABLE", "idle,taunt", "'taunt'")]
+        // One Idle state: the second idle clip was dropped without a word.
+        [TestCase("IDLE_CLIP_UNUSED", "idle,idle_blink", "'idle_blink'", "'idle'")]
+        // Both clips got an Any State transition on Attack, and only the first could ever fire.
+        [TestCase("TRIGGER_SHARED", "idle,attack,hero_attack", "'hero_attack'", "'attack'", "'Attack'")]
+        public void SetupController_ClipThatNoTransitionPlays_IsNamedInAWarning(string code, string clips, params string[] named)
+        {
+            var result = SetupController(BuildClips("unplayed", clips.Split(',')));
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+
+            // Not even a transition that can never fire: for a shared trigger the builder used to
+            // add a second Any State transition anyway.
+            string clip = named[0].Trim('\'');
+            var sm = AssetDatabase.LoadAssetAtPath<AnimatorController>($"{TempRoot}/Hero.controller").layers[0].stateMachine;
+            var incoming = sm.anyStateTransitions
+                .Concat(sm.states.SelectMany(s => s.state.transitions))
+                .Where(t => t.destinationState != null && t.destinationState.name == clip);
+            Assert.That(incoming, Is.Empty, $"a transition leads to '{clip}'");
+
+            var warnings = result["diagnostics"]
+                .Where(d => d.Value<string>("code") == code)
                 .Select(d => d.Value<string>("message"))
                 .ToArray();
-            Assert.AreEqual(1, unreachable.Length,
-                "'taunt' matches no action word, so no transition leads to its state and the response " +
-                "must say so; diagnostics were " + result["diagnostics"]);
-            Assert.That(unreachable[0], Does.Contain("'taunt'"), "the warning must name the clip it is about");
+            Assert.AreEqual(1, warnings.Length, "diagnostics were " + result["diagnostics"]);
+            foreach (string name in named)
+                Assert.That(warnings[0], Does.Contain(name));
         }
 
         [Test]
@@ -1605,28 +1626,31 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         // The controller re-derived looping from the clip name, so 'attack' with loop=true
-        // still got a one-shot exit to idle while its .anim looped.
-        [TestCase(true, false)]
-        [TestCase(null, true)]
-        public void FullSetup_ExplicitLoop_DecidesTheOneShotExit(bool? loop, bool expectExit)
+        // still got a one-shot exit to idle while its .anim looped. A death got that exit too,
+        // and returning to idle stood the dead character back up.
+        [TestCase("attack", true, false)]
+        [TestCase("attack", null, true)]
+        [TestCase("die", null, false)]
+        [TestCase("hero_death", null, false)]
+        public void FullSetup_LoopAndName_DecideTheOneShotExit(string clipName, bool? loop, bool expectExit)
         {
             string path = CreateSheet("loopflag", 4, 1);
-            var attackDef = new JObject { ["name"] = "attack", ["start_frame"] = 2, ["end_frame"] = 3 };
-            if (loop.HasValue) attackDef["loop"] = loop.Value;
+            var oneShotDef = new JObject { ["name"] = clipName, ["start_frame"] = 2, ["end_frame"] = 3 };
+            if (loop.HasValue) oneShotDef["loop"] = loop.Value;
             var result = Run(new JObject
             {
                 ["action"] = "full_setup", ["path"] = path, ["cols"] = 4,
                 ["output_dir"] = TempRoot, ["controller_path"] = $"{TempRoot}/Loop.controller",
                 ["clips"] = new JArray {
                     new JObject { ["name"] = "idle", ["start_frame"] = 0, ["end_frame"] = 1 },
-                    attackDef,
+                    oneShotDef,
                 },
             });
             Assert.IsTrue(result.Value<bool>("success"), result.ToString());
 
             var sm = AssetDatabase.LoadAssetAtPath<AnimatorController>($"{TempRoot}/Loop.controller").layers[0].stateMachine;
-            var attack = sm.states.Select(s => s.state).Single(s => s.name == "attack");
-            bool exitsToIdle = attack.transitions.Any(t => t.destinationState != null && t.destinationState.name == "Idle");
+            var oneShot = sm.states.Select(s => s.state).Single(s => s.name == clipName);
+            bool exitsToIdle = oneShot.transitions.Any(t => t.destinationState != null && t.destinationState.name == "Idle");
             Assert.AreEqual(expectExit, exitsToIdle);
         }
 
