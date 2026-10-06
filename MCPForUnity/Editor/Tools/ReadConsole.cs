@@ -653,7 +653,7 @@ namespace MCPForUnity.Editor.Tools
         /// </summary>
         /// <param name="fullMessage">The complete log message including any appended stack trace.</param>
         /// <returns>The message body (line endings normalized to "\n", internal blank lines preserved) and the stack trace, or null when none is found.</returns>
-        private static (string body, string stackTrace) SplitMessageAndStackTrace(string fullMessage)
+        internal static (string body, string stackTrace) SplitMessageAndStackTrace(string fullMessage)
         {
             if (string.IsNullOrEmpty(fullMessage))
                 return (fullMessage, null);
@@ -685,6 +685,7 @@ namespace MCPForUnity.Editor.Tools
                 // Check for common stack trace patterns.
                 if (
                     trimmedLine.StartsWith("at ")
+                    || IsNativeStackFrame(trimmedLine)
                     || trimmedLine.StartsWith("UnityEngine.")
                     || trimmedLine.StartsWith("UnityEditor.")
                     || trimmedLine.Contains("(at ")
@@ -702,6 +703,20 @@ namespace MCPForUnity.Editor.Tools
             }
 
             return -1;
+        }
+
+        // Native frames Unity appends when Stack Trace Logging is set to Full, e.g.
+        // "0x00007ffd387f224e (Unity) StackWalker::ShowCallstack".
+        private static bool IsNativeStackFrame(string line)
+        {
+            if (!line.StartsWith("0x", StringComparison.Ordinal))
+                return false;
+
+            int i = 2;
+            while (i < line.Length && Uri.IsHexDigit(line[i]))
+                i++;
+
+            return i > 2 && string.CompareOrdinal(line, i, " (", 0, 2) == 0;
         }
 
         /* LogEntry.mode bits exploration (based on Unity decompilation/observation):
