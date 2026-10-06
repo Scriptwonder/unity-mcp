@@ -10,13 +10,23 @@ on:
     paths:
       - Server/**
       - tools/**
-      - .github/workflows/python-tests.yml
+      # Files outside Server/ and tools/ that the tests read: the tool manifest, both
+      # skill copies (kept identical by test_skill_copies_in_sync.py) and the workflows.
+      - manifest.json
+      - unity-mcp-skill/**
+      - .claude/skills/**
+      - .github/workflows/**
   pull_request:
     branches: [main, beta]
     paths:
       - Server/**
       - tools/**
-      - .github/workflows/python-tests.yml
+      # Files outside Server/ and tools/ that the tests read: the tool manifest, both
+      # skill copies (kept identical by test_skill_copies_in_sync.py) and the workflows.
+      - manifest.json
+      - unity-mcp-skill/**
+      - .claude/skills/**
+      - .github/workflows/**
   workflow_dispatch: {}
   workflow_call:
     inputs:
