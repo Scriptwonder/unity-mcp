@@ -6,7 +6,7 @@ description: "MCP for Unity tools in the animation group."
 
 # `animation` tools
 
-Animator control & AnimationClip creation
+Animator control, AnimationClip creation & 2D sprite-sheet animation
 
 - **[`manage_animation`](./manage_animation.md)** — Manage Unity animation: Animator control and AnimationClip creation.
-- **[`manage_sprite`](./manage_sprite.md)** — 2D sprite animation tool. get_info: read sprite import settings and return the sheet as an image block for vision analysis; the slice list is paged (page_size / cursor). slice_sheet: apply grid slicing to a sprite sheet. setup_clips: cre…
+- **[`manage_sprite`](./manage_sprite.md)** — Slice 2D sprite sheets and build AnimationClips and an AnimatorController from the frames.

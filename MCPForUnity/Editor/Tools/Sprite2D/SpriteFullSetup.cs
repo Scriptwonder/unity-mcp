@@ -57,6 +57,13 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             bool overwrite = ParamCoercion.CoerceBool(@params["overwrite"], false);
 
             var clips = SpriteClipBuilder.CreateClips(path, clipsToken, outputDir, overwrite, diagnostics);
+            // A repeated run skips every clip, and the controller step then failed with "No valid
+            // clips loaded.", which named neither the cause nor the way past it.
+            if (clips.Count == 0 && diagnostics.Build().Count(d => d.code == "CLIP_EXISTS") == clipsToken.Count)
+                diagnostics.AddError("ALL_CLIPS_EXIST",
+                    "Every requested clip already exists, so no clip was written and full_setup stopped before the controller step.",
+                    "Set overwrite=true to replace the clips and the controller.",
+                    "Call setup_controller with the existing .anim paths, which the CLIP_EXISTS warnings name, and overwrite=true if the controller already exists.");
             if (diagnostics.HasErrors)
                 return Stop("setup_clips", diagnostics);
 

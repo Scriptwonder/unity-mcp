@@ -184,6 +184,9 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 filterMode       = importer.filterMode;
             }
 
+            /// <summary>The frame names the sheet had before this call, in sheet order.</summary>
+            public string[] FrameNames => spritesheet.Select(s => s.name).ToArray();
+
             public void Restore(TextureImporter importer)
             {
                 bool changed = false;
@@ -234,6 +237,24 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
             if (!rowsGiven && frameH <= 0)
                 rows = 1;
 
+            // Point unless asked: it keeps pixel art sharp, and it was the only filter slice_sheet
+            // set before this was a parameter. A switch rather than Enum.TryParse, which would
+            // also take "7" or "Bilinear,Trilinear", neither of them a filter.
+            FilterMode filterMode = FilterMode.Point;
+            JToken filterToken = @params["filter_mode"];
+            if (filterToken != null && filterToken.Type != JTokenType.Null)
+            {
+                switch (filterToken.ToString().ToLowerInvariant())
+                {
+                    case "point":     filterMode = FilterMode.Point; break;
+                    case "bilinear":  filterMode = FilterMode.Bilinear; break;
+                    case "trilinear": filterMode = FilterMode.Trilinear; break;
+                    default:
+                        return diagnostics.Fail("BAD_PARAM",
+                            $"'filter_mode' must be point, bilinear or trilinear; got '{filterToken}'.");
+                }
+            }
+
             // Measure only once imported as a sprite sheet: a Default-type import rescales a
             // non-power-of-two sheet (96px to 128px) and the trailing frames then land outside
             // the real texture, where Unity drops them silently - measured on 6000.4.4f1, a
@@ -257,7 +278,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                     EditorUtility.SetDirty(importer);
                     importer.SaveAndReimport();
                 }
-                return SliceConverted(@params, diagnostics, path, importer, snapshot, cols, rows, frameW, frameH);
+                return SliceConverted(@params, diagnostics, path, importer, snapshot, cols, rows, frameW, frameH, filterMode);
             }
             catch
             {
@@ -270,7 +291,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
         private static object SliceConverted(JObject @params, SpriteDiagnosticBuilder diagnostics, string path,
                                              TextureImporter importer, ImporterSnapshot snapshot,
-                                             int cols, int rows, int frameW, int frameH)
+                                             int cols, int rows, int frameW, int frameH, FilterMode filterMode)
         {
             var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
             if (texture == null)
@@ -357,7 +378,7 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
             importer.spriteImportMode = SpriteImportMode.Multiple;
             importer.spritesheet      = metas;
-            importer.filterMode       = FilterMode.Point; // pixel-perfect default
+            importer.filterMode       = filterMode;
             // Assigning spritesheet on an already-Multiple importer does not mark it dirty, so
             // SaveAndReimport would restore the old grid - measured, a second slice did nothing.
             EditorUtility.SetDirty(importer);
@@ -378,6 +399,24 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                     $"Unity accepted a {cols}x{rows} grid but generated {generated} of {totalFrames} sprites for '{path}'.",
                     "Check the Unity console for the import error",
                     "Confirm the texture's import settings allow sprite generation");
+            }
+
+            // A sprite's ID follows its name, so a re-slice keeps only the frames whose names the
+            // new grid reuses. Measured on 2021.3.45f2: a clip of all eight frames of a 4x2 sheet
+            // had six of them missing after a 2x1 re-slice, and the response said nothing;
+            // slicing 4x2 again brought all eight back. After the generation check, because a
+            // refusal restores the old frames and the warning would then be false.
+            string[] before = snapshot.FrameNames;
+            string[] removed = before.Except(metas.Select(m => m.name)).ToArray();
+            if (removed.Length > 0)
+            {
+                const int MaxNamesListed = 10;
+                string names = string.Join(", ", removed.Take(MaxNamesListed))
+                             + (removed.Length > MaxNamesListed ? $" and {removed.Length - MaxNamesListed} more" : "");
+                diagnostics.AddWarning("SLICE_REMOVED_FRAMES",
+                    $"This slice removed {removed.Length} of the {before.Length} frames the sheet had ({names}); animation clips that used them lose those frames.",
+                    "If the frames are still needed, slice again with the previous grid and base_name; clips pick them up again by name",
+                    "Otherwise rebuild the clips that used them: setup_clips or full_setup, with overwrite=true");
             }
 
             return new

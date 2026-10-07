@@ -128,6 +128,8 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 return default;
             }
             var rootSM = controller.layers[0].stateMachine;
+            // Every transition below gets duration 0: sprite keys are object references, which
+            // cannot blend, so a blend time would only delay the visible sprite change.
 
             // ── Parameters ──────────────────────────────────────────────────
 
@@ -147,14 +149,20 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
             // ── Idle state ────────────────────────────────────────────────────
 
-            var idlePair = entries.FirstOrDefault(e => e.entry.Category == SpriteAnimCategory.Idle);
+            var idlePairs = entries.Where(e => e.entry.Category == SpriteAnimCategory.Idle).ToList();
             AnimatorState idleState = null;
-            if (idlePair.clip != null)
+            if (idlePairs.Count > 0)
             {
                 idleState = rootSM.AddState("Idle");
-                idleState.motion = idlePair.clip;
+                idleState.motion = idlePairs[0].clip;
                 rootSM.defaultState = idleState;
             }
+            // There is one Idle state, so a second idle clip is left out of the controller.
+            foreach (var extra in idlePairs.Skip(1))
+                diagnostics.AddWarning("IDLE_CLIP_UNUSED",
+                    $"Clip '{extra.entry.ClipName}' is also an idle clip, and the one Idle state plays '{idlePairs[0].entry.ClipName}', so '{extra.entry.ClipName}' got no state.",
+                    "Rename it to include an action word such as attack, jump or hurt, and neither idle nor stand, then rebuild with overwrite=true.",
+                    "Put it in its own controller.");
 
             // ── Locomotion ────────────────────────────────────────────────────
 
@@ -172,9 +180,11 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                         var t1 = idleState.AddTransition(locoState);
                         t1.AddCondition(AnimatorConditionMode.Greater, 0.1f, "Speed");
                         t1.hasExitTime = false;
+                        t1.duration = 0f;
                         var t2 = locoState.AddTransition(idleState);
                         t2.AddCondition(AnimatorConditionMode.Less, 0.1f, "Speed");
                         t2.hasExitTime = false;
+                        t2.duration = 0f;
                     }
                 }
                 else
@@ -198,9 +208,11 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                         var t1 = idleState.AddTransition(blendState);
                         t1.AddCondition(AnimatorConditionMode.Greater, 0.1f, "Speed");
                         t1.hasExitTime = false;
+                        t1.duration = 0f;
                         var t2 = blendState.AddTransition(idleState);
                         t2.AddCondition(AnimatorConditionMode.Less, 0.1f, "Speed");
                         t2.hasExitTime = false;
+                        t2.duration = 0f;
                     }
                 }
             }
@@ -212,6 +224,10 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 e.entry.Category == SpriteAnimCategory.Jump   ||
                 e.entry.Category == SpriteAnimCategory.Object).ToList();
 
+            // Trigger -> the clip whose state it enters. Two Any State transitions on one trigger
+            // always resolve to the same one, so the second could never fire and is not built;
+            // its clip keeps a state, with its exit, for a script to play.
+            var triggerOwners = new Dictionary<string, string>();
             foreach (var pair in triggerPairs)
             {
                 var state = rootSM.AddState(pair.entry.ClipName);
@@ -219,24 +235,36 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
 
                 string trigger = pair.entry.TriggerName ?? pair.entry.ClipName;
 
-                foreach (var existingState in rootSM.states.Select(s => s.state))
+                if (triggerOwners.TryGetValue(trigger, out string owner))
                 {
-                    if (existingState == state) continue;
-                    var tr = existingState.AddTransition(state);
+                    diagnostics.AddWarning("TRIGGER_SHARED",
+                        $"Clips '{owner}' and '{pair.entry.ClipName}' share the trigger '{trigger}', which plays '{owner}': no transition leads to '{pair.entry.ClipName}', so it plays only from a script.",
+                        "Give each clip its own action word (attack, slash and punch are three different triggers), then rebuild with overwrite=true.");
+                }
+                else
+                {
+                    triggerOwners.Add(trigger, pair.entry.ClipName);
+                    var tr = rootSM.AddAnyStateTransition(state);
                     tr.AddCondition(AnimatorConditionMode.If, 0, trigger);
                     tr.hasExitTime = false;
+                    tr.duration = 0f;
+                    // On, a repeated trigger restarts the clip. Off, Unity would leave that trigger
+                    // set, and it would replay the state as soon as the Animator left it.
+                    tr.canTransitionToSelf = true;
                 }
 
                 // A one-shot state hands control back to idle, else locomotion. With
                 // neither, the default is another one-shot, and exiting into it would
-                // just chain one stuck state into the next.
+                // just chain one stuck state into the next. A death gets no exit and holds
+                // its last frame; a trigger the game fires still leaves it, from Any State.
                 var exitTarget = idleState ?? locomotionState;
-                if (exitTarget != null && !pair.entry.Loop)
+                if (exitTarget != null && !pair.entry.Loop && !pair.entry.Terminal)
                 {
                     var exitTr = state.AddTransition(exitTarget);
                     exitTr.hasExitTime = true;
                     exitTr.exitTime     = 1f;
                     exitTr.hasFixedDuration = false;
+                    exitTr.duration     = 0f;
                 }
             }
 
@@ -248,6 +276,10 @@ namespace MCPForUnity.Editor.Tools.Sprite2D
                 state.motion = pair.clip;
                 if (rootSM.defaultState == null)
                     rootSM.defaultState = state;
+                if (rootSM.defaultState != state)
+                    diagnostics.AddWarning("STATE_UNREACHABLE",
+                        $"Clip '{pair.entry.ClipName}' matches no action word, so no transition leads to its state: it plays only from a script, or after you rename the clip to an action word.",
+                        "Rename the clip to include an action word such as attack, jump or hurt, then rebuild with overwrite=true.");
             }
 
             EditorUtility.SetDirty(controller);

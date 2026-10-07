@@ -697,6 +697,25 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.AreEqual(16, SpritesOf(path).Length);
         }
 
+        [TestCase("slice_sheet", null, FilterMode.Point)]
+        [TestCase("slice_sheet", "bilinear", FilterMode.Bilinear)]
+        // Mixed case, and through full_setup, which hands its own params to the slice step.
+        [TestCase("full_setup", "Trilinear", FilterMode.Trilinear)]
+        public void FilterMode_IsWhatTheSliceSets_PointUnlessAsked(string action, string filterMode, FilterMode expected)
+        {
+            string path = CreateSheet("filter", 4, 1);
+            Assert.AreEqual(FilterMode.Bilinear, ((TextureImporter)AssetImporter.GetAtPath(path)).filterMode,
+                "fixture: a sheet that starts as Point would let the Point case pass without the slice setting it");
+            var request = new JObject { ["action"] = action, ["path"] = path, ["cols"] = 4 };
+            if (filterMode != null)
+                request["filter_mode"] = filterMode;
+
+            var result = Run(request);
+
+            Assert.AreEqual(expected, ((TextureImporter)AssetImporter.GetAtPath(path)).filterMode,
+                result.ToString(Newtonsoft.Json.Formatting.None));
+        }
+
         private static IEnumerable<TestCaseData> RefusedGrids()
         {
             TestCaseData Case(int sheetCols, int sheetRows, JObject grid, string code) =>
@@ -723,6 +742,8 @@ namespace MCPForUnityTests.Editor.Tools
             yield return Case(8, 8, new JObject { ["cols"] = 128, ["rows"] = 128 }, "SLICE_TOO_MANY_FRAMES");
             // A negative alternative used to be silently replaced by the value derived from cols.
             yield return Case(2, 1, new JObject { ["cols"] = 2, ["frame_width"] = -1 }, "BAD_PARAM");
+            // "nearest" is another engine's name for Point: refused like a bad grid value, not mapped.
+            yield return Case(2, 1, new JObject { ["cols"] = 2, ["filter_mode"] = "nearest" }, "BAD_PARAM");
         }
 
         [TestCaseSource(nameof(RefusedGrids))]
@@ -810,7 +831,7 @@ namespace MCPForUnityTests.Editor.Tools
             Slice(path, 4, 2);
             Assert.AreEqual(8, SpritesOf(path).Length);
 
-            Slice(path, 2, 1);
+            var smaller = Slice(path, 2, 1);
             var after = SpritesOf(path).Select(s => s.name).ToArray();
 #pragma warning disable CS0618 // same API the tool writes through
             int configured = ((TextureImporter)AssetImporter.GetAtPath(path)).spritesheet.Length;
@@ -818,6 +839,11 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.AreEqual(2, after.Length,
                 $"stale frames must not survive a reslice; importer holds {configured}, " +
                 "project holds: " + string.Join(", ", after));
+            // A clip that played reslice_2..7 loses those frames, so the slice has to name them.
+            Assert.That(smaller["diagnostics"].ToString(),
+                Does.Contain("SLICE_REMOVED_FRAMES").And.Contain("reslice_7").And.Not.Contain("reslice_1"));
+            Assert.That(Slice(path, 2, 1)["diagnostics"].ToString(), Does.Not.Contain("SLICE_REMOVED_FRAMES"),
+                "the same grid again removes nothing");
         }
 
         // =====================================================================
@@ -1240,6 +1266,65 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         [Test]
+        public void SetupController_TriggersFireFromAnyStateWithoutBlending()
+        {
+            // Trigger transitions used to come only from states that already existed, so
+            // 'attack' could not interrupt 'hurt', which is built after it.
+            var result = SetupController(BuildClips("anystate", "idle", "walk", "attack", "hurt"));
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+
+            var sm = AssetDatabase.LoadAssetAtPath<AnimatorController>($"{TempRoot}/Hero.controller").layers[0].stateMachine;
+            foreach (var (state, trigger) in new[] { ("attack", "Attack"), ("hurt", "Hurt") })
+                Assert.IsTrue(sm.anyStateTransitions.Any(t =>
+                        t.destinationState != null && t.destinationState.name == state &&
+                        t.conditions.Any(c => c.mode == AnimatorConditionMode.If && c.parameter == trigger)),
+                    $"'{state}' needs an Any State transition on '{trigger}'; without one, states built " +
+                    "after it cannot be interrupted by it ('attack' could not interrupt 'hurt')");
+            Assert.That(sm.anyStateTransitions.Where(t => !t.canTransitionToSelf).Select(t => t.destinationState?.name),
+                Is.Empty, "a repeated trigger must restart its clip; with canTransitionToSelf off, Unity keeps " +
+                "the trigger set and replays the state after it ends");
+
+            var blended = sm.states
+                .SelectMany(s => s.state.transitions.Select(t => (source: s.state.name, t)))
+                .Concat(sm.anyStateTransitions.Select(t => (source: "Any State", t)))
+                .Where(x => x.t.duration != 0f)
+                .Select(x => $"{x.source} -> {x.t.destinationState?.name} ({x.t.duration})")
+                .ToArray();
+            Assert.That(blended, Is.Empty,
+                "sprite keys cannot blend, so any blend time only delays the frame change");
+        }
+
+        // Each case leaves one clip that no transition plays, so only a warning tells the caller.
+        // `named`: what the warning must name, the clip it is about first.
+        [TestCase("STATE_UNREACHABLE", "idle,taunt", "'taunt'")]
+        // One Idle state: the second idle clip was dropped without a word.
+        [TestCase("IDLE_CLIP_UNUSED", "idle,idle_blink", "'idle_blink'", "'idle'")]
+        // Both clips got an Any State transition on Attack, and only the first could ever fire.
+        [TestCase("TRIGGER_SHARED", "idle,attack,hero_attack", "'hero_attack'", "'attack'", "'Attack'")]
+        public void SetupController_ClipThatNoTransitionPlays_IsNamedInAWarning(string code, string clips, params string[] named)
+        {
+            var result = SetupController(BuildClips("unplayed", clips.Split(',')));
+            Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+
+            // Not even a transition that can never fire: for a shared trigger the builder used to
+            // add a second Any State transition anyway.
+            string clip = named[0].Trim('\'');
+            var sm = AssetDatabase.LoadAssetAtPath<AnimatorController>($"{TempRoot}/Hero.controller").layers[0].stateMachine;
+            var incoming = sm.anyStateTransitions
+                .Concat(sm.states.SelectMany(s => s.state.transitions))
+                .Where(t => t.destinationState != null && t.destinationState.name == clip);
+            Assert.That(incoming, Is.Empty, $"a transition leads to '{clip}'");
+
+            var warnings = result["diagnostics"]
+                .Where(d => d.Value<string>("code") == code)
+                .Select(d => d.Value<string>("message"))
+                .ToArray();
+            Assert.AreEqual(1, warnings.Length, "diagnostics were " + result["diagnostics"]);
+            foreach (string name in named)
+                Assert.That(warnings[0], Does.Contain(name));
+        }
+
+        [Test]
         public void SetupController_WalkAndRun_BuildsASpeedDrivenBlendTree()
         {
             var result = SetupController(BuildClips("blend", "idle", "walk", "run"));
@@ -1374,8 +1459,13 @@ namespace MCPForUnityTests.Editor.Tools
         // full_setup
         // =====================================================================
 
-        [Test]
-        public void FullSetup_ControllerRefusal_StopsBeforeTouchingTheScene()
+        // A second run without overwrite. Given the same clip, every clip exists: it used to reach
+        // the controller step and fail there with "No valid clips loaded.". Given a new clip, the
+        // clip is written and the existing controller refuses. `fixes`: what the refusal must offer.
+        [TestCase(null, "setup_clips", "ALL_CLIPS_EXIST", "overwrite=true", "setup_controller")]
+        [TestCase("s5_new", "setup_controller", "CONTROLLER_EXISTS", "overwrite=true")]
+        public void FullSetup_RerunWithoutOverwrite_StopsAtTheRefusingStepBeforeTouchingTheScene(
+            string secondClip, string step, string code, params string[] fixes)
         {
             string path = CreateSheet("s5", 4, 1);
             var go = new GameObject("SpriteTest_S5");
@@ -1385,17 +1475,23 @@ namespace MCPForUnityTests.Editor.Tools
                 Run(new JObject { ["action"] = "full_setup", ["path"] = path, ["cols"] = 4,
                                   ["output_dir"] = TempRoot, ["controller_path"] = ctrl });
 
-                // Second run: the controller exists and overwrite is not set, so the
-                // controller step fails - and a failed step must not fall through.
-                var result = Run(new JObject { ["action"] = "full_setup", ["path"] = path, ["cols"] = 4,
-                                  ["output_dir"] = TempRoot, ["controller_path"] = ctrl,
-                                  ["add_to_scene"] = true, ["scene_target"] = "SpriteTest_S5" });
+                var rerun = new JObject { ["action"] = "full_setup", ["path"] = path, ["cols"] = 4,
+                                          ["output_dir"] = TempRoot, ["controller_path"] = ctrl,
+                                          ["add_to_scene"] = true, ["scene_target"] = "SpriteTest_S5" };
+                if (secondClip != null) rerun["animation_name"] = secondClip;
+                var result = Run(rerun);
 
                 Assert.IsFalse(result.Value<bool>("success"));
-                Assert.AreEqual("setup_controller", result.Value<string>("step"),
-                    "the response must name the step that failed");
+                Assert.AreEqual(step, result.Value<string>("step"),
+                    "the response must name the step that refused; it was " + result);
+                var refusal = result["diagnostics"].FirstOrDefault(d => d.Value<string>("code") == code);
+                Assert.IsNotNull(refusal, "diagnostics were " + result["diagnostics"]);
+                Assert.AreEqual("error", refusal.Value<string>("severity"));
+                string offered = string.Join(" ", refusal["fix_options"].Values<string>());
+                foreach (string fix in fixes)
+                    Assert.That(offered, Does.Contain(fix));
                 Assert.IsNull(go.GetComponent<Animator>(),
-                    "a refused controller step must not go on to modify the scene");
+                    "a refused step must not go on to modify the scene");
             }
             finally { Object.DestroyImmediate(go); }
         }
@@ -1544,28 +1640,31 @@ namespace MCPForUnityTests.Editor.Tools
         }
 
         // The controller re-derived looping from the clip name, so 'attack' with loop=true
-        // still got a one-shot exit to idle while its .anim looped.
-        [TestCase(true, false)]
-        [TestCase(null, true)]
-        public void FullSetup_ExplicitLoop_DecidesTheOneShotExit(bool? loop, bool expectExit)
+        // still got a one-shot exit to idle while its .anim looped. A death got that exit too,
+        // and returning to idle stood the dead character back up.
+        [TestCase("attack", true, false)]
+        [TestCase("attack", null, true)]
+        [TestCase("die", null, false)]
+        [TestCase("hero_death", null, false)]
+        public void FullSetup_LoopAndName_DecideTheOneShotExit(string clipName, bool? loop, bool expectExit)
         {
             string path = CreateSheet("loopflag", 4, 1);
-            var attackDef = new JObject { ["name"] = "attack", ["start_frame"] = 2, ["end_frame"] = 3 };
-            if (loop.HasValue) attackDef["loop"] = loop.Value;
+            var oneShotDef = new JObject { ["name"] = clipName, ["start_frame"] = 2, ["end_frame"] = 3 };
+            if (loop.HasValue) oneShotDef["loop"] = loop.Value;
             var result = Run(new JObject
             {
                 ["action"] = "full_setup", ["path"] = path, ["cols"] = 4,
                 ["output_dir"] = TempRoot, ["controller_path"] = $"{TempRoot}/Loop.controller",
                 ["clips"] = new JArray {
                     new JObject { ["name"] = "idle", ["start_frame"] = 0, ["end_frame"] = 1 },
-                    attackDef,
+                    oneShotDef,
                 },
             });
             Assert.IsTrue(result.Value<bool>("success"), result.ToString());
 
             var sm = AssetDatabase.LoadAssetAtPath<AnimatorController>($"{TempRoot}/Loop.controller").layers[0].stateMachine;
-            var attack = sm.states.Select(s => s.state).Single(s => s.name == "attack");
-            bool exitsToIdle = attack.transitions.Any(t => t.destinationState != null && t.destinationState.name == "Idle");
+            var oneShot = sm.states.Select(s => s.state).Single(s => s.name == clipName);
+            bool exitsToIdle = oneShot.transitions.Any(t => t.destinationState != null && t.destinationState.name == "Idle");
             Assert.AreEqual(expectExit, exitsToIdle);
         }
 

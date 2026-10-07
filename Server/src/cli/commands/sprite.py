@@ -58,10 +58,15 @@ def info(path: str, page_size: Optional[int], cursor: Optional[int]):
 @click.option("--frame-width", type=int, default=None, help="Frame width in pixels; alternative to --cols.")
 @click.option("--frame-height", type=int, default=None, help="Frame height in pixels; alternative to --rows.")
 @click.option("--base-name", default=None, help="Base name for the frames (default: texture file name).")
+@click.option("--filter-mode", type=click.Choice(["point", "bilinear", "trilinear"]), default=None,
+              help="Texture filter for the sheet (default point, for pixel art).")
 @handle_unity_errors
 def slice_sheet(path: str, cols: Optional[int], rows: Optional[int], frame_width: Optional[int],
-                frame_height: Optional[int], base_name: Optional[str]):
+                frame_height: Optional[int], base_name: Optional[str], filter_mode: Optional[str]):
     """Slice a sprite sheet into a grid of frames.
+
+    Replaces the sheet's existing slices and sets it to Sprite (Multiple) import,
+    with NPOT scaling off and the --filter-mode filter.
 
     \b
     Examples:
@@ -71,7 +76,7 @@ def slice_sheet(path: str, cols: Optional[int], rows: Optional[int], frame_width
     config = get_config()
     result = run_command("manage_sprite", _params(
         "slice_sheet", path=path, cols=cols, rows=rows, frame_width=frame_width,
-        frame_height=frame_height, base_name=base_name), config)
+        frame_height=frame_height, base_name=base_name, filter_mode=filter_mode), config)
     click.echo(format_output(result, config.format))
 
 
@@ -125,24 +130,35 @@ def setup_controller(controller_path: str, clips: str, overwrite: bool):
 @click.option("--frame-width", type=int, default=None, help="Frame width in pixels; alternative to --cols.")
 @click.option("--frame-height", type=int, default=None, help="Frame height in pixels; alternative to --rows.")
 @click.option("--base-name", default=None, help="Base name for the frames (default: texture file name).")
+@click.option("--filter-mode", type=click.Choice(["point", "bilinear", "trilinear"]), default=None,
+              help="Texture filter for the sheet (default point, for pixel art).")
 @click.option("--clips", "clips", default=None,
               help='JSON list: [{"name","start_frame","end_frame","fps","loop"}].')
-@click.option("--animation-name", default=None, help="Name of the single clip made when --clips is not given.")
-@click.option("--output-dir", default=None, help="Folder for the .anim assets (default: the sheet's folder).")
-@click.option("--controller-path", default=None, help="Path for the .controller asset.")
-@click.option("--overwrite", is_flag=True, help="Replace .anim and .controller assets that already exist.")
-@click.option("--add-to-scene", is_flag=True, help="Attach an Animator with the controller to --scene-target.")
-@click.option("--scene-target", default=None, help="Existing GameObject that --add-to-scene attaches the Animator to.")
+@click.option("--animation-name", default=None,
+              help="Name of the one clip made from all frames when --clips is not given (default: the "
+                   "sheet's file name; 12 fps; loops only for idle, walk or run-type names).")
+@click.option("--output-dir", default=None,
+              help="Folder for the .anim assets and, without --controller-path, the controller "
+                   "(default: the sheet's folder).")
+@click.option("--controller-path", default=None,
+              help="Path for the .controller asset (default: <output-dir>/<sheet>_Controller.controller).")
+@click.option("--overwrite", is_flag=True,
+              help="Replace .anim and .controller assets that already exist (the sheet is re-sliced either way).")
+@click.option("--add-to-scene", is_flag=True,
+              help="Give --scene-target an Animator with the controller, and a SpriteRenderer if it has none.")
+@click.option("--scene-target", default=None,
+              help="Name of exactly one existing GameObject (inactive ones count) for --add-to-scene.")
 @handle_unity_errors
 def full_setup(path: str, cols: Optional[int], rows: Optional[int], frame_width: Optional[int],
                frame_height: Optional[int], base_name: Optional[str], clips: Optional[str],
                animation_name: Optional[str], output_dir: Optional[str], controller_path: Optional[str],
-               overwrite: bool, add_to_scene: bool, scene_target: Optional[str]):
+               overwrite: bool, add_to_scene: bool, scene_target: Optional[str], filter_mode: Optional[str]):
     """Slice a sheet, then build its clips and controller in one step.
 
     \b
     Examples:
-        unity-mcp sprite full-setup Assets/Sprites/coin.png --cols 8 --animation-name spin
+        unity-mcp sprite full-setup Assets/Sprites/coin.png --cols 8 \\
+            --clips '[{"name": "spin", "start_frame": 0, "end_frame": 7, "loop": true}]'
         unity-mcp sprite full-setup Assets/Sprites/hero.png --cols 6 --rows 4 \\
             --clips '[{"name": "idle", "start_frame": 0, "end_frame": 5}, {"name": "walk", "start_frame": 6, "end_frame": 11}]' \\
             --controller-path Assets/Animators/Hero.controller --add-to-scene --scene-target Hero
@@ -150,7 +166,7 @@ def full_setup(path: str, cols: Optional[int], rows: Optional[int], frame_width:
     config = get_config()
     result = run_command("manage_sprite", _params(
         "full_setup", path=path, cols=cols, rows=rows, frame_width=frame_width,
-        frame_height=frame_height, base_name=base_name, clips=_clips(clips),
+        frame_height=frame_height, base_name=base_name, filter_mode=filter_mode, clips=_clips(clips),
         animation_name=animation_name, output_dir=output_dir, controller_path=controller_path,
         overwrite=overwrite or None, add_to_scene=add_to_scene or None,
         scene_target=scene_target), config)
