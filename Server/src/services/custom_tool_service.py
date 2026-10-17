@@ -433,7 +433,7 @@ class CustomToolService:
             params.append(
                 inspect.Parameter(
                     param.name,
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    inspect.Parameter.KEYWORD_ONLY,
                     default=default,
                     annotation=self._map_param_type(param),
                 )
