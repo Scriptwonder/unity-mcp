@@ -183,6 +183,41 @@ namespace MCPForUnityTests.Editor.Tools
             Assert.AreEqual(LogType.Log, ReadConsole.GetLogTypeFromMode(1 << 14));
         }
 
+        // Issue #1433: with Full stack traces the appended frames contain words such as
+        // "Exception", so a plain Debug.Log came back from an error-only read.
+        [Test]
+        public void HandleCommand_Get_KeepsDebugLogOutOfErrors_WithFullStackTrace()
+        {
+            StackTraceLogType previous = Application.GetStackTraceLogType(LogType.Log);
+            try
+            {
+                Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.Full);
+                string marker = $"Full trace probe {Guid.NewGuid()}";
+                Debug.Log(marker);
+
+                JArray Read(string type)
+                {
+                    var result = ToJObject(ReadConsole.HandleCommand(new JObject
+                    {
+                        ["action"] = "get",
+                        ["types"] = new JArray { type },
+                        ["format"] = "detailed",
+                        ["filterText"] = marker,
+                        ["count"] = 5
+                    }));
+                    Assert.IsTrue(result.Value<bool>("success"), result.ToString());
+                    return result["data"] as JArray;
+                }
+
+                Assert.IsFalse(ContainsMessage(Read("error"), marker), "A Debug.Log must not be read as an error.");
+                Assert.AreEqual("Log", Read("log")?[0]?["type"]?.ToString());
+            }
+            finally
+            {
+                Application.SetStackTraceLogType(LogType.Log, previous);
+            }
+        }
+
         // The Console window's severity toggles and search box live on the shared internal
         // UnityEditor.LogEntries state, so they leak into every StartGettingEntries caller.
         // read_console must neutralize them for the duration of a read and restore them after.
